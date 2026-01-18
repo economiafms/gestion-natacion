@@ -18,7 +18,7 @@ def refrescar_datos():
     st.cache_data.clear()
     st.rerun()
 
-# --- 3. CARGA DE METADATOS ---
+# --- 3. CARGA DE METADATOS Y PRE-CALCULO DE HASHES (EFICIENCIA) ---
 @st.cache_data(ttl="1h")
 def cargar_referencias():
     return {
@@ -34,17 +34,26 @@ def cargar_referencias():
 data = cargar_referencias()
 if not data: st.stop()
 
-# Auxiliares
+# --- PRE-PROCESAMIENTO PARA VALIDACIÓN RÁPIDA (O(1)) ---
+# 1. Set de Nadadores existentes (Apellido, Nombre)
 df_nad = data['nadadores'].copy()
-df_nad['Nombre Completo'] = df_nad['apellido'].astype(str) + ", " + df_nad['nombre'].astype(str)
-lista_nombres = df_nad['Nombre Completo'].sort_values().unique()
+df_nad['Nombre Completo'] = df_nad['apellido'].astype(str).str.strip().str.upper() + ", " + df_nad['nombre'].astype(str).str.strip().str.upper()
+set_nadadores_existentes = set(df_nad['Nombre Completo'].unique())
 
+# 2. Set de Tiempos existentes (ID_Nadador + ID_Estilo + ID_Distancia + Fecha)
+# Esto evita cargar dos veces la misma carrera
+df_t = data['tiempos'].copy()
+df_t['hash_validacion'] = df_t['codnadador'].astype(str) + "_" + df_t['codestilo'].astype(str) + "_" + df_t['coddistancia'].astype(str) + "_" + df_t['fecha'].astype(str)
+set_tiempos_existentes = set(df_t['hash_validacion'].unique())
+
+# Listas para Selectores
+lista_nombres = sorted(df_nad['Nombre Completo'].unique())
 df_pil = data['piletas'].copy()
 df_pil['Detalle'] = df_pil['club'].astype(str) + " (" + df_pil['medida'].astype(str) + ")"
 lista_piletas = df_pil['Detalle'].unique()
 lista_reglamentos = data['cat_relevos']['tipo_reglamento'].unique().tolist() if not data['cat_relevos'].empty else ["FED"]
 
-# Separadores visuales
+# Estilos visuales
 sep = "<div style='text-align: center; font-size: 20px; font-weight: bold; margin-top: 30px;'>:</div>"
 sep_dot = "<div style='text-align: center; font-size: 20px; font-weight: bold; margin-top: 30px;'>.</div>"
 
@@ -54,11 +63,11 @@ sep_dot = "<div style='text-align: center; font-size: 20px; font-weight: bold; m
 total = len(st.session_state.cola_tiempos) + len(st.session_state.cola_nadadores) + len(st.session_state.cola_relevos)
 
 if total > 0:
-    st.info(f"📢 Tienes **{total}** registros listos para subir.")
+    st.info(f"📢 Tienes **{total}** registros en cola.")
     col_s1, col_s2 = st.columns(2)
     if col_s1.button("☁️ SUBIR A GOOGLE SHEETS", type="primary", use_container_width=True):
         try:
-            with st.spinner("Sincronizando..."):
+            with st.spinner("Subiendo datos..."):
                 if st.session_state.cola_nadadores:
                     conn.update(worksheet="Nadadores", data=pd.concat([data['nadadores'], pd.DataFrame(st.session_state.cola_nadadores)], ignore_index=True))
                     st.session_state.cola_nadadores = []
@@ -79,11 +88,9 @@ if total > 0:
 # ==========================================
 # 5. MENÚ DE NAVEGACIÓN
 # ==========================================
-# Usamos radio buttons para mantener la pestaña activa tras el rerun
-seccion_activa = st.radio("📍 Seleccionar Sección de Carga:", 
+seccion_activa = st.radio("📍 Sección:", 
                           ["👤 Nadadores", "⏱️ Individuales", "🏊‍♂️ Relevos"], 
-                          horizontal=True, 
-                          label_visibility="collapsed")
+                          horizontal=True, label_visibility="collapsed")
 st.divider()
 
 # --- SECCIÓN 1: NADADORES ---
@@ -91,12 +98,10 @@ if seccion_activa == "👤 Nadadores":
     with st.container(border=True):
         st.subheader("Nuevo Nadador")
         with st.form("f_nad", clear_on_submit=True):
-            # Fila 1
             c1, c2 = st.columns(2)
             n_nom = c1.text_input("Nombre")
             n_ape = c2.text_input("Apellido")
             
-            # Fila 2
             c3, c4 = st.columns(2)
             n_gen = c3.selectbox("Género", ["M", "F"], index=None, placeholder="Seleccionar...")
             
@@ -109,22 +114,30 @@ if seccion_activa == "👤 Nadadores":
             st.write("") 
             if st.form_submit_button("Guardar Nadador", use_container_width=True):
                 if n_nom and n_ape and n_gen:
-                    base_id = data['nadadores']['codnadador'].max() if not data['nadadores'].empty else 0
-                    cola_id = pd.DataFrame(st.session_state.cola_nadadores)['codnadador'].max() if st.session_state.cola_nadadores else 0
-                    st.session_state.cola_nadadores.append({
-                        'codnadador': int(max(base_id, cola_id) + 1), 
-                        'nombre': n_nom.title(), 'apellido': n_ape.title(),
-                        'fechanac': n_fec.strftime('%Y-%m-%d'), 'codgenero': n_gen
-                    })
-                    st.rerun()
-                else: st.warning("Completa Nombre, Apellido y Género.")
+                    # VALIDACIÓN DE DUPLICADOS (NOMBRE + APELLIDO)
+                    nombre_completo_nuevo = f"{n_ape.strip().upper()}, {n_nom.strip().upper()}"
+                    
+                    if nombre_completo_nuevo in set_nadadores_existentes:
+                        st.error(f"⛔ Error: El nadador **{nombre_completo_nuevo}** ya existe en la base de datos.")
+                    else:
+                        base_id = data['nadadores']['codnadador'].max() if not data['nadadores'].empty else 0
+                        cola_id = pd.DataFrame(st.session_state.cola_nadadores)['codnadador'].max() if st.session_state.cola_nadadores else 0
+                        st.session_state.cola_nadadores.append({
+                            'codnadador': int(max(base_id, cola_id) + 1), 
+                            'nombre': n_nom.title(), 'apellido': n_ape.title(),
+                            'fechanac': n_fec.strftime('%Y-%m-%d'), 'codgenero': n_gen
+                        })
+                        # Actualizamos el set localmente para que detecte duplicados en la misma sesión
+                        set_nadadores_existentes.add(nombre_completo_nuevo)
+                        st.success(f"Nadador {n_nom} añadido.")
+                        st.rerun()
+                else: st.warning("Completa todos los datos.")
 
 # --- SECCIÓN 2: TIEMPOS INDIVIDUALES ---
 elif seccion_activa == "⏱️ Individuales":
     with st.container(border=True):
         st.subheader("Carga Individual")
         with st.form("f_ind", clear_on_submit=True):
-            # El primer campo es el Nadador, ideal para encadenar cargas
             t_nad = st.selectbox("Nadador", lista_nombres, index=None, placeholder="Buscar apellido...")
             
             c1, c2 = st.columns(2)
@@ -149,23 +162,36 @@ elif seccion_activa == "⏱️ Individuales":
             st.write("")
             if st.form_submit_button("Guardar Tiempo", use_container_width=True):
                 if t_nad and t_est and t_dis and t_pil:
-                    base_id = data['tiempos']['id_registro'].max() if not data['tiempos'].empty else 0
-                    cola_id = pd.DataFrame(st.session_state.cola_tiempos)['id_registro'].max() if st.session_state.cola_tiempos else 0
-                    st.session_state.cola_tiempos.append({
-                        'id_registro': int(max(base_id, cola_id) + 1),
-                        'codnadador': df_nad[df_nad['Nombre Completo'] == t_nad]['codnadador'].values[0],
-                        'codpileta': df_pil[df_pil['Detalle'] == t_pil]['codpileta'].values[0],
-                        'codestilo': data['estilos'][data['estilos']['descripcion'] == t_est]['codestilo'].values[0],
-                        'coddistancia': data['distancias'][data['distancias']['descripcion'] == t_dis]['coddistancia'].values[0],
-                        'tiempo': f"{vm:02d}:{vs:02d}.{vc:02d}", 'fecha': v_fec.strftime('%Y-%m-%d'), 'posicion': int(v_pos)
-                    })
-                    st.success("Tiempo guardado.")
-                    st.rerun()
+                    # Recuperar IDs
+                    id_nad = df_nad[df_nad['Nombre Completo'] == t_nad]['codnadador'].values[0]
+                    id_est = data['estilos'][data['estilos']['descripcion'] == t_est]['codestilo'].values[0]
+                    id_dis = data['distancias'][data['distancias']['descripcion'] == t_dis]['coddistancia'].values[0]
+                    fecha_str = v_fec.strftime('%Y-%m-%d')
+
+                    # VALIDACIÓN DE DUPLICADOS (Nadador + Estilo + Distancia + Fecha)
+                    hash_nuevo = f"{id_nad}_{id_est}_{id_dis}_{fecha_str}"
+                    
+                    if hash_nuevo in set_tiempos_existentes:
+                        st.error(f"⛔ Error: Ya existe un tiempo cargado para **{t_nad}** en **{t_dis} {t_est}** con fecha **{v_fec.strftime('%d/%m/%Y')}**.")
+                    else:
+                        base_id = data['tiempos']['id_registro'].max() if not data['tiempos'].empty else 0
+                        cola_id = pd.DataFrame(st.session_state.cola_tiempos)['id_registro'].max() if st.session_state.cola_tiempos else 0
+                        st.session_state.cola_tiempos.append({
+                            'id_registro': int(max(base_id, cola_id) + 1),
+                            'codnadador': int(id_nad),
+                            'codpileta': df_pil[df_pil['Detalle'] == t_pil]['codpileta'].values[0],
+                            'codestilo': int(id_est),
+                            'coddistancia': int(id_dis),
+                            'tiempo': f"{vm:02d}:{vs:02d}.{vc:02d}", 'fecha': fecha_str, 'posicion': int(v_pos)
+                        })
+                        # Actualizamos el set local
+                        set_tiempos_existentes.add(hash_nuevo)
+                        st.success("✅ Tiempo guardado.")
+                        st.rerun()
                 else: st.warning("Faltan datos obligatorios.")
 
 # --- SECCIÓN 3: RELEVOS ---
 elif seccion_activa == "🏊‍♂️ Relevos":
-    # Filtros externos (dinámicos)
     with st.container(border=True):
         st.subheader("Configuración del Relevo")
         r_gen = st.selectbox("Género del Equipo", ["M", "F", "X"], index=None, placeholder="Seleccionar género primero...")
@@ -177,10 +203,9 @@ elif seccion_activa == "🏊‍♂️ Relevos":
         else:
             ld = lista_nombres 
         
-        # Filtro automático 4x50
+        # Filtro 4x50
         lista_dist_4x50 = data['distancias'][data['distancias']['descripcion'].str.contains("4x50", case=False, na=False)]['descripcion'].unique()
 
-    # Formulario de Carga
     with st.container(border=True):
         with st.form("f_rel", clear_on_submit=True):
             c1, c2, c3 = st.columns(3)
@@ -216,19 +241,24 @@ elif seccion_activa == "🏊‍♂️ Relevos":
             st.write("")
             if st.form_submit_button("Guardar Relevo", use_container_width=True):
                 if r_gen and all(r_n) and r_dis and r_pil:
-                    base_id = data['relevos']['id_relevo'].max() if not data['relevos'].empty else 0
-                    cola_id = pd.DataFrame(st.session_state.cola_relevos)['id_relevo'].max() if st.session_state.cola_relevos else 0
-                    ids_n = [df_nad[df_nad['Nombre Completo'] == n]['codnadador'].values[0] for n in r_n]
-                    st.session_state.cola_relevos.append({
-                        'id_relevo': int(max(base_id, cola_id) + 1),
-                        'codpileta': df_pil[df_pil['Detalle'] == r_pil]['codpileta'].values[0],
-                        'codestilo': data['estilos'][data['estilos']['descripcion'] == r_est]['codestilo'].values[0],
-                        'coddistancia': data['distancias'][data['distancias']['descripcion'] == r_dis]['coddistancia'].values[0],
-                        'codgenero': r_gen, 'nadador_1': ids_n[0], 'tiempo_1': r_p[0], 'nadador_2': ids_n[1], 'tiempo_2': r_p[1],
-                        'nadador_3': ids_n[2], 'tiempo_3': r_p[2], 'nadador_4': ids_n[3], 'tiempo_4': r_p[3],
-                        'tiempo_final': f"{rvm:02d}:{rvs:02d}.{rvc:02d}", 'posicion': int(rp_r), 'fecha': rf_r.strftime('%Y-%m-%d'), 'tipo_reglamento': r_reg
-                    })
-                    st.success("Relevo guardado en cola.")
-                    st.rerun()
+                    # VALIDACIÓN: Nadadores repetidos en el mismo relevo
+                    if len(set(r_n)) != 4:
+                        st.error("⛔ Error: Hay nadadores repetidos en el equipo.")
+                    else:
+                        base_id = data['relevos']['id_relevo'].max() if not data['relevos'].empty else 0
+                        cola_id = pd.DataFrame(st.session_state.cola_relevos)['id_relevo'].max() if st.session_state.cola_relevos else 0
+                        ids_n = [df_nad[df_nad['Nombre Completo'] == n]['codnadador'].values[0] for n in r_n]
+                        
+                        st.session_state.cola_relevos.append({
+                            'id_relevo': int(max(base_id, cola_id) + 1),
+                            'codpileta': df_pil[df_pil['Detalle'] == r_pil]['codpileta'].values[0],
+                            'codestilo': data['estilos'][data['estilos']['descripcion'] == r_est]['codestilo'].values[0],
+                            'coddistancia': data['distancias'][data['distancias']['descripcion'] == r_dis]['coddistancia'].values[0],
+                            'codgenero': r_gen, 'nadador_1': ids_n[0], 'tiempo_1': r_p[0], 'nadador_2': ids_n[1], 'tiempo_2': r_p[1],
+                            'nadador_3': ids_n[2], 'tiempo_3': r_p[2], 'nadador_4': ids_n[3], 'tiempo_4': r_p[3],
+                            'tiempo_final': f"{rvm:02d}:{rvs:02d}.{rvc:02d}", 'posicion': int(rp_r), 'fecha': rf_r.strftime('%Y-%m-%d'), 'tipo_reglamento': r_reg
+                        })
+                        st.success("✅ Relevo guardado.")
+                        st.rerun()
                 else:
                     st.error("Faltan datos obligatorios.")
