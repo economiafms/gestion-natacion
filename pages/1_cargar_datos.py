@@ -90,13 +90,34 @@ with col_nad:
             n_nom = st.text_input("Nombre")
             n_ape = st.text_input("Apellido")
             n_gen = st.selectbox("Género", ["M", "F"], index=None)
-            n_fec = st.date_input("Nacimiento", value=date(1990, 1, 1))
+            
+            # --- ÚNICA MODIFICACIÓN: Lógica de fechas profesional ---
+            hoy = date.today()
+            anio_actual = hoy.year
+            # Mínimo 18 años al 31/12 del año actual
+            fecha_maxima = date(anio_actual - 18, 12, 31) 
+            # Máximo 100 años
+            fecha_minima = date(anio_actual - 100, 1, 1)
+
+            n_fec = st.date_input(
+                "Nacimiento", 
+                value=date(1990, 1, 1),
+                min_value=fecha_minima,
+                max_value=fecha_maxima
+            )
+            # --- FIN DE LA MODIFICACIÓN ---
+
             if st.form_submit_button("➕ Añadir a lista"):
+                # Mantengo tu lógica de IDs y Session State intacta
                 base_id = data['nadadores']['codnadador'].max() if not data['nadadores'].empty else 0
                 cola_id = pd.DataFrame(st.session_state.cola_nadadores)['codnadador'].max() if st.session_state.cola_nadadores else 0
+                
                 st.session_state.cola_nadadores.append({
-                    'codnadador': int(max(base_id, cola_id) + 1), 'nombre': n_nom.title(), 'apellido': n_ape.title(),
-                    'fechanac': n_fec.strftime('%Y-%m-%d'), 'codgenero': n_gen
+                    'codnadador': int(max(base_id, cola_id) + 1), 
+                    'nombre': n_nom.title(), 
+                    'apellido': n_ape.title(),
+                    'fechanac': n_fec.strftime('%Y-%m-%d'), 
+                    'codgenero': n_gen
                 })
                 st.rerun()
 
