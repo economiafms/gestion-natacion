@@ -7,7 +7,7 @@ import itertools
 # --- 1. CONFIGURACIÓN ---
 st.set_page_config(page_title="Simulador de Élite - NOB", layout="wide")
 st.markdown("<h1 style='text-align: center; color: red;'>🔴⚫ SIMULADOR DE RELEVOS ESTRATÉGICO</h1>", unsafe_allow_html=True)
-st.markdown("<h4 style='text-align: center;'>Versión Ultra-Rápida (Optimización de Memoria)</h4>", unsafe_allow_html=True)
+st.markdown("<h4 style='text-align: center;'>Análisis Federativo CENARD - Optimización de Estilos</h4>", unsafe_allow_html=True)
 
 conn = st.connection("gsheets", type=GSheetsConnection)
 
@@ -27,7 +27,7 @@ def cargar_datos_sim():
         df_n['Nombre Completo'] = df_n['apellido'].astype(str).str.upper() + ", " + df_n['nombre'].astype(str)
         df_n['AnioNac'] = pd.to_datetime(df_n['fechanac']).dt.year
         
-        # Filtramos marcas de 50m una sola vez
+        # Mapa de IDs para evitar búsquedas repetitivas
         df_t_50 = data['tiempos'][data['tiempos']['coddistancia'] == 'D1'].copy()
         
         return data, df_n, df_t_50
@@ -38,7 +38,7 @@ def cargar_datos_sim():
 data, df_nad, df_tiempos_50 = cargar_datos_sim()
 if not data: st.stop()
 
-# --- 3. FUNCIONES TÉCNICAS OPTIMIZADAS ---
+# --- 3. FUNCIONES TÉCNICAS ---
 def tiempo_a_seg(t_str):
     try:
         partes = str(t_str).replace('.', ':').split(':')
@@ -56,6 +56,7 @@ def get_cat_info(suma, reg):
     return f"Suma {int(suma)}", 999
 
 def analizar_competitividad(tiempo_seg, suma_edades, genero):
+    # Benchmarks oficiales Federación / CENARD
     benchmarks = {
         "M": {119: 112, 159: 115, 199: 119, 239: 130}, 
         "F": {119: 132, 159: 135, 199: 145, 239: 165}, 
@@ -88,7 +89,7 @@ with st.container(border=True):
 
     if st.button("🚀 Calcular Estrategia y Parciales", use_container_width=True):
         if len(set(n_sel)) == 4 and None not in n_sel:
-            # Crear mapa de marcas local para velocidad
+            # Diccionario local de marcas para velocidad
             marcas_locales = {}
             for nad in n_sel:
                 idn = df_nad[df_nad['Nombre Completo'] == nad]['codnadador'].iloc[0]
@@ -102,34 +103,46 @@ with st.container(border=True):
             
             se = sum([(2026 - df_nad[df_nad['Nombre Completo'] == n]['AnioNac'].iloc[0]) for n in n_sel])
             cat_desc, _ = get_cat_info(se, s_reg)
-            st.success(f"**Categoría: {cat_desc} | Tiempo Total: {seg_a_tiempo(total_actual)}**")
             
-            # Buscar mejor orden con los mismos 4
+            st.success(f"**Categoría: {cat_desc} | Tiempo Total Simulado: {seg_a_tiempo(total_actual)}**")
+            
+            # --- BÚSQUEDA DE ANTECEDENTE HISTÓRICO ---
+            ids_act = sorted([df_nad[df_nad['Nombre Completo'] == n]['codnadador'].iloc[0] for n in n_sel])
+            def check_eq(row): return sorted([int(row['nadador_1']), int(row['nadador_2']), int(row['nadador_3']), int(row['nadador_4'])]) == ids_act
+            hist_rel = data['relevos'][data['relevos'].apply(check_eq, axis=1)]
+            
+            obs_final = analizar_competitividad(total_actual, se, s_gen)
+            
+            if not hist_rel.empty:
+                ant = hist_rel.sort_values('tiempo_final').iloc[0]
+                obs_final += f"\n\n📋 **ANTECEDENTE REGISTRADO:** Este grupo ya compitió el {ant['fecha']} con un tiempo de **{ant['tiempo_final']}**."
+
+            # Análisis de reordenamiento eficiente
             mejor_t_var, mejor_ord_var = total_actual, n_sel
             if "Medley" in s_tipo_rel:
                 for p in itertools.permutations(n_sel):
                     t_p = sum([marcas_locales[p[idx]].get(legs_desc[idx][1], 999.0) for idx in range(4)])
                     if t_p < mejor_t_var: mejor_t_var, mejor_ord_var = t_p, p
             
-            obs = analizar_competitividad(total_actual, se, s_gen)
             if mejor_t_var < (total_actual - 0.1):
-                obs += f"\n\n💡 **VARIANTE MÁS EFICIENTE:** El tiempo bajaría a **{seg_a_tiempo(mejor_t_var)}** con el orden: " + " / ".join([f"{mejor_ord_var[i]} ({legs_desc[i][0]})" for i in range(4)])
-            if obs: st.info(obs)
-        else: st.error("Seleccione 4 nadadores únicos.")
+                obs_final += f"\n\n💡 **VARIANTE MÁS EFICIENTE:** Cambiando el orden a: " + " / ".join([f"{mejor_ord_var[i]} ({legs_desc[i][0]})" for i in range(4)]) + f". El tiempo bajaría a **{seg_a_tiempo(mejor_t_var)}**."
+            
+            if obs_final: st.info(obs_final)
+        else: st.error("Seleccione 4 nadadores con marcas.")
 
-# --- 5. OPTIMIZADOR ESTRATÉGICO (ALTO RENDIMIENTO) ---
+# --- 5. OPTIMIZADOR ESTRATÉGICO ---
 st.divider()
 st.subheader("🎯 Optimizador Estratégico Multi-Posta")
-pool = st.multiselect("Nadadores convocados:", sorted(df_nad['Nombre Completo'].tolist()))
+pool = st.multiselect("Nadadores convocados:", sorted(df_nad['Nombre Completo'].tolist()), key="p_opt")
 o_reg = st.selectbox("Reglamento", data['cat_relevos']['tipo_reglamento'].unique(), key="o1")
 o_tipo = st.radio("Estilo de Relevo", ["Libre (Crol)", "Combinado (Medley)"], horizontal=True)
-o_gen = st.radio("Género", ["M", "F", "X"], horizontal=True)
+o_gen = st.radio("Género Relevo", ["M", "F", "X"], horizontal=True)
 
 if st.button("🪄 Generar Estrategia Ganadora", type="primary", use_container_width=True):
-    if len(pool) < 4: st.error("Mínimo 4 nadadores.")
+    if len(pool) < 4: st.error("Faltan nadadores.")
     else:
         with st.spinner("Procesando combinaciones óptimas..."):
-            # 1. Pre-mapear marcas del pool (CRÍTICO PARA VELOCIDAD)
+            # Mapa de marcas del pool para máxima velocidad
             marks_map = {}
             for n in pool:
                 idn = df_nad[df_nad['Nombre Completo'] == n]['codnadador'].iloc[0]
@@ -147,9 +160,7 @@ if st.button("🪄 Generar Estrategia Ganadora", type="primary", use_container_w
                 for c in combis:
                     gs = [marks_map[n]['genero'] for n in c]
                     if (o_gen == "M" and all(g=="M" for g in gs)) or (o_gen == "F" and all(g=="F" for g in gs)) or (o_gen == "X" and gs.count("M")==2):
-                        
                         m_t, m_ord = 999.0, None
-                        # Optimización: En Crol no permutamos, solo sumamos
                         if "Libre" in o_tipo:
                             m_t = sum([marks_map[n].get("E4", 999.0) for n in c])
                             m_ord = sorted(c, key=lambda x: marks_map[x].get("E4", 999.0), reverse=True)
@@ -157,7 +168,6 @@ if st.button("🪄 Generar Estrategia Ganadora", type="primary", use_container_w
                             for p in itertools.permutations(c):
                                 tp = sum([marks_map[p[idx]].get(legs_opt[idx][0], 999.0) for idx in range(4)])
                                 if tp < m_t: m_t, m_ord = tp, p
-                        
                         if m_ord and m_t < 400: validas.append({'eq': m_ord, 't': m_t})
                 
                 if not validas: break
@@ -167,12 +177,20 @@ if st.button("🪄 Generar Estrategia Ganadora", type="primary", use_container_w
                 propuestas.append({'eq': mejor['eq'], 't': mejor['t'], 'cat': c_nom, 'se': se_e, 'cmax': c_max, 'parc': [marks_map[mejor['eq'][idx]].get(legs_opt[idx][0], 999.0) for idx in range(4)]})
                 for n in mejor['eq']: pool_actual.remove(n)
 
+            # --- RENDERIZACIÓN DE RESULTADOS ---
             for i, p in enumerate(propuestas):
                 with st.expander(f"Posta #{i+1}: {p['cat']} ({seg_a_tiempo(p['t'])})", expanded=True):
+                    # Título de grupo y tiempo resaltado
+                    st.markdown(f"### ⏱️ Tiempo: {seg_a_tiempo(p['t'])} | 👥 Grupo: {p['cat']}")
+                    
                     cols = st.columns(4)
                     for j in range(4):
-                        cols[j].write(f"**{legs_opt[j][1]}**\n\n{p['eq'][j]}")
+                        cols[j].markdown(f"**{legs_opt[j][1]}**")
+                        cols[j].write(p['eq'][j])
                         cols[j].code(seg_a_tiempo(p['parc'][j]))
-                    st.write(analizar_competitividad(p['t'], p['se'], o_gen))
+                    
+                    comp_text = analizar_competitividad(p['t'], p['se'], o_gen)
+                    if comp_text: st.info(comp_text)
+                    
                     falt = p['cmax'] - p['se']
-                    if falt <= 8: st.info(f"💡 **TIP:** Estás a {falt} años del límite. Evaluar subir de categoría.")
+                    if falt <= 8: st.success(f"💡 **TIP ESTRATÉGICO:** Este equipo suma {p['se']} años. Están a solo {falt} años del límite de categoría. Evaluar subir de grupo.")
