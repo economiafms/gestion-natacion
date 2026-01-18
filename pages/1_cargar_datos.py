@@ -18,7 +18,7 @@ def refrescar_datos():
     st.cache_data.clear()
     st.rerun()
 
-# --- 3. CARGA DE METADATOS Y PRE-CALCULO DE HASHES ---
+# --- 3. CARGA DE METADATOS Y HASHES ---
 @st.cache_data(ttl="1h")
 def cargar_referencias():
     return {
@@ -34,17 +34,15 @@ def cargar_referencias():
 data = cargar_referencias()
 if not data: st.stop()
 
-# --- PRE-PROCESAMIENTO PARA VALIDACIÓN RÁPIDA (O(1)) ---
+# Pre-procesamiento para validaciones
 df_nad = data['nadadores'].copy()
 df_nad['Nombre Completo'] = df_nad['apellido'].astype(str).str.strip().str.upper() + ", " + df_nad['nombre'].astype(str).str.strip().str.upper()
 set_nadadores_existentes = set(df_nad['Nombre Completo'].unique())
 
 df_t = data['tiempos'].copy()
-# Hash compuesto para evitar duplicados de carrera
 df_t['hash_validacion'] = df_t['codnadador'].astype(str) + "_" + df_t['codestilo'].astype(str) + "_" + df_t['coddistancia'].astype(str) + "_" + df_t['fecha'].astype(str)
 set_tiempos_existentes = set(df_t['hash_validacion'].unique())
 
-# Listas para Selectores
 lista_nombres = sorted(df_nad['Nombre Completo'].unique())
 df_pil = data['piletas'].copy()
 df_pil['Detalle'] = df_pil['club'].astype(str) + " (" + df_pil['medida'].astype(str) + ")"
@@ -84,11 +82,14 @@ if total > 0:
         st.rerun()
 
 # ==========================================
-# 5. MENÚ DE NAVEGACIÓN
+# 5. MENÚ DE NAVEGACIÓN (CON MEMORIA 'KEY')
 # ==========================================
+# Agregamos key="navegacion_principal" para que no se resetee al hacer rerun
 seccion_activa = st.radio("📍 Sección:", 
                           ["👤 Nadadores", "⏱️ Individuales", "🏊‍♂️ Relevos"], 
-                          horizontal=True, label_visibility="collapsed")
+                          horizontal=True, 
+                          label_visibility="collapsed",
+                          key="navegacion_principal") # <--- ESTO SOLUCIONA EL SALTO DE PÁGINA
 st.divider()
 
 # --- SECCIÓN 1: NADADORES ---
@@ -158,7 +159,7 @@ elif seccion_activa == "⏱️ Individuales":
             st.write("")
             if st.form_submit_button("Guardar Tiempo", use_container_width=True):
                 if t_nad and t_est and t_dis and t_pil:
-                    # Recuperar valores (CORRECCIÓN: NO FORZAR INT EN CÓDIGOS)
+                    # Recuperar valores sin forzar int() en códigos
                     id_nad = df_nad[df_nad['Nombre Completo'] == t_nad]['codnadador'].values[0]
                     id_est = data['estilos'][data['estilos']['descripcion'] == t_est]['codestilo'].values[0]
                     id_dis = data['distancias'][data['distancias']['descripcion'] == t_dis]['coddistancia'].values[0]
@@ -174,10 +175,10 @@ elif seccion_activa == "⏱️ Individuales":
                         cola_id = pd.DataFrame(st.session_state.cola_tiempos)['id_registro'].max() if st.session_state.cola_tiempos else 0
                         st.session_state.cola_tiempos.append({
                             'id_registro': int(max(base_id, cola_id) + 1),
-                            'codnadador': id_nad, # Sin int() por si acaso
+                            'codnadador': id_nad, 
                             'codpileta': df_pil[df_pil['Detalle'] == t_pil]['codpileta'].values[0],
-                            'codestilo': id_est,  # Sin int()
-                            'coddistancia': id_dis, # Sin int()
+                            'codestilo': id_est,
+                            'coddistancia': id_dis,
                             'tiempo': f"{vm:02d}:{vs:02d}.{vc:02d}", 'fecha': fecha_str, 'posicion': int(v_pos)
                         })
                         set_tiempos_existentes.add(hash_nuevo)
