@@ -138,15 +138,11 @@ with tab2:
         df_final = df_tmp.copy()
         if h_dis_sel != "Todos": df_final = df_final[df_final['Distancia'] == h_dis_sel]
 
-        # --- LÓGICA DEL GRÁFICO (MODIFICADA) ---
+        # --- LÓGICA DEL GRÁFICO (MODIFICADA: MENOR A MAYOR) ---
         if h_est_sel != "Todos" and h_dis_sel != "Todos" and len(df_final) >= 2:
             df_g = df_final.copy().sort_values('fecha')
             df_g['fecha_dt'] = pd.to_datetime(df_g['fecha'])
-            
-            # Formateo para eje Y (convertir segundos a objeto de tiempo ficticio para MM:SS.cc)
             df_g['y_time'] = pd.to_datetime(df_g['segundos'], unit='s', origin='2000-01-01')
-            
-            # Categoría en la fecha de la carrera
             df_g['cat_en_fecha'] = (df_g['fecha_dt'].dt.year - fecha_nac_dt.year).apply(asignar_cat)
 
             fig = px.line(
@@ -155,17 +151,16 @@ with tab2:
                 custom_data=['tiempo', 'Sede_Full', 'cat_en_fecha']
             )
 
-            # Estética y Hover
+            # Tooltips limpios (sin etiquetas de nombres)
             fig.update_traces(
                 hovertemplate="<b>%{x|%d/%m/%Y}</b><br>"+
-                              "Tiempo: %{customdata[0]}<br>"+
-                              "Sede: %{customdata[1]}<br>"+
-                              "Categoría: %{customdata[2]}<extra></extra>"
+                              "%{customdata[0]}<br>"+
+                              "%{customdata[1]}<br>"+
+                              "%{customdata[2]}<extra></extra>"
             )
             
-            # Eje Y invertido con formato MM:SS.ms
+            # Eje Y en orden Menor a Mayor (Estándar)
             fig.update_yaxes(
-                autorange="reversed", 
                 tickformat="%M:%S.%2f", 
                 title="Tiempo (MM:SS.ms)"
             )
