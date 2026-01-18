@@ -56,6 +56,7 @@ def get_cat_info(suma, reg):
     return f"Suma {int(suma)}", 999
 
 def analizar_competitividad(tiempo_seg, suma_edades, genero):
+    # Benchmarks oficiales Federación / CENARD
     benchmarks = {
         "M": {119: 112, 159: 115, 199: 119, 239: 130}, 
         "F": {119: 132, 159: 135, 199: 145, 239: 165}, 
@@ -67,8 +68,8 @@ def analizar_competitividad(tiempo_seg, suma_edades, genero):
         meta = benchmarks[genero][cat_techo]
         if tiempo_seg <= meta:
             return True, f"🔥 **NIVEL FEDERACIÓN/CENARD.** Tiempo de podio ({seg_a_tiempo(meta)})."
-        elif tiempo_seg <= meta + 10:
-            return False, f"✨ **NIVEL COMPETITIVO.** A solo {seg_a_tiempo(tiempo_seg - meta)} del podio nacional."
+        else:
+            return False, f"⏳ A **{seg_a_tiempo(tiempo_seg - meta)}** del tiempo de podio nacional ({seg_a_tiempo(meta)})."
     return False, ""
 
 # --- 4. SIMULADOR MANUAL ---
@@ -97,55 +98,65 @@ with st.container(border=True):
             
             # --- VISUALIZACIÓN DESTACADA ---
             st.markdown(f"""
-                <div style="background-color: #1e1e1e; padding: 20px; border-radius: 10px; border-left: 10px solid red; text-align: center;">
-                    <h1 style="margin: 0; color: white;">{seg_a_tiempo(total)}</h1>
-                    <h2 style="margin: 0; color: #ff4b4b;">CATEGORÍA: {cat_nom.upper()}</h2>
-                    <p style="margin: 5px; color: gray;">Suma de edades: {se} años</p>
+                <div style="background-color: #1e1e1e; padding: 30px; border-radius: 15px; border: 2px solid red; text-align: center; margin-bottom: 20px;">
+                    <h3 style="margin: 0; color: #888; text-transform: uppercase; letter-spacing: 2px;">Tiempo Final Simulado</h3>
+                    <h1 style="margin: 0; color: white; font-size: 80px; font-family: monospace;">{seg_a_tiempo(total)}</h1>
+                    <h2 style="margin: 0; color: #ff4b4b; font-size: 35px;">{cat_nom.upper()}</h2>
+                    <p style="margin: 10px; color: #aaa; font-size: 18px;">Suma Total de Edades: <b>{se} años</b></p>
                 </div>
             """, unsafe_allow_html=True)
             
             st.write("### ⏱️ Desglose Técnico")
             res_c = st.columns(4)
             for i in range(4):
-                res_c[i].metric(n_sel[i].split(',')[0], seg_a_tiempo(marcas[n_sel[i]].get(legs[i][1])))
-                res_c[i].caption(legs[i][0])
+                res_c[i].metric(n_sel[i], seg_a_tiempo(marcas[n_sel[i]].get(legs[i][1])))
+                res_c[i].caption(f"Tramo: {legs[i][0]}")
 
-            # --- OBSERVACIONES ---
+            # --- ANÁLISIS DE OBSERVACIONES ---
+            # 1. Buscar mejor orden con los mismos 4
             mejor_t_var, mejor_ord_var = total, n_sel
             for p in itertools.permutations(n_sel):
                 t_p = sum([marcas[p[idx]].get(legs[idx][1], 999.0) for idx in range(4)])
                 if t_p < mejor_t_var: mejor_t_var, mejor_ord_var = t_p, p
             
+            # 2. Competitividad
             is_podio, txt_podio = analizar_competitividad(total, se, s_gen)
-            obs_final = txt_podio
-            if mejor_t_var < (total - 0.1):
-                detalles_v = [f"{mejor_ord_var[i].split(',')[0]} en {legs[i][0]}" for i in range(4)]
-                obs_final += f"\n\n💡 **VARIANTE MÁS EFICIENTE:** {seg_a_tiempo(mejor_t_var)} con el orden: {' / '.join(detalles_v)}."
             
-            # Antecedente
+            # Construcción del bloque de observaciones
+            st.write("### 📝 Observaciones del Analista")
+            obs_texto = txt_podio
+            
+            if mejor_t_var < (total - 0.01): # Si bajan aunque sea centésimas
+                variante_desc = " / ".join([f"**{mejor_ord_var[i].split(',')[0]}** ({legs[i][0]})" for i in range(4)])
+                obs_texto += f"\n\n💡 **OPTIMIZACIÓN DE ORDEN:** Se detectó una variante más rápida. Si el orden fuera {variante_desc}, el tiempo bajaría a **{seg_a_tiempo(mejor_t_var)}**."
+            
+            # 3. Antecedente Histórico
             ids_act = sorted([int(df_nad[df_nad['Nombre Completo'] == n]['codnadador'].iloc[0]) for n in n_sel])
-            def check_eq(row): return sorted([int(row['nadador_1']), int(row['nadador_2']), int(row['nadador_3']), int(row['nadador_4'])]) == ids_act
+            def check_eq(row): 
+                try: return sorted([int(row['nadador_1']), int(row['nadador_2']), int(row['nadador_3']), int(row['nadador_4'])]) == ids_act
+                except: return False
             hist = data['relevos'][data['relevos'].apply(check_eq, axis=1)]
+            
             if not hist.empty:
                 ant = hist.sort_values('tiempo_final').iloc[0]
                 ip = dict_piletas.get(ant['codpileta'], {"club": "Sede ?", "medida": "-"})
-                obs_final += f"\n\n📋 **ANTECEDENTE:** {ant['tiempo_final']} en {ip['club']} ({ip['medida']}) el {ant['fecha']}."
+                obs_texto += f"\n\n📋 **ANTECEDENTE REAL:** Este grupo ya compitió en **{ip['club']} ({ip['medida']})** con un tiempo de **{ant['tiempo_final']}** el {ant['fecha']}."
             
-            st.info(obs_final)
-        else: st.error("Seleccione 4 nadadores únicos.")
+            st.info(obs_texto)
+        else: st.error("Seleccione 4 nadadores únicos con marcas.")
 
 # --- 5. OPTIMIZADOR DE VICTORIA ---
 st.divider()
 st.subheader("🎯 Optimizador de Podios por Categoría")
 pool = st.multiselect("Pool de Convocados:", sorted(df_nad['Nombre Completo'].tolist()))
 o_reg = st.selectbox("Reglamento Torneo", data['cat_relevos']['tipo_reglamento'].unique(), key="o1")
-o_tipo = st.radio("Relevo", ["Libre (Crol)", "Combinado (Medley)"], horizontal=True)
-o_gen = st.radio("Género", ["M", "F", "X"], horizontal=True)
+o_tipo = st.radio("Estilo de Relevo", ["Libre (Crol)", "Combinado (Medley)"], horizontal=True)
+o_gen = st.radio("Género Relevo", ["M", "F", "X"], horizontal=True)
 
-if st.button("🪄 Armar Equipos Ganadores", type="primary", use_container_width=True):
+if st.button("🪄 Armar Estrategia Ganadora", type="primary", use_container_width=True):
     if len(pool) < 4: st.error("Faltan nadadores.")
     else:
-        with st.spinner("Priorizando categorías competitivas..."):
+        with st.spinner("Priorizando podios nacionales..."):
             m_map = {n: {row['codestilo']: tiempo_a_seg(row['tiempo']) for _, row in df_tiempos_50[df_tiempos_50['codnadador'] == df_nad[df_nad['Nombre Completo'] == n]['codnadador'].iloc[0]].iterrows()} for n in pool}
             for n in pool:
                 m_map[n]['gen'] = df_nad[df_nad['Nombre Completo'] == n]['codgenero'].iloc[0]
@@ -153,7 +164,7 @@ if st.button("🪄 Armar Equipos Ganadores", type="primary", use_container_width
 
             legs_opt = [("E2", "Espalda"), ("E3", "Pecho"), ("E1", "Mariposa"), ("E4", "Crol")] if "Medley" in o_tipo else [("E4", "Crol")]*4
             pool_actual, propuestas = list(pool), []
-            categorias_cubiertas = []
+            categorias_ganadas = []
 
             while len(pool_actual) >= 4:
                 combis = list(itertools.combinations(pool_actual, 4))
@@ -169,43 +180,40 @@ if st.button("🪄 Armar Equipos Ganadores", type="primary", use_container_width
                             se = sum([m_map[n]['edad'] for n in mo])
                             c_nom, c_max = get_cat_info(se, o_reg)
                             is_comp, _ = analizar_competitividad(mt, se, o_gen)
-                            # CRITERIO: Si la categoría ya tiene un ganador, solo aceptamos otro si es competitivo
-                            if c_nom not in categorias_cubiertas or is_comp:
-                                validas.append({'eq': mo, 't': mt, 'cat': c_nom, 'se': se, 'cmax': c_max})
+                            # Si la categoría ya tiene equipo, solo sumamos si el nuevo también es nivel podio
+                            if c_nom not in categorias_ganadas or is_comp:
+                                validas.append({'eq': mo, 't': mt, 'cat': c_nom, 'se': se, 'cmax': c_max, 'comp': is_comp})
                 
                 if not validas: break
-                
-                # Priorizar el equipo que más se acerque al podio nacional o sea el más rápido absoluto
                 mejor = min(validas, key=lambda x: x['t'])
                 
-                # --- BUSCAR SALTO ESTRATÉGICO PARA ASEGURAR CATEGORÍA ---
-                sugerencia = None
+                # Búsqueda de salto de categoría
+                sug = None
                 faltante = mejor['cmax'] - mejor['se']
                 if faltante <= 10:
                     suplentes = [n for n in pool_actual if n not in mejor['eq']]
                     mejor_rec = None
-                    min_dif = 999.0
+                    m_dif = 999.0
                     for s in suplentes:
                         for idx in range(4):
                             sale = mejor['eq'][idx]
                             if o_gen == "X" and m_map[s]['gen'] != m_map[sale]['gen']: continue
-                            n_suma = mejor['se'] - m_map[sale]['edad'] + m_map[s]['edad']
-                            if n_suma > mejor['cmax']:
+                            ns = mejor['se'] - m_map[sale]['edad'] + m_map[s]['edad']
+                            if ns > mejor['cmax']:
                                 perd = m_map[s].get(legs_opt[idx][0], 999.0) - m_map[sale].get(legs_opt[idx][0], 999.0)
-                                if perd < min_dif: min_dif, mejor_rec = perd, (sale, s, n_suma)
+                                if perd < m_dif: m_dif, mejor_rec = perd, (sale, s, ns)
                     if mejor_rec:
-                        c_nueva, _ = get_cat_info(mejor_rec[2], o_reg)
-                        sugerencia = f"💡 **ESTRATEGIA:** Sacando a **{mejor_rec[0]}** y poniendo a **{mejor_rec[1]}**, el equipo sube a **{c_nueva.upper()}**. Se pierden solo {min_dif:.2f}s pero se compite contra nadadores más grandes."
+                        cn, _ = get_cat_info(mejor_rec[2], o_reg)
+                        sug = f"💡 **MOVIMIENTO MAESTRO:** Sacando a **{mejor_rec[0]}** y poniendo a **{mejor_rec[1]}**, el equipo suma **{mejor_rec[2]}** años. Saltan a **{cn.upper()}**. Se pierden {m_dif:.2f}s pero ganan ventaja de edad."
 
                 propuestas.append({
                     'eq': mejor['eq'], 't': mejor['t'], 'cat': mejor['cat'], 'se': mejor['se'], 
                     'parc': [m_map[mejor['eq'][idx]].get(legs_opt[idx][0], 999.0) for idx in range(4)],
-                    'tip': sugerencia
+                    'tip': sug, 'podio': mejor['comp']
                 })
-                categorias_cubiertas.append(mejor['cat'])
+                categorias_ganadas.append(mejor['cat'])
                 for n in mejor['eq']: pool_actual.remove(n)
 
-            # RENDER DE RESULTADOS OPTIMIZADOS
             for i, p in enumerate(propuestas):
                 with st.expander(f"POSTA #{i+1}: {p['cat'].upper()} ({seg_a_tiempo(p['t'])})", expanded=True):
                     st.markdown(f"### ⏱️ {seg_a_tiempo(p['t'])} | {p['cat'].upper()}")
@@ -214,7 +222,7 @@ if st.button("🪄 Armar Equipos Ganadores", type="primary", use_container_width
                         cols[j].write(f"**{legs_opt[j][1]}**\n\n{p['eq'][j]}")
                         cols[j].code(seg_a_tiempo(p['parc'][j]))
                     
-                    is_podio, txt_p = analizar_competitividad(p['t'], p['se'], o_gen)
-                    if is_podio: st.success(txt_p)
+                    is_pod, txt_p = analizar_competitividad(p['t'], p['se'], o_gen)
+                    if is_pod: st.success(txt_p)
                     else: st.warning(txt_p)
                     if p['tip']: st.info(p['tip'])
