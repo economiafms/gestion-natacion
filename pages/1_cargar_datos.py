@@ -18,7 +18,7 @@ def refrescar_datos():
     st.cache_data.clear()
     st.rerun()
 
-# --- 3. CARGA DE METADATOS Y PRE-CALCULO DE HASHES (EFICIENCIA) ---
+# --- 3. CARGA DE METADATOS Y PRE-CALCULO DE HASHES ---
 @st.cache_data(ttl="1h")
 def cargar_referencias():
     return {
@@ -35,14 +35,12 @@ data = cargar_referencias()
 if not data: st.stop()
 
 # --- PRE-PROCESAMIENTO PARA VALIDACIÓN RÁPIDA (O(1)) ---
-# 1. Set de Nadadores existentes (Apellido, Nombre)
 df_nad = data['nadadores'].copy()
 df_nad['Nombre Completo'] = df_nad['apellido'].astype(str).str.strip().str.upper() + ", " + df_nad['nombre'].astype(str).str.strip().str.upper()
 set_nadadores_existentes = set(df_nad['Nombre Completo'].unique())
 
-# 2. Set de Tiempos existentes (ID_Nadador + ID_Estilo + ID_Distancia + Fecha)
-# Esto evita cargar dos veces la misma carrera
 df_t = data['tiempos'].copy()
+# Hash compuesto para evitar duplicados de carrera
 df_t['hash_validacion'] = df_t['codnadador'].astype(str) + "_" + df_t['codestilo'].astype(str) + "_" + df_t['coddistancia'].astype(str) + "_" + df_t['fecha'].astype(str)
 set_tiempos_existentes = set(df_t['hash_validacion'].unique())
 
@@ -114,11 +112,10 @@ if seccion_activa == "👤 Nadadores":
             st.write("") 
             if st.form_submit_button("Guardar Nadador", use_container_width=True):
                 if n_nom and n_ape and n_gen:
-                    # VALIDACIÓN DE DUPLICADOS (NOMBRE + APELLIDO)
                     nombre_completo_nuevo = f"{n_ape.strip().upper()}, {n_nom.strip().upper()}"
                     
                     if nombre_completo_nuevo in set_nadadores_existentes:
-                        st.error(f"⛔ Error: El nadador **{nombre_completo_nuevo}** ya existe en la base de datos.")
+                        st.error(f"⛔ Error: **{nombre_completo_nuevo}** ya existe.")
                     else:
                         base_id = data['nadadores']['codnadador'].max() if not data['nadadores'].empty else 0
                         cola_id = pd.DataFrame(st.session_state.cola_nadadores)['codnadador'].max() if st.session_state.cola_nadadores else 0
@@ -127,7 +124,6 @@ if seccion_activa == "👤 Nadadores":
                             'nombre': n_nom.title(), 'apellido': n_ape.title(),
                             'fechanac': n_fec.strftime('%Y-%m-%d'), 'codgenero': n_gen
                         })
-                        # Actualizamos el set localmente para que detecte duplicados en la misma sesión
                         set_nadadores_existentes.add(nombre_completo_nuevo)
                         st.success(f"Nadador {n_nom} añadido.")
                         st.rerun()
@@ -162,29 +158,28 @@ elif seccion_activa == "⏱️ Individuales":
             st.write("")
             if st.form_submit_button("Guardar Tiempo", use_container_width=True):
                 if t_nad and t_est and t_dis and t_pil:
-                    # Recuperar IDs
+                    # Recuperar valores (CORRECCIÓN: NO FORZAR INT EN CÓDIGOS)
                     id_nad = df_nad[df_nad['Nombre Completo'] == t_nad]['codnadador'].values[0]
                     id_est = data['estilos'][data['estilos']['descripcion'] == t_est]['codestilo'].values[0]
                     id_dis = data['distancias'][data['distancias']['descripcion'] == t_dis]['coddistancia'].values[0]
                     fecha_str = v_fec.strftime('%Y-%m-%d')
 
-                    # VALIDACIÓN DE DUPLICADOS (Nadador + Estilo + Distancia + Fecha)
+                    # Validación de Hash
                     hash_nuevo = f"{id_nad}_{id_est}_{id_dis}_{fecha_str}"
                     
                     if hash_nuevo in set_tiempos_existentes:
-                        st.error(f"⛔ Error: Ya existe un tiempo cargado para **{t_nad}** en **{t_dis} {t_est}** con fecha **{v_fec.strftime('%d/%m/%Y')}**.")
+                        st.error(f"⛔ Error: Tiempo duplicado para **{t_nad}**.")
                     else:
                         base_id = data['tiempos']['id_registro'].max() if not data['tiempos'].empty else 0
                         cola_id = pd.DataFrame(st.session_state.cola_tiempos)['id_registro'].max() if st.session_state.cola_tiempos else 0
                         st.session_state.cola_tiempos.append({
                             'id_registro': int(max(base_id, cola_id) + 1),
-                            'codnadador': int(id_nad),
+                            'codnadador': id_nad, # Sin int() por si acaso
                             'codpileta': df_pil[df_pil['Detalle'] == t_pil]['codpileta'].values[0],
-                            'codestilo': int(id_est),
-                            'coddistancia': int(id_dis),
+                            'codestilo': id_est,  # Sin int()
+                            'coddistancia': id_dis, # Sin int()
                             'tiempo': f"{vm:02d}:{vs:02d}.{vc:02d}", 'fecha': fecha_str, 'posicion': int(v_pos)
                         })
-                        # Actualizamos el set local
                         set_tiempos_existentes.add(hash_nuevo)
                         st.success("✅ Tiempo guardado.")
                         st.rerun()
@@ -203,7 +198,6 @@ elif seccion_activa == "🏊‍♂️ Relevos":
         else:
             ld = lista_nombres 
         
-        # Filtro 4x50
         lista_dist_4x50 = data['distancias'][data['distancias']['descripcion'].str.contains("4x50", case=False, na=False)]['descripcion'].unique()
 
     with st.container(border=True):
@@ -241,9 +235,8 @@ elif seccion_activa == "🏊‍♂️ Relevos":
             st.write("")
             if st.form_submit_button("Guardar Relevo", use_container_width=True):
                 if r_gen and all(r_n) and r_dis and r_pil:
-                    # VALIDACIÓN: Nadadores repetidos en el mismo relevo
                     if len(set(r_n)) != 4:
-                        st.error("⛔ Error: Hay nadadores repetidos en el equipo.")
+                        st.error("⛔ Error: Nadadores repetidos.")
                     else:
                         base_id = data['relevos']['id_relevo'].max() if not data['relevos'].empty else 0
                         cola_id = pd.DataFrame(st.session_state.cola_relevos)['id_relevo'].max() if st.session_state.cola_relevos else 0
