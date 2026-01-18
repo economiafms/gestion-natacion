@@ -7,7 +7,7 @@ import itertools
 # --- 1. CONFIGURACIÓN ---
 st.set_page_config(page_title="Simulador de Élite - NOB", layout="wide")
 st.markdown("<h1 style='text-align: center; color: red;'>🔴⚫ SIMULADOR DE RELEVOS ESTRATÉGICO</h1>", unsafe_allow_html=True)
-st.markdown("<h4 style='text-align: center;'>Optimización Técnica y Análisis de Marcas CENARD</h4>", unsafe_allow_html=True)
+st.markdown("<h4 style='text-align: center;'>Análisis Federativo CENARD - Optimización de Estilos</h4>", unsafe_allow_html=True)
 
 conn = st.connection("gsheets", type=GSheetsConnection)
 
@@ -24,13 +24,8 @@ def cargar_datos_sim():
             "cat_relevos": conn.read(worksheet="Categorias_Relevos")
         }
         df_n = data['nadadores'].copy()
-        # Formato APELLIDO, Nombre para todo el sistema
         df_n['Nombre Completo'] = df_n['apellido'].astype(str).str.upper() + ", " + df_n['nombre'].astype(str)
-        
-        df_t = data['tiempos'].copy()
-        # Filtrar solo marcas de 50m (D1) para evitar lentitud
-        df_t_50 = df_t[df_t['coddistancia'] == 'D1'].copy()
-        
+        df_t_50 = data['tiempos'][data['tiempos']['coddistancia'] == 'D1'].copy()
         return data, df_n, df_t_50
     except Exception as e:
         st.error(f"Error al conectar: {e}")
@@ -50,17 +45,10 @@ def seg_a_tiempo(seg):
     if seg >= 900: return "S/T"
     return f"{int(seg // 60):02d}:{int(seg % 60):02d}.{int((seg % 1) * 100):02d}"
 
-def obtener_nadadores_aptos(id_estilo, genero="X"):
-    ids_con_tiempo = df_tiempos_50[df_tiempos_50['codestilo'] == id_estilo]['codnadador'].unique()
-    res = df_nad[df_nad['codnadador'].isin(ids_con_tiempo)]
-    if genero != "X": res = res[res['codgenero'] == genero]
-    return sorted(res['Nombre Completo'].tolist())
-
 def obtener_mejor_marca(nombre, id_estilo):
     idn = df_nad[df_nad['Nombre Completo'] == nombre]['codnadador'].iloc[0]
     m = df_tiempos_50[(df_tiempos_50['codnadador'] == idn) & (df_tiempos_50['codestilo'] == id_estilo)]
-    if m.empty: return 999.0
-    return m['tiempo'].apply(tiempo_a_seg).min()
+    return m['tiempo'].apply(tiempo_a_seg).min() if not m.empty else 999.0
 
 def get_cat_info(suma, reg):
     regs = data['cat_relevos'][data['cat_relevos']['tipo_reglamento'] == reg]
@@ -80,7 +68,7 @@ def analizar_competitividad(tiempo_seg, suma_edades, genero):
         meta = benchmarks[genero][cat_techo]
         if tiempo_seg <= meta: return f"🔥 **NIVEL FEDERACIÓN/CENARD.** Tiempo de élite ({seg_a_tiempo(meta)})."
         elif tiempo_seg <= meta + 10: return f"✨ **NIVEL COMPETITIVO.** Cerca de marcas de podio nacional."
-    return "" # Se elimina la recomendación de "entrenar más"
+    return ""
 
 # --- 4. SIMULADOR MANUAL ---
 st.divider()
@@ -92,95 +80,82 @@ with st.container(border=True):
     s_gen = c3.selectbox("Género", ["M", "F", "X"], key="m3")
 
     legs_desc = [("Espalda", "E2"), ("Pecho", "E3"), ("Mariposa", "E1"), ("Crol", "E4")] if "Medley" in s_tipo_rel else [("Crol", "E4")] * 4
-    
     n_sel, cols = [], st.columns(4)
     for i, (nombre_est, cod_est) in enumerate(legs_desc):
-        n_sel.append(cols[i].selectbox(f"Pos {i+1}: {nombre_est}", obtener_nadadores_aptos(cod_est, s_gen), index=None, key=f"sel{i}"))
+        # Filtrar nadadores aptos para ESTA posición específica
+        ids_est = df_tiempos_50[df_tiempos_50['codestilo'] == cod_est]['codnadador'].unique()
+        aptos = df_nad[df_nad['codnadador'].isin(ids_est)]
+        if s_gen != "X": aptos = aptos[aptos['codgenero'] == s_gen]
+        n_sel.append(cols[i].selectbox(f"Pos {i+1}: {nombre_est}", sorted(aptos['Nombre Completo'].tolist()), index=None, key=f"sel{i}"))
 
     if st.button("🚀 Calcular Estrategia y Parciales", use_container_width=True):
         if len(set(n_sel)) == 4 and None not in n_sel:
-            total_actual = 0
+            total_actual = sum([obtener_mejor_marca(n, legs_desc[i][1]) for i, n in enumerate(n_sel)])
             cols_res = st.columns(4)
             for i, (nom_est, cod_est) in enumerate(legs_desc):
                 t = obtener_mejor_marca(n_sel[i], cod_est)
-                total_actual += t
-                cols_res[i].metric(n_sel[i], seg_a_tiempo(t)) # Muestra APELLIDO, Nombre
-                cols_res[i].caption(f"Estilo: {nom_est}")
+                cols_res[i].metric(n_sel[i], seg_a_tiempo(t))
             
             se = sum([(2026 - pd.to_datetime(df_nad[df_nad['Nombre Completo'] == n]['fechanac'].iloc[0]).year) for n in n_sel])
             cat_desc, _ = get_cat_info(se, s_reg)
             st.success(f"**Categoría: {cat_desc} | Tiempo Total: {seg_a_tiempo(total_actual)}**")
             
-            # Análisis de eficiencia
+            # Analizar variantes más eficientes con los mismos 4
             mejor_t_var, mejor_ord_var = total_actual, n_sel
             for p in itertools.permutations(n_sel):
-                t_p, skip = 0, False
-                for idx, (nom_e, cod_e) in enumerate(legs_desc):
-                    mv = obtener_mejor_marca(p[idx], cod_e)
-                    if mv >= 900: skip = True; break
-                    t_p += mv
-                if not skip and t_p < mejor_t_var:
-                    mejor_t_var, mejor_ord_var = t_p, p
+                t_p = sum([obtener_mejor_marca(p[idx], legs_desc[idx][1]) for idx in range(4)])
+                if t_p < mejor_t_var: mejor_t_var, mejor_ord_var = t_p, p
             
             obs = analizar_competitividad(total_actual, se, s_gen)
             if mejor_t_var < (total_actual - 0.1):
-                detalles_var = [f"{mejor_ord_var[i]} en {legs_desc[i][0]}" for i in range(4)]
-                obs += f"\n\n💡 **VARIANTE MÁS EFICIENTE:** El tiempo bajaría a **{seg_a_tiempo(mejor_t_var)}** con el orden: {' / '.join(detalles_var)}."
-            
-            if obs: st.info(obs)
-        else:
-            st.error("Seleccione 4 nadadores distintos con marcas registradas.")
+                obs += f"\n\n💡 **VARIANTE MÁS EFICIENTE:** El tiempo bajaría a **{seg_a_tiempo(mejor_t_var)}** ordenando: " + " / ".join([f"{mejor_ord_var[i]} ({legs_desc[i][0]})" for i in range(4)])
+            st.info(obs)
+        else: st.error("Seleccione 4 nadadores con marcas.")
 
-# --- 5. OPTIMIZADOR ESTRATÉGICO ---
+# --- 5. OPTIMIZADOR ESTRATÉGICO (VERSION PROTEGIDA) ---
 st.divider()
 st.subheader("🎯 Optimizador Estratégico Multi-Posta")
-pool = st.multiselect("Nadadores convocados:", sorted(df_nad['Nombre Completo'].tolist()))
-g1, g2, g3 = st.columns(3)
-o_reg = g1.selectbox("Reglamento Torneo", data['cat_relevos']['tipo_reglamento'].unique(), key="o1")
-o_tipo = g2.selectbox("Estilo", ["Libre (Crol)", "Combinado (Medley)"], key="o2")
-o_gen = g3.selectbox("Género Relevo", ["M", "F", "X"], key="o3")
+pool = st.multiselect("Nadadores convocados:", sorted(df_nad['Nombre Completo'].tolist()), help="Selecciona a los que van al torneo.")
+o_reg = st.selectbox("Reglamento Torneo", data['cat_relevos']['tipo_reglamento'].unique(), key="o1")
+o_tipo = st.radio("Estilo de Relevo", ["Libre (Crol)", "Combinado (Medley)"], horizontal=True)
+o_gen = st.radio("Género Relevo", ["M", "F", "X"], horizontal=True)
 
 if st.button("🪄 Generar Estrategia Ganadora", type="primary", use_container_width=True):
     if len(pool) < 4: st.error("Mínimo 4 nadadores.")
     else:
-        legs_opt = [("E2", "Espalda"), ("E3", "Pecho"), ("E1", "Mariposa"), ("E4", "Crol")] if "Medley" in o_tipo else [("E4", "Crol")]*4
-        pool_actual, propuestas = list(pool), []
-        
-        while len(pool_actual) >= 4:
-            combis = list(itertools.combinations(pool_actual, 4))
-            validas = []
-            for c in combis:
-                gs = [df_nad[df_nad['Nombre Completo'] == n]['codgenero'].iloc[0] for n in c]
-                if (o_gen == "M" and all(g == "M" for g in gs)) or (o_gen == "F" and all(g == "F" for g in gs)) or (o_gen == "X" and gs.count("M") == 2):
-                    m_t, m_ord = 999.0, None
-                    for p in itertools.permutations(c):
-                        tp, skip = 0, False
-                        for idx, (cod_e, nom_e) in enumerate(legs_opt):
-                            mv = obtener_mejor_marca(p[idx], cod_e)
-                            if mv >= 900: skip = True; break
-                            tp += mv
-                        if not skip and tp < m_t: m_t, m_ord = tp, p
-                    if m_ord: validas.append({'equipo': m_ord, 'tiempo': m_t})
+        with st.spinner("Optimizando combinaciones..."):
+            legs_opt = [("E2", "Espalda"), ("E3", "Pecho"), ("E1", "Mariposa"), ("E4", "Crol")] if "Medley" in o_tipo else [("E4", "Crol")]*4
+            pool_actual, propuestas = list(pool), []
             
-            if not validas: break
-            mejor_eq = min(validas, key=lambda x: x['tiempo'])
-            se_e = sum([(2026 - pd.to_datetime(df_nad[df_nad['Nombre Completo'] == n]['fechanac'].iloc[0]).year) for n in mejor_eq['equipo']])
-            cat_nom, cat_max = get_cat_info(se_e, o_reg)
-            propuestas.append({'equipo': mejor_eq['equipo'], 'tiempo': mejor_eq['tiempo'], 'cat': cat_nom, 'suma': se_e, 'suma_max': cat_max,
-                               'parciales': [obtener_mejor_marca(mejor_eq['equipo'][idx], legs_opt[idx][0]) for idx in range(4)]})
-            for n in mejor_eq['equipo']: pool_actual.remove(n)
+            while len(pool_actual) >= 4:
+                # 1. Filtrar combinaciones por género
+                combis = list(itertools.combinations(pool_actual, 4))
+                validas = []
+                for c in combis:
+                    gs = [df_nad[df_nad['Nombre Completo'] == n]['codgenero'].iloc[0] for n in c]
+                    if (o_gen == "M" and all(g=="M" for g in gs)) or (o_gen == "F" and all(g=="F" for g in gs)) or (o_gen == "X" and gs.count("M")==2):
+                        # 2. Solo permutar si tienen marcas en los estilos
+                        m_t, m_ord = 999.0, None
+                        for p in itertools.permutations(c):
+                            tp = sum([obtener_mejor_marca(p[idx], legs_opt[idx][0]) for idx in range(4)])
+                            if tp < m_t: m_t, m_ord = tp, p
+                        if m_ord and m_t < 400: # Ignorar si la suma es ridícula
+                            validas.append({'eq': m_ord, 't': m_t})
+                
+                if not validas: break
+                mejor = min(validas, key=lambda x: x['t'])
+                se_e = sum([(2026 - pd.to_datetime(df_nad[df_nad['Nombre Completo'] == n]['fechanac'].iloc[0]).year) for n in mejor['eq']])
+                c_nom, c_max = get_cat_info(se_e, o_reg)
+                propuestas.append({'eq': mejor['eq'], 't': mejor['t'], 'cat': c_nom, 'se': se_e, 'cmax': c_max, 'parc': [obtener_mejor_marca(mejor['eq'][idx], legs_opt[idx][0]) for idx in range(4)]})
+                for n in mejor['eq']: pool_actual.remove(n)
 
-        for i, p in enumerate(propuestas):
-            with st.expander(f"Posta #{i+1}: {p['cat']} ({seg_a_tiempo(p['tiempo'])})", expanded=True):
-                cols_p = st.columns(4)
-                for j in range(4):
-                    cols_p[j].write(f"**{legs_opt[j][1]}**")
-                    cols_p[j].write(f"{p['equipo'][j]}") # Muestra APELLIDO, Nombre
-                    cols_p[j].code(seg_a_tiempo(p['parciales'][j]))
-                
-                comp_text = analizar_competitividad(p['tiempo'], p['suma'], o_gen)
-                if comp_text: st.write(comp_text)
-                
-                faltante = p['suma_max'] - p['suma']
-                if faltante <= 8:
-                    st.info(f"💡 **TIP ESTRATÉGICO:** Están a {faltante} años del límite. Evaluar subir de categoría para ganar.")
+            if propuestas:
+                for i, p in enumerate(propuestas):
+                    with st.expander(f"Posta #{i+1}: {p['cat']} ({seg_a_tiempo(p['t'])})", expanded=True):
+                        cols = st.columns(4)
+                        for j in range(4):
+                            cols[j].write(f"**{legs_opt[j][1]}**\n\n{p['eq'][j]}")
+                            cols[j].code(seg_a_tiempo(p['parc'][j]))
+                        st.write(analizar_competitividad(p['t'], p['se'], o_gen))
+                        if (p['cmax'] - p['se']) <= 8: st.info(f"💡 **TIP:** Estás a {p['cmax'] - p['se']} años del límite. Evaluar subir de categoría.")
+            else: st.error("No se pudieron formar equipos válidos con marcas registradas.")
