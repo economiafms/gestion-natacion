@@ -5,9 +5,9 @@ from datetime import datetime
 import itertools
 
 # --- 1. CONFIGURACIÓN ---
-st.set_page_config(page_title="Simulador de Élite - NOB", layout="wide")
-st.markdown("<h1 style='text-align: center; color: red;'>🔴⚫ SIMULADOR DE RELEVOS ESTRATÉGICO</h1>", unsafe_allow_html=True)
-st.markdown("<h4 style='text-align: center;'>Análisis Federativo CENARD - Optimización Técnica</h4>", unsafe_allow_html=True)
+st.set_page_config(page_title="Estrategia Pro - NOB", layout="wide")
+st.markdown("<h1 style='text-align: center; color: red;'>🔴⚫ ANALISTA ESTRATÉGICO DE RELEVOS</h1>", unsafe_allow_html=True)
+st.markdown("<h4 style='text-align: center;'>Optimización de Categorías para Máximo Rendimiento</h4>", unsafe_allow_html=True)
 
 conn = st.connection("gsheets", type=GSheetsConnection)
 
@@ -27,9 +27,9 @@ def cargar_datos_sim():
         df_n = data['nadadores'].copy()
         df_n['Nombre Completo'] = df_n['apellido'].astype(str).str.upper() + ", " + df_n['nombre'].astype(str)
         df_n['AnioNac'] = pd.to_datetime(df_n['fechanac']).dt.year
+        df_n['Edad_Master'] = 2026 - df_n['AnioNac']
         
         df_t_50 = data['tiempos'][data['tiempos']['coddistancia'] == 'D1'].copy()
-        
         return data, df_n, df_t_50
     except Exception as e:
         st.error(f"Error al conectar: {e}")
@@ -38,7 +38,6 @@ def cargar_datos_sim():
 data, df_nad, df_tiempos_50 = cargar_datos_sim()
 if not data: st.stop()
 
-# Diccionarios de referencia rápida
 dict_piletas = data['piletas'].set_index('codpileta').to_dict('index')
 
 # --- 3. FUNCIONES TÉCNICAS ---
@@ -51,11 +50,6 @@ def tiempo_a_seg(t_str):
 def seg_a_tiempo(seg):
     if seg >= 900: return "S/T"
     return f"{int(seg // 60):02d}:{int(seg % 60):02d}.{int((seg % 1) * 100):02d}"
-
-def obtener_mejor_marca(nombre, id_estilo):
-    idn = df_nad[df_nad['Nombre Completo'] == nombre]['codnadador'].iloc[0]
-    m = df_tiempos_50[(df_tiempos_50['codnadador'] == idn) & (df_tiempos_50['codestilo'] == id_estilo)]
-    return m['tiempo'].apply(tiempo_a_seg).min() if not m.empty else 999.0
 
 def get_cat_info(suma, reg):
     regs = data['cat_relevos'][data['cat_relevos']['tipo_reglamento'] == reg]
@@ -73,17 +67,17 @@ def analizar_competitividad(tiempo_seg, suma_edades, genero):
     cat_techo = next((l for l in limites if suma_edades <= l), 999)
     if cat_techo in benchmarks[genero]:
         meta = benchmarks[genero][cat_techo]
-        if tiempo_seg <= meta: return f"🔥 **NIVEL FEDERACIÓN/CENARD.** Tiempo de élite ({seg_a_tiempo(meta)})."
-        elif tiempo_seg <= meta + 10: return f"✨ **NIVEL COMPETITIVO.** Cerca de marcas de podio nacional."
+        if tiempo_seg <= meta: return f"🔥 **NIVEL CENARD.** Tiempo de podio nacional ({seg_a_tiempo(meta)})."
+        elif tiempo_seg <= meta + 10: return f"✨ **NIVEL COMPETITIVO.** Cerca del podio."
     return ""
 
 # --- 4. SIMULADOR MANUAL ---
 st.divider()
-st.subheader("🧪 Configuración de Posta Manual")
+st.subheader("🧪 Simulación de Posta Manual")
 with st.container(border=True):
     c1, c2, c3 = st.columns(3)
     s_reg = c1.selectbox("Reglamento", data['cat_relevos']['tipo_reglamento'].unique(), key="m1")
-    s_tipo_rel = c2.selectbox("Prueba de Relevo", ["Libre (Crol)", "Combinado (Medley)"], key="m2")
+    s_tipo_rel = c2.selectbox("Tipo Relevo", ["Libre (Crol)", "Combinado (Medley)"], key="m2")
     s_gen = c3.selectbox("Género", ["M", "F", "X"], key="m3")
 
     legs_desc = [("Espalda", "E2"), ("Pecho", "E3"), ("Mariposa", "E1"), ("Crol", "E4")] if "Medley" in s_tipo_rel else [("Crol", "E4")] * 4
@@ -94,63 +88,49 @@ with st.container(border=True):
         if s_gen != "X": aptos = aptos[aptos['codgenero'] == s_gen]
         n_sel.append(cols[i].selectbox(f"Pos {i+1}: {nombre_est}", sorted(aptos['Nombre Completo'].tolist()), index=None, key=f"sel{i}"))
 
-    if st.button("🚀 Calcular Estrategia y Parciales", use_container_width=True):
+    if st.button("🚀 Calcular Estrategia", use_container_width=True):
         if len(set(n_sel)) == 4 and None not in n_sel:
-            # Diccionario local para velocidad
+            # Diccionario marcas local
             marcas_locales = {n: {row['codestilo']: tiempo_a_seg(row['tiempo']) for _, row in df_tiempos_50[df_tiempos_50['codnadador'] == df_nad[df_nad['Nombre Completo'] == n]['codnadador'].iloc[0]].iterrows()} for n in n_sel}
-
             total_actual = sum([marcas_locales[n].get(legs_desc[i][1], 999.0) for i, n in enumerate(n_sel)])
-            cols_res = st.columns(4)
-            for i, (nom_est, cod_est) in enumerate(legs_desc):
-                cols_res[i].metric(n_sel[i], seg_a_tiempo(marcas_locales[n_sel[i]].get(cod_est, 999.0)))
             
-            se = sum([(2026 - df_nad[df_nad['Nombre Completo'] == n]['AnioNac'].iloc[0]) for n in n_sel])
-            cat_desc, _ = get_cat_info(se, s_reg)
-            st.success(f"**Categoría: {cat_desc} | Tiempo Total Simulado: {seg_a_tiempo(total_actual)}**")
+            res_c = st.columns(4)
+            for i in range(4):
+                res_c[i].metric(n_sel[i].split(',')[0], seg_a_tiempo(marcas_locales[n_sel[i]].get(legs_desc[i][1])))
             
-            # --- ANTECEDENTE HISTÓRICO CON SEDE Y MEDIDA ---
+            se = sum([df_nad[df_nad['Nombre Completo'] == n]['Edad_Master'].iloc[0] for n in n_sel])
+            cat_nom, _ = get_cat_info(se, s_reg)
+            st.success(f"**Categoría: {cat_nom} | Tiempo: {seg_a_tiempo(total_actual)}**")
+            
+            # Antecedente
             ids_act = sorted([int(df_nad[df_nad['Nombre Completo'] == n]['codnadador'].iloc[0]) for n in n_sel])
-            def check_eq(row): 
-                try: return sorted([int(row['nadador_1']), int(row['nadador_2']), int(row['nadador_3']), int(row['nadador_4'])]) == ids_act
-                except: return False
-            
-            hist_rel = data['relevos'][data['relevos'].apply(check_eq, axis=1)]
-            obs_final = analizar_competitividad(total_actual, se, s_gen)
-            
-            if not hist_rel.empty:
-                ant = hist_rel.sort_values('tiempo_final').iloc[0]
-                info_p = dict_piletas.get(ant['codpileta'], {"club": "Sede desconocida", "medida": "-"})
-                obs_final += f"\n\n📋 **ANTECEDENTE REGISTRADO:** Este grupo ya compitió el {ant['fecha']} en **{info_p['club']} ({info_p['medida']})** con un tiempo de **{ant['tiempo_final']}**."
-
-            # Análisis de reordenamiento
-            mejor_t_var, mejor_ord_var = total_actual, n_sel
-            if "Medley" in s_tipo_rel:
-                for p in itertools.permutations(n_sel):
-                    t_p = sum([marcas_locales[p[idx]].get(legs_desc[idx][1], 999.0) for idx in range(4)])
-                    if t_p < mejor_t_var: mejor_t_var, mejor_ord_var = t_p, p
-            
-            if mejor_t_var < (total_actual - 0.1):
-                obs_final += f"\n\n💡 **VARIANTE MÁS EFICIENTE:** El tiempo bajaría a **{seg_a_tiempo(mejor_t_var)}** ordenando: " + " / ".join([f"{mejor_ord_var[i]} ({legs_desc[i][0]})" for i in range(4)])
-            
-            if obs_final: st.info(obs_final)
+            def check_eq(row): return sorted([int(row['nadador_1']), int(row['nadador_2']), int(row['nadador_3']), int(row['nadador_4'])]) == ids_act
+            hist = data['relevos'][data['relevos'].apply(check_eq, axis=1)]
+            obs = analizar_competitividad(total_actual, se, s_gen)
+            if not hist.empty:
+                ant = hist.sort_values('tiempo_final').iloc[0]
+                ip = dict_piletas.get(ant['codpileta'], {"club": "Sede ?", "medida": "-"})
+                obs += f"\n\n📋 **RÉCORD GRUPAL:** {ant['tiempo_final']} en {ip['club']} ({ip['medida']}) el {ant['fecha']}."
+            st.info(obs)
         else: st.error("Seleccione 4 nadadores con marcas.")
 
-# --- 5. OPTIMIZADOR ESTRATÉGICO ---
+# --- 5. OPTIMIZADOR CON SUGERENCIA DE SALTO ---
 st.divider()
-st.subheader("🎯 Optimizador Estratégico Multi-Posta")
-pool = st.multiselect("Nadadores convocados:", sorted(df_nad['Nombre Completo'].tolist()), key="p_opt")
+st.subheader("🎯 Optimizador con Sugerencia de Salto de Categoría")
+pool = st.multiselect("Convocados:", sorted(df_nad['Nombre Completo'].tolist()))
 o_reg = st.selectbox("Reglamento", data['cat_relevos']['tipo_reglamento'].unique(), key="o1")
-o_tipo = st.radio("Estilo de Relevo", ["Libre (Crol)", "Combinado (Medley)"], horizontal=True)
-o_gen = st.radio("Género Relevo", ["M", "F", "X"], horizontal=True)
+o_tipo = st.radio("Relevo", ["Libre (Crol)", "Combinado (Medley)"], horizontal=True)
+o_gen = st.radio("Género", ["M", "F", "X"], horizontal=True)
 
-if st.button("🪄 Generar Estrategia Ganadora", type="primary", use_container_width=True):
+if st.button("🪄 Generar Estrategia de Victoria", type="primary", use_container_width=True):
     if len(pool) < 4: st.error("Mínimo 4 nadadores.")
     else:
-        with st.spinner("Procesando combinaciones óptimas..."):
-            marks_map = {n: {row['codestilo']: tiempo_a_seg(row['tiempo']) for _, row in df_tiempos_50[df_tiempos_50['codnadador'] == df_nad[df_nad['Nombre Completo'] == n]['codnadador'].iloc[0]].iterrows()} for n in pool}
+        with st.spinner("Analizando miles de combinaciones..."):
+            # Mapa de marcas completo del pool
+            m_map = {n: {row['codestilo']: tiempo_a_seg(row['tiempo']) for _, row in df_tiempos_50[df_tiempos_50['codnadador'] == df_nad[df_nad['Nombre Completo'] == n]['codnadador'].iloc[0]].iterrows()} for n in pool}
             for n in pool:
-                marks_map[n]['genero'] = df_nad[df_nad['Nombre Completo'] == n]['codgenero'].iloc[0]
-                marks_map[n]['anio'] = df_nad[df_nad['Nombre Completo'] == n]['AnioNac'].iloc[0]
+                m_map[n]['gen'] = df_nad[df_nad['Nombre Completo'] == n]['codgenero'].iloc[0]
+                m_map[n]['edad'] = df_nad[df_nad['Nombre Completo'] == n]['Edad_Master'].iloc[0]
 
             legs_opt = [("E2", "Espalda"), ("E3", "Pecho"), ("E1", "Mariposa"), ("E4", "Crol")] if "Medley" in o_tipo else [("E4", "Crol")]*4
             pool_actual, propuestas = list(pool), []
@@ -159,33 +139,65 @@ if st.button("🪄 Generar Estrategia Ganadora", type="primary", use_container_w
                 combis = list(itertools.combinations(pool_actual, 4))
                 validas = []
                 for c in combis:
-                    gs = [marks_map[n]['genero'] for n in c]
+                    gs = [m_map[n]['gen'] for n in c]
                     if (o_gen == "M" and all(g=="M" for g in gs)) or (o_gen == "F" and all(g=="F" for g in gs)) or (o_gen == "X" and gs.count("M")==2):
-                        m_t, m_ord = 999.0, None
-                        if "Libre" in o_tipo:
-                            m_t = sum([marks_map[n].get("E4", 999.0) for n in c])
-                            m_ord = sorted(c, key=lambda x: marks_map[x].get("E4", 999.0), reverse=True)
-                        else:
-                            for p in itertools.permutations(c):
-                                tp = sum([marks_map[p[idx]].get(legs_opt[idx][0], 999.0) for idx in range(4)])
-                                if tp < m_t: m_t, m_ord = tp, p
-                        if m_ord and m_t < 400: validas.append({'eq': m_ord, 't': m_t})
+                        mt, mo = 999.0, None
+                        for p in itertools.permutations(c):
+                            tp = sum([m_map[p[idx]].get(legs_opt[idx][0], 999.0) for idx in range(4)])
+                            if tp < mt: mt, mo = tp, p
+                        if mo: validas.append({'eq': mo, 't': mt})
                 
                 if not validas: break
                 mejor = min(validas, key=lambda x: x['t'])
-                se_e = sum([(2026 - marks_map[n]['anio']) for n in mejor['eq']])
+                se_e = sum([m_map[n]['edad'] for n in mejor['eq']])
                 c_nom, c_max = get_cat_info(se_e, o_reg)
-                propuestas.append({'eq': mejor['eq'], 't': mejor['t'], 'cat': c_nom, 'se': se_e, 'cmax': c_max, 'parc': [marks_map[mejor['eq'][idx]].get(legs_opt[idx][0], 999.0) for idx in range(4)]})
+                
+                # --- LÓGICA DE SUGERENCIA DE SALTO ---
+                sugerencia_salto = None
+                faltante = c_max - se_e
+                if faltante <= 12: # Si están cerca del límite
+                    # Buscamos en el pool restante a alguien que nos haga saltar perdiendo lo menos posible
+                    nadadores_fuera = [n for n in pool if n not in mejor['eq']]
+                    mejor_reemplazo = None
+                    min_perdida = 999.0
+                    
+                    for r in nadadores_fuera:
+                        # Debe cumplir género
+                        if o_gen != "X" and m_map[r]['gen'] != o_gen: continue
+                        if o_gen == "X": # Si es mixto, el que sale debe ser del mismo género que el que entra
+                            pass # Simplificación: buscamos por tiempo para la idea
+
+                        for idx_sale in range(4):
+                            n_sale = mejor['eq'][idx_sale]
+                            if o_gen == "X" and m_map[r]['gen'] != m_map[n_sale]['gen']: continue
+                            
+                            nueva_suma = se_e - m_map[n_sale]['edad'] + m_map[r]['edad']
+                            if nueva_suma > c_max: # ¡Saltamos de categoría!
+                                perdida = m_map[r].get(legs_opt[idx_sale][0], 999.0) - m_map[n_sale].get(legs_opt[idx_sale][0], 999.0)
+                                if perdida < min_perdida:
+                                    min_perdida = perdida
+                                    mejor_reemplazo = (n_sale, r, nueva_suma, perdida)
+
+                    if mejor_reemplazo:
+                        n_sale, n_entra, s_nueva, perd = mejor_reemplazo
+                        c_nueva, _ = get_cat_info(s_nueva, o_reg)
+                        sugerencia_salto = f"🏅 **OPCIÓN ESTRATÉGICA:** Cambiando a **{n_sale}** por **{n_entra}**, el equipo suma **{s_nueva}** años y sube a la categoría **{c_nueva}**. Solo se pierden {perd:.2f}s, pero se compite contra nadadores más grandes."
+
+                propuestas.append({
+                    'eq': mejor['eq'], 't': mejor['t'], 'cat': c_nom, 'se': se_e, 
+                    'parc': [m_map[mejor['eq'][idx]].get(legs_opt[idx][0], 999.0) for idx in range(4)],
+                    'tip': sugerencia_salto
+                })
                 for n in mejor['eq']: pool_actual.remove(n)
 
+            # Render
             for i, p in enumerate(propuestas):
                 with st.expander(f"Posta #{i+1}: {p['cat']} ({seg_a_tiempo(p['t'])})", expanded=True):
-                    st.markdown(f"### ⏱️ Tiempo: {seg_a_tiempo(p['t'])} | 👥 Grupo: {p['cat']}")
+                    st.markdown(f"### ⏱️ {seg_a_tiempo(p['t'])} | {p['cat']}")
                     cols = st.columns(4)
                     for j in range(4):
-                        cols[j].write(f"**{legs_opt[j][1]}**")
-                        cols[j].write(p['eq'][j])
+                        cols[j].write(f"**{legs_opt[j][1]}**\n\n{p['eq'][j]}")
                         cols[j].code(seg_a_tiempo(p['parc'][j]))
+                    
+                    if p['tip']: st.success(p['tip'])
                     st.write(analizar_competitividad(p['t'], p['se'], o_gen))
-                    falt = p['cmax'] - p['se']
-                    if falt <= 8: st.success(f"💡 **TIP ESTRATÉGICO:** Están a solo {falt} años del límite. Evaluar subir de grupo.")
