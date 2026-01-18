@@ -101,10 +101,11 @@ with st.container(border=True):
                 se = sum([df_nad[df_nad['Nombre Completo'] == n]['Edad_Master'].iloc[0] for n in n_sel])
                 cat_nom, _ = get_cat_info(se, s_reg)
 
-                st.markdown(f"""<div style='background-color: #f0f2f6; padding: 15px; border-radius: 10px; border-left: 5px solid red;'>
-                    <span style='font-size: 18px;'>TIEMPO: <b>{seg_a_tiempo(total)}</b></span> | 
-                    <span style='font-size: 18px;'>CATEGORÍA: <b>{cat_nom.upper()}</b></span> | 
-                    <span style='font-size: 14px; color: gray;'>Suma: {se} años</span></div>""", unsafe_allow_html=True)
+                # CORRECCIÓN DE COLOR: Fondo oscuro, texto blanco y rojo para alto contraste
+                st.markdown(f"""<div style='background-color: #1e1e1e; padding: 20px; border-radius: 10px; border-left: 10px solid red; color: white;'>
+                    <span style='font-size: 20px;'>TIEMPO TOTAL: <b style='color: #ffffff;'>{seg_a_tiempo(total)}</b></span><br>
+                    <span style='font-size: 20px;'>CATEGORÍA: <b style='color: #ff4b4b;'>{cat_nom.upper()}</b></span><br>
+                    <span style='font-size: 14px; color: #aaaaaa;'>Suma de edades: {se} años</span></div>""", unsafe_allow_html=True)
 
                 t_cols = st.columns(4)
                 for i in range(4):
@@ -120,10 +121,10 @@ with st.container(border=True):
                     ant = hist.sort_values('tiempo_final').iloc[0]
                     ip = dict_piletas.get(ant['codpileta'], {"club": "Sede ?", "medida": "-"})
                     obs += f"\n\n📋 **ANTECEDENTE:** Ya compitieron en **{ip['club']} ({ip['medida']})** el {ant['fecha']} con un tiempo de **{ant['tiempo_final']}**."
-                st.info(obs if obs != "" else "No hay observaciones adicionales para esta combinación.")
+                st.info(obs if obs != "" else "Cálculo finalizado sin observaciones adicionales.")
         else: st.error("Seleccione 4 nadadores únicos.")
 
-# --- 5. SIMULADOR POR GRUPO DE NADADORES EN COMPETENCIA ---
+# --- 5. SIMULADOR POR GRUPO (CON CATCH DE ERRORES) ---
 st.divider()
 st.subheader("🎯 Simulador de relevos por grupo de nadadores en competencia")
 
@@ -136,75 +137,64 @@ with st.container(border=True):
     o_gen = "X" if "Mixto" in o_gen_in else ("M" if "(M)" in o_gen_in else "F")
 
 if st.button("🪄 Generar Estrategia Óptima", type="primary", use_container_width=True):
+    # CATCH 1: Validación de cantidad mínima
     if len(pool) < 4: 
-        st.warning("⚠️ Observación: Se requieren al menos 4 nadadores seleccionados para conformar un relevo.")
+        st.warning("⚠️ **CATCH:** Se requieren al menos 4 nadadores seleccionados para procesar un relevo.")
     else:
-        with st.spinner("Analizando combinaciones disponibles..."):
-            m_map = {n: {row['codestilo']: tiempo_a_seg(row['tiempo']) for _, row in df_tiempos_50[df_tiempos_50['codnadador'] == df_nad[df_nad['Nombre Completo'] == n]['codnadador'].iloc[0]].iterrows()} for n in pool}
-            for n in pool:
-                m_map[n]['gen'] = df_nad[df_nad['Nombre Completo'] == n]['codgenero'].iloc[0]
-                m_map[n]['edad'] = df_nad[df_nad['Nombre Completo'] == n]['Edad_Master'].iloc[0]
+        try:
+            with st.spinner("Procesando mejores combinaciones..."):
+                m_map = {n: {row['codestilo']: tiempo_a_seg(row['tiempo']) for _, row in df_tiempos_50[df_tiempos_50['codnadador'] == df_nad[df_nad['Nombre Completo'] == n]['codnadador'].iloc[0]].iterrows()} for n in pool}
+                for n in pool:
+                    m_map[n]['gen'] = df_nad[df_nad['Nombre Completo'] == n]['codgenero'].iloc[0]
+                    m_map[n]['edad'] = df_nad[df_nad['Nombre Completo'] == n]['Edad_Master'].iloc[0]
 
-            # Verificar disponibilidad de géneros antes de procesar
-            mensajes_error = []
-            pool_m = [n for n in pool if m_map[n]['gen'] == "M"]
-            pool_f = [n for n in pool if m_map[n]['gen'] == "F"]
+                # CATCH 2: Validación de Géneros en el pool
+                p_m = [n for n in pool if m_map[n]['gen'] == "M"]
+                p_f = [n for n in pool if m_map[n]['gen'] == "F"]
+                
+                continuar = True
+                if o_gen == "M" and len(p_m) < 4:
+                    st.error(f"❌ **CATCH:** No hay suficientes hombres (M). Tenés {len(p_m)}, necesitás 4."); continuar = False
+                elif o_gen == "F" and len(p_f) < 4:
+                    st.error(f"❌ **CATCH:** No hay suficientes mujeres (F). Tenés {len(p_f)}, necesitás 4."); continuar = False
+                elif o_gen == "X" and (len(p_m) < 2 or len(p_f) < 2):
+                    st.error(f"❌ **CATCH:** No hay balance para Mixto. Tenés {len(p_m)}M y {len(p_f)}F (necesitás 2 y 2)."); continuar = False
 
-            if o_gen == "M" and len(pool_m) < 4:
-                mensajes_error.append(f"No hay suficientes hombres (M) en el pool. Tenés {len(pool_m)}, necesitás 4.")
-            elif o_gen == "F" and len(pool_f) < 4:
-                mensajes_error.append(f"No hay suficientes mujeres (F) en el pool. Tenés {len(pool_f)}, necesitás 4.")
-            elif o_gen == "X" and (len(pool_m) < 2 or len(pool_f) < 2):
-                mensajes_error.append(f"No hay suficientes nadadores para el Mixto. Tenés {len(pool_m)}M y {len(pool_f)}F (necesitás 2 y 2).")
+                if continuar:
+                    legs_o = [("E2", "Espalda"), ("E3", "Pecho"), ("E1", "Mariposa"), ("E4", "Crol")] if "Medley" in o_tipo else [("E4", "Crol")]*4
+                    pool_act, propuestas, cats_ok = list(pool), [], []
 
-            if mensajes_error:
-                st.error("❌ **No se pudieron conformar relevos:**")
-                for m in mensajes_error: st.write(f"- {m}")
-            else:
-                legs_o = [("E2", "Espalda"), ("E3", "Pecho"), ("E1", "Mariposa"), ("E4", "Crol")] if "Medley" in o_tipo else [("E4", "Crol")]*4
-                pool_actual, propuestas, cats_ok = list(pool), [], []
+                    # CATCH 3: Lógica de búsqueda optimizada
+                    combis = list(itertools.combinations(pool_act, 4))
+                    validas = []
+                    for c in combis:
+                        gs = [m_map[n]['gen'] for n in c]
+                        if (o_gen == "M" and all(g=="M" for g in gs)) or (o_gen == "F" and all(g=="F" for g in gs)) or (o_gen == "X" and gs.count("M") == 2 and gs.count("F") == 2):
+                            mt, mo = 999.0, None
+                            for p in itertools.permutations(c):
+                                tp = sum([m_map[p[idx]].get(legs_o[idx][0], 999.0) for idx in range(4)])
+                                if tp < mt: mt, mo = tp, p
+                            if mo:
+                                se = sum([m_map[n]['edad'] for n in mo])
+                                cn, cm = get_cat_info(se, o_reg)
+                                validas.append({'eq': mo, 't': mt, 'cat': cn, 'se': se})
 
-                # Generar combinaciones
-                combis = list(itertools.combinations(pool_actual, 4))
-                validas = []
-                for c in combis:
-                    gs = [m_map[n]['gen'] for n in c]
-                    # Validación de género estricta
-                    if (o_gen == "M" and all(g=="M" for g in gs)) or \
-                       (o_gen == "F" and all(g=="F" for g in gs)) or \
-                       (o_gen == "X" and gs.count("M") == 2 and gs.count("F") == 2):
-                        
-                        mt, mo = 999.0, None
-                        for p in itertools.permutations(c):
-                            tp = sum([m_map[p[idx]].get(legs_o[idx][0], 999.0) for idx in range(4)])
-                            if tp < mt: mt, mo = tp, p
-                        
-                        if mo:
-                            se = sum([m_map[n]['edad'] for n in mo])
-                            cn, cm = get_cat_info(se, o_reg)
-                            validas.append({'eq': mo, 't': mt, 'cat': cn, 'se': se})
+                    if not validas:
+                        st.info("⚠️ **CATCH:** Los nadadores seleccionados no tienen marcas cargadas suficientes para conformar este relevo.")
+                    else:
+                        while len(pool_act) >= 4 and validas:
+                            dispo = [v for v in validas if all(n in pool_act for n in v['eq'])]
+                            if not dispo: break
+                            mejor = min(dispo, key=lambda x: x['t'])
+                            propuestas.append(mejor)
+                            for n in mejor['eq']: pool_act.remove(n)
 
-                if not validas:
-                    st.warning("⚠️ Observación: Los nadadores seleccionados no poseen marcas cargadas en los estilos requeridos para conformar el relevo solicitado.")
-                else:
-                    # Lógica de asignación (greedy por tiempo)
-                    while len(pool_actual) >= 4 and validas:
-                        # Filtrar las que aún se pueden armar con el pool restante
-                        disponibles = [v for v in validas if all(n in pool_actual for n in v['eq'])]
-                        if not disponibles: break
-                        
-                        mejor = min(disponibles, key=lambda x: x['t'])
-                        propuestas.append(mejor)
-                        for n in mejor['eq']: pool_actual.remove(n)
-
-                    for i, p in enumerate(propuestas):
-                        with st.expander(f"POSTA #{i+1}: {p['cat']} ({seg_a_tiempo(p['t'])})", expanded=True):
-                            st.write(f"**Tiempo Final: {seg_a_tiempo(p['t'])}** | Suma edades: {p['se']} años")
-                            cs = st.columns(4)
-                            for j in range(4):
-                                cs[j].markdown(f"*{legs_o[j][1]}*")
-                                cs[j].write(p['eq'][j])
-                                cs[j].code(seg_a_tiempo(m_map[p['eq'][j]].get(legs_o[j][0], 999.0)))
-                            
-                            comp_txt = analizar_competitividad(p['t'], p['se'], o_gen)
-                            if comp_txt: st.success(comp_txt)
+                        for i, p in enumerate(propuestas):
+                            with st.expander(f"POSTA #{i+1}: {p['cat']} ({seg_a_tiempo(p['t'])})", expanded=True):
+                                st.markdown(f"**Tiempo Final: {seg_a_tiempo(p['t'])}**")
+                                cs = st.columns(4)
+                                for j in range(4):
+                                    cs[j].write(f"*{legs_o[j][1]}*\n\n{p['eq'][j]}")
+                                    cs[j].code(seg_a_tiempo(m_map[p['eq'][j]].get(legs_o[j][0], 999.0)))
+        except Exception as e:
+            st.error(f"⚠️ **CATCH DE SISTEMA:** Ocurrió un error inesperado en el procesamiento ({e}). Intente con menos nadadores.")
