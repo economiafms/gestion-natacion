@@ -1,3 +1,17 @@
+import streamlit as st
+from streamlit_gsheets import GSheetsConnection
+import pandas as pd
+from datetime import datetime
+
+# --- 1. CONFIGURACIÓN ---
+st.set_page_config(page_title="Resultados - Natación", layout="wide")
+st.title("📊 Visualización de Resultados y Padrón")
+
+conn = st.connection("gsheets", type=GSheetsConnection)
+
+def refrescar_datos():
+    st.cache_data.clear()
+    st.rerun()
 # --- TAB 2: FICHA DEL NADADOR ---
 with tab2:
     df_t = data['tiempos'].copy()
@@ -127,3 +141,4 @@ with tab2:
             # Tabla final sin la columna Distancia
             st.dataframe(df_rel_temp[['fecha', 'Estilo', 'codgenero', 'tiempo_final', 'posicion', 'Sede_Full', 'Equipo y Marcas']].sort_values('fecha', ascending=False),
                          use_container_width=True, hide_index=True)
+
