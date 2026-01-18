@@ -71,10 +71,12 @@ def analizar_competitividad(tiempo_seg, suma_edades, genero):
 st.subheader("🧪 Posta Manual")
 with st.container(border=True):
     c1, c2, c3 = st.columns(3)
-    s_reg = c1.selectbox("Reglamento", data['cat_relevos']['tipo_reglamento'].unique())
-    s_tipo_rel = c2.selectbox("Prueba", ["Libre (Crol)", "Combinado (Medley)"])
-    s_gen_in = c3.selectbox("Género", ["Masculino (M)", "Femenino (F)", "Mixto (2M-2F)"])
-    s_gen = "X" if "Mixto" in s_gen_input else ("M" if "(M)" in s_gen_input else "F")
+    s_reg = c1.selectbox("Reglamento", data['cat_relevos']['tipo_reglamento'].unique(), key="s_reg_m")
+    s_tipo_rel = c2.selectbox("Prueba", ["Libre (Crol)", "Combinado (Medley)"], key="s_tipo_m")
+    s_gen_sel = c3.selectbox("Género", ["Masculino (M)", "Femenino (F)", "Mixto (2M-2F)"], key="s_gen_m")
+    
+    # Definición segura de género
+    s_gen = "X" if "Mixto" in s_gen_sel else ("M" if "(M)" in s_gen_sel else "F")
 
     legs = [("Espalda", "E2"), ("Pecho", "E3"), ("Mariposa", "E1"), ("Crol", "E4")] if "Medley" in s_tipo_rel else [("Crol", "E4")] * 4
     n_sel = []
@@ -82,14 +84,13 @@ with st.container(border=True):
     for i, (nom_e, cod_e) in enumerate(legs):
         aptos = df_nad[df_nad['codnadador'].isin(df_tiempos_50[df_tiempos_50['codestilo'] == cod_e]['codnadador'])]
         if s_gen != "X": aptos = aptos[aptos['codgenero'] == s_gen]
-        n_sel.append(cols[i].selectbox(f"{nom_e}", sorted(aptos['Nombre Completo'].tolist()), index=None, key=f"man_{i}"))
+        n_sel.append(cols[i].selectbox(f"{nom_e}", sorted(aptos['Nombre Completo'].tolist()), index=None, key=f"man_sel_{i}"))
 
     if st.button("🚀 Calcular Posta", use_container_width=True):
         if len(set(n_sel)) == 4 and None not in n_sel:
-            # Validar Mixto
             gens = [df_nad[df_nad['Nombre Completo'] == n]['codgenero'].iloc[0] for n in n_sel]
             if s_gen == "X" and (gens.count("M") != 2 or gens.count("F") != 2):
-                st.error("⚠️ Error: Mixto requiere exactamente 2H y 2M.")
+                st.error("⚠️ Error: Mixto requiere 2 hombres y 2 mujeres.")
             else:
                 m_loc = {n: {r['codestilo']: tiempo_a_seg(r['tiempo']) for _, r in df_tiempos_50[df_tiempos_50['codnadador'] == df_nad[df_nad['Nombre Completo'] == n]['codnadador'].iloc[0]].iterrows()} for n in n_sel}
                 tiempos_p = [m_loc[n_sel[i]].get(legs[i][1], 999.0) for i in range(4)]
@@ -97,22 +98,20 @@ with st.container(border=True):
                 se = sum([df_nad[df_nad['Nombre Completo'] == n]['Edad_Master'].iloc[0] for n in n_sel])
                 cat_n, _ = get_cat_info(se, s_reg)
 
-                # --- DISEÑO HORIZONTAL CONSOLIDADO ---
+                # --- TABLERO ELECTRÓNICO CONSOLIDADO ---
                 st.markdown(f"""
-                <div style='background-color: #1e1e1e; padding: 25px; border-radius: 12px; border-left: 12px solid red; color: white; display: flex; justify-content: space-around; align-items: center; box-shadow: 2px 2px 10px rgba(0,0,0,0.5);'>
+                <div style='background-color: #1e1e1e; padding: 20px; border-radius: 10px; border-left: 10px solid red; color: white; display: flex; justify-content: space-around; align-items: center;'>
                     <div style='text-align: center;'>
-                        <small style='color: #888; text-transform: uppercase; letter-spacing: 1px;'>Tiempo Total</small><br>
-                        <b style='font-size: 38px; font-family: monospace; color: #ffffff;'>{seg_a_tiempo(total)}</b>
+                        <small style='color: #888;'>TIEMPO TOTAL</small><br>
+                        <b style='font-size: 35px; font-family: monospace;'>{seg_a_tiempo(total)}</b>
                     </div>
-                    <div style='height: 50px; border-left: 1px solid #444;'></div>
                     <div style='text-align: center;'>
-                        <small style='color: #888; text-transform: uppercase; letter-spacing: 1px;'>Categoría</small><br>
-                        <b style='font-size: 28px; color: #ff4b4b;'>{cat_n.upper()}</b>
+                        <small style='color: #888;'>CATEGORÍA</small><br>
+                        <b style='font-size: 24px; color: #ff4b4b;'>{cat_n.upper()}</b>
                     </div>
-                    <div style='height: 50px; border-left: 1px solid #444;'></div>
                     <div style='text-align: center;'>
-                        <small style='color: #888; text-transform: uppercase; letter-spacing: 1px;'>Suma Edades</small><br>
-                        <b style='font-size: 28px; color: #ffffff;'>{se} años</b>
+                        <small style='color: #888;'>SUMA</small><br>
+                        <b style='font-size: 24px;'>{se} años</b>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
@@ -120,51 +119,34 @@ with st.container(border=True):
                 st.write("### ⏱️ Parciales Técnicos")
                 t_cols = st.columns(4)
                 for i in range(4):
-                    t_cols[i].metric(n_sel[i].split(',')[0], seg_a_tiempo(tiempos_p[i]), help=legs[i][0])
+                    t_cols[i].metric(n_sel[i].split(',')[0], seg_a_tiempo(tiempos_p[i]), legs[i][0])
 
                 st.write("---")
-                # Análisis de observaciones
                 obs = analizar_competitividad(total, se, s_gen)
-                
-                # Antecedente
                 ids_a = sorted([int(df_nad[df_nad['Nombre Completo'] == n]['codnadador'].iloc[0]) for n in n_sel])
-                def check_eq(row): 
-                    try: return sorted([int(row['nadador_1']), int(row['nadador_2']), int(row['nadador_3']), int(row['nadador_4'])]) == ids_a
-                    except: return False
-                hist = data['relevos'][data['relevos'].apply(check_eq, axis=1)]
+                hist = data['relevos'][data['relevos'].apply(lambda r: sorted([int(r['nadador_1']), int(r['nadador_2']), int(r['nadador_3']), int(r['nadador_4'])]) == ids_a if pd.notnull(r['nadador_1']) else False, axis=1)]
                 
                 if not hist.empty:
                     ant = hist.sort_values('tiempo_final').iloc[0]
                     ip = dict_piletas.get(ant['codpileta'], {"club": "Sede ?", "medida": "-"})
-                    obs += f"\n\n📋 **ANTECEDENTE REGISTRADO:** {ant['tiempo_final']} en **{ip['club']} ({ip['medida']})** el {ant['fecha']}."
-
-                # Variante eficiente
-                mejor_t, mejor_o = total, n_sel
-                if "Medley" in s_tipo_rel:
-                    for p in itertools.permutations(n_sel):
-                        tp = sum([m_loc[p[idx]].get(legs[idx][1], 999.0) for idx in range(4)])
-                        if tp < mejor_t: mejor_t, mejor_o = tp, p
+                    obs += f"\n\n📋 **ANTECEDENTE:** {ant['tiempo_final']} en **{ip['club']} ({ip['medida']})** el {ant['fecha']}."
                 
-                if mejor_t < (total - 0.05):
-                    det = " / ".join([f"**{mejor_o[i].split(',')[0]}** ({legs[i][0]})" for i in range(4)])
-                    obs += f"\n\n💡 **OPTIMIZACIÓN DE ORDEN:** El tiempo bajaría a **{seg_a_tiempo(mejor_t)}** si ordenan: {det}."
-                
-                st.info(obs if obs else "Resultados calculados sin observaciones.")
-        else: st.error("Seleccione 4 nadadores.")
+                st.info(obs if obs else "Cálculo finalizado.")
+        else: st.error("Seleccione 4 nadadores únicos.")
 
-# --- 5. SIMULADOR POR GRUPO (OPTIMIZADO) ---
+# --- 5. SIMULADOR POR GRUPO ---
 st.divider()
-st.subheader("🎯 Simulador por grupo de nadadores en competencia")
+st.subheader("🎯 Simulador de relevos por grupo de nadadores en competencia")
 with st.container(border=True):
-    pool = st.multiselect("Pool de Convocados:", sorted(df_nad['Nombre Completo'].tolist()))
+    pool = st.multiselect("Pool de Convocados:", sorted(df_nad['Nombre Completo'].tolist()), key="pool_opt_g")
     c1, c2, c3 = st.columns(3)
-    o_reg = c1.selectbox("Reglamento", data['cat_relevos']['tipo_reglamento'].unique(), key="reg_g")
-    o_tipo = c2.radio("Estilo de Relevo", ["Libre (Crol)", "Combinado (Medley)"], horizontal=True)
-    o_gen_in = c3.radio("Género Prueba", ["Masculino (M)", "Femenino (F)", "Mixto (2M-2F)"], horizontal=True)
-    o_gen = "X" if "Mixto" in o_gen_in else ("M" if "(M)" in o_gen_in else "F")
+    o_reg = c1.selectbox("Reglamento", data['cat_relevos']['tipo_reglamento'].unique(), key="o_reg_g")
+    o_tipo = c2.radio("Estilo de Prueba", ["Libre (Crol)", "Combinado (Medley)"], horizontal=True, key="o_tipo_g")
+    o_gen_sel = c3.radio("Género Prueba", ["Masculino (M)", "Femenino (F)", "Mixto (2M-2F)"], horizontal=True, key="o_gen_g")
+    o_gen = "X" if "Mixto" in o_gen_sel else ("M" if "(M)" in o_gen_sel else "F")
 
 if st.button("🪄 Generar Estrategia Óptima", type="primary", use_container_width=True):
-    if len(pool) < 4: st.warning("⚠️ Seleccione al menos 4 nadadores para conformar un relevo.")
+    if len(pool) < 4: st.warning("⚠️ Seleccione al menos 4 nadadores.")
     else:
         try:
             with st.spinner("Procesando mejores combinaciones..."):
@@ -173,7 +155,7 @@ if st.button("🪄 Generar Estrategia Óptima", type="primary", use_container_wi
                     m_map[n].update({'gen': df_nad[df_nad['Nombre Completo'] == n]['codgenero'].iloc[0], 'edad': df_nad[df_nad['Nombre Completo'] == n]['Edad_Master'].iloc[0]})
 
                 legs_o = [("E2", "Espalda"), ("E3", "Pecho"), ("E1", "Mariposa"), ("E4", "Crol")] if "Medley" in o_tipo else [("E4", "Crol")]*4
-                pool_act, propuestas, cats_ok = list(pool), [], []
+                pool_act, propuestas = list(pool), []
 
                 while len(pool_act) >= 4:
                     subset = pool_act[:12] if len(pool_act) > 12 else pool_act
@@ -197,13 +179,10 @@ if st.button("🪄 Generar Estrategia Óptima", type="primary", use_container_wi
 
                 for i, p in enumerate(propuestas):
                     with st.expander(f"POSTA #{i+1}: {p['cat'].upper()} ({seg_a_tiempo(p['t'])})", expanded=True):
-                        # --- DISEÑO RESUMIDO EN OPTIMIZADOR ---
                         st.markdown(f"**TIEMPO:** {seg_a_tiempo(p['t'])} | **SUMA:** {p['se']} años")
                         cs = st.columns(4)
                         for j in range(4):
                             cs[j].write(f"*{legs_o[j][1]}*\n\n{p['eq'][j]}")
                             cs[j].code(seg_a_tiempo(m_map[p['eq'][j]].get(legs_o[j][0], 999.0)))
-                        comp = analizar_competitividad(p['t'], p['se'], o_gen)
-                        if comp: st.success(comp)
         except Exception as e:
-            st.error(f"Error técnico: {e}")
+            st.error(f"Error en el proceso: {e}")
