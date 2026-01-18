@@ -12,6 +12,60 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 def refrescar_datos():
     st.cache_data.clear()
     st.rerun()
+
+# --- 2. CARGA DE DATOS ---
+@st.cache_data(ttl="15m")
+def cargar_visualizacion():
+    try:
+        return {
+            "nadadores": conn.read(worksheet="Nadadores"),
+            "tiempos": conn.read(worksheet="Tiempos"),
+            "relevos": conn.read(worksheet="Relevos"),
+            "estilos": conn.read(worksheet="Estilos"),
+            "distancias": conn.read(worksheet="Distancias"),
+            "piletas": conn.read(worksheet="Piletas"),
+            "categorias": conn.read(worksheet="Categorias"),
+            "cat_relevos": conn.read(worksheet="Categorias_Relevos")
+        }
+    except Exception as e:
+        st.error(f"Error al cargar datos: {e}")
+        return None
+
+data = cargar_visualizacion()
+if not data: st.stop()
+
+# --- 3. DICCIONARIOS Y PROCESAMIENTO GLOBAL ---
+df_nad = data['nadadores'].copy()
+df_nad['Nombre Completo'] = df_nad['apellido'].astype(str) + ", " + df_nad['nombre'].astype(str)
+dict_id_nombre = df_nad.set_index('codnadador')['Nombre Completo'].to_dict()
+dict_id_nac = pd.to_datetime(df_nad.set_index('codnadador')['fechanac']).to_dict()
+
+def tiempo_a_segundos(t_str):
+    try:
+        if not isinstance(t_str, str) or ":" not in t_str: return 99999.0
+        partes = t_str.replace('.', ':').split(':')
+        mins = float(partes[0])
+        segs = float(partes[1])
+        cents = float(partes[2]) / 100 if len(partes) > 2 else 0
+        return mins * 60 + segs + cents
+    except: return 99999.0
+
+# --- 4. INTERFAZ DE USUARIO ---
+tab1, tab2, tab3 = st.tabs(["👥 Padrón General", "👤 Ficha del Nadador", "🏊‍♂️ Todos los Relevos"])
+
+# --- TAB 1: PADRÓN ---
+with tab1:
+    st.subheader("Listado de Nadadores")
+    df_p = df_nad.copy()
+    df_p['fechanac'] = pd.to_datetime(df_p['fechanac'])
+    df_p['Edad'] = 2026 - df_p['fechanac'].dt.year
+    def asignar_cat(edad):
+        for _, r in data['categorias'].iterrows():
+            if r['edad_min'] <= edad <= r['edad_max']: return r['nombre_cat']
+        return "-"
+    df_p['Categoría'] = df_p['Edad'].apply(asignar_cat)
+    st.dataframe(df_p[['Nombre Completo', 'Edad', 'Categoría', 'codgenero']].sort_values('Nombre Completo'), use_container_width=True, hide_index=True)
+
 # --- TAB 2: FICHA DEL NADADOR ---
 with tab2:
     df_t = data['tiempos'].copy()
@@ -22,13 +76,12 @@ with tab2:
     f_nad = st.selectbox("Seleccione un Nadador:", sorted(df_nad['Nombre Completo'].unique().tolist()), index=None)
     
     if f_nad:
-        # 1. Obtención de datos básicos del nadador
+        # --- DATOS PERSONALES ---
         info_nadador = df_nad[df_nad['Nombre Completo'] == f_nad].iloc[0]
         id_actual = info_nadador['codnadador']
         fecha_nac_dt = pd.to_datetime(info_nadador['fechanac'])
         
-        # Cálculo de Edad y Categoría (Regla 31/12)
-        anio_actual = 2025 # O usar datetime.now().year
+        anio_actual = 2026 
         edad_master = anio_actual - fecha_nac_dt.year
         
         def obtener_categoria_texto(edad):
@@ -38,18 +91,17 @@ with tab2:
         
         categoria_actual = obtener_categoria_texto(edad_master)
 
-        # --- CABECERA DE DATOS PERSONALES ---
         st.header(f"👤 {info_nadador['apellido'].upper()}, {info_nadador['nombre']}")
         
         c_info1, c_info2, c_info3, c_info4 = st.columns(4)
-        c_info1.markdown(f"**Nacimiento:** \n{fecha_nac_dt.strftime('%d/%m/%Y')}")
-        c_info2.markdown(f"**Edad (al 31/12):** \n{edad_master} años")
-        c_info3.markdown(f"**Categoría:** \n{categoria_actual}")
-        c_info4.markdown(f"**Género:** \n{info_nadador['codgenero']}")
+        c_info1.metric("Nacimiento", fecha_nac_dt.strftime('%d/%m/%Y'))
+        c_info2.metric("Edad (al 31/12)", f"{edad_master} años")
+        c_info3.metric("Categoría", categoria_actual)
+        c_info4.metric("Género", info_nadador['codgenero'])
         
         st.divider()
 
-        # --- MEDALLERO (Mantenemos tu lógica) ---
+        # --- MEDALLERO ---
         pos_ind = df_t[df_t['codnadador'] == id_actual]['posicion'].value_counts()
         df_r_base = data['relevos'].copy()
         cond_rel = (df_r_base['nadador_1'] == id_actual) | (df_r_base['nadador_2'] == id_actual) | \
@@ -65,7 +117,7 @@ with tab2:
 
         st.divider()
 
-        # --- MEJORES MARCAS (TARJETAS - Mantenemos tu lógica) ---
+        # --- MEJORES MARCAS ---
         st.subheader("✨ Mejores Marcas Personales")
         mis_tiempos = df_t[df_t['codnadador'] == id_actual].copy()
         if not mis_tiempos.empty:
@@ -83,18 +135,15 @@ with tab2:
         
         st.divider()
 
-        # --- HISTORIAL INDIVIDUAL (FILTROS COMUNICADOS - Mantenemos tu lógica) ---
+        # --- HISTORIAL INDIVIDUAL ---
         st.subheader("📜 Historial Individual")
-        
         c1, c2 = st.columns(2)
         h_est_sel = c1.selectbox("Filtrar por Estilo:", ["Todos"] + sorted(mis_tiempos['Estilo'].unique().tolist()), key="h_ind_est")
-        
         df_temp_dis = mis_tiempos.copy()
         if h_est_sel != "Todos":
             df_temp_dis = df_temp_dis[df_temp_dis['Estilo'] == h_est_sel]
         
         h_dis_sel = c2.selectbox("Filtrar por Distancia:", ["Todos"] + sorted(df_temp_dis['Distancia'].unique().tolist()), key="h_ind_dis")
-        
         df_hist = df_temp_dis.copy()
         if h_dis_sel != "Todos":
             df_hist = df_hist[df_hist['Distancia'] == h_dis_sel]
@@ -103,7 +152,7 @@ with tab2:
 
         st.divider()
 
-       # --- MIS RELEVOS (SIN DISTANCIA) ---
+        # --- MIS RELEVOS ---
         st.subheader("🏊‍♂️ Mis Relevos")
         mis_r = df_r_base[cond_rel].copy()
         if not mis_r.empty:
@@ -112,16 +161,12 @@ with tab2:
             mis_r = mis_r.rename(columns={'descripcion_x': 'Estilo', 'descripcion_y': 'Distancia'})
             
             cr1, cr2 = st.columns(2)
-            # Filtro 1: Estilo
             fr_est_sel = cr1.selectbox("Estilo Relevo:", ["Todos"] + sorted(mis_r['Estilo'].unique().tolist()), key="fr_rel_est")
-            
             df_rel_temp = mis_r.copy()
             if fr_est_sel != "Todos":
                 df_rel_temp = df_rel_temp[df_rel_temp['Estilo'] == fr_est_sel]
             
-            # Filtro 2: Género (Dependiente del Estilo)
             fr_gen_sel = cr2.selectbox("Género Relevo:", ["Todos"] + sorted(df_rel_temp['codgenero'].unique().tolist()), key="fr_rel_gen")
-            
             if fr_gen_sel != "Todos":
                 df_rel_temp = df_rel_temp[df_rel_temp['codgenero'] == fr_gen_sel]
 
@@ -137,8 +182,41 @@ with tab2:
                 return " / ".join(detalles)
             
             df_rel_temp['Equipo y Marcas'] = df_rel_temp.apply(obtener_equipo_pro, axis=1)
-            
-            # Tabla final sin la columna Distancia
             st.dataframe(df_rel_temp[['fecha', 'Estilo', 'codgenero', 'tiempo_final', 'posicion', 'Sede_Full', 'Equipo y Marcas']].sort_values('fecha', ascending=False),
                          use_container_width=True, hide_index=True)
 
+# --- TAB 3: TODOS LOS RELEVOS ---
+with tab3:
+    st.subheader("Historial General de Relevos")
+    if not data['relevos'].empty:
+        mr = data['relevos'].copy()
+        mr = mr.merge(data['estilos'], on='codestilo', how='left').merge(data['distancias'], on='coddistancia', how='left').merge(data['piletas'], on='codpileta', how='left')
+        mr['Sede_Full'] = mr['club'].astype(str) + " (" + mr['medida'].astype(str) + ")"
+        mr = mr.rename(columns={'descripcion_x': 'Estilo', 'descripcion_y': 'Distancia'})
+        
+        c_rf1, c_rf2, c_rf3 = st.columns(3)
+        f_re = c_rf1.selectbox("Filtrar Estilo:", ["Todos"] + sorted(mr['Estilo'].unique().tolist()), key="r_g_est")
+        mr_temp = mr.copy()
+        if f_re != "Todos": mr_temp = mr_temp[mr_temp['Estilo'] == f_re]
+        
+        f_rg = c_rf2.selectbox("Filtrar Género:", ["Todos"] + sorted(mr_temp['codgenero'].unique().tolist()), key="r_g_gen")
+        if f_rg != "Todos": mr_temp = mr_temp[mr_temp['codgenero'] == f_rg]
+        
+        f_rr = c_rf3.selectbox("Filtrar Reglamento:", ["Todos"] + sorted(mr_temp['tipo_reglamento'].unique().tolist()), key="r_g_reg")
+        if f_rr != "Todos": mr_temp = mr_temp[mr_temp['tipo_reglamento'] == f_rr]
+        
+        mr_temp['suma_edades'] = 0
+        for i in range(1, 5):
+            mr_temp[f'Nadador {i}'] = mr_temp[f'nadador_{i}'].map(dict_id_nombre).fillna("?")
+            nacs = pd.to_datetime(mr_temp[f'nadador_{i}'].map(dict_id_nac))
+            mr_temp['suma_edades'] += (2026 - nacs.dt.year).fillna(0)
+
+        def cat_p(row):
+            reg = row.get('tipo_reglamento', 'FED'); regs = data['cat_relevos'][data['cat_relevos']['tipo_reglamento'] == reg]
+            for _, r in regs.iterrows():
+                if r['suma_min'] <= row['suma_edades'] <= r['suma_max']: return r['descripcion']
+            return f"Suma {int(row['suma_edades'])}"
+
+        mr_temp['Cat. Posta'] = mr_temp.apply(cat_p, axis=1)
+        st.dataframe(mr_temp[['fecha', 'Sede_Full', 'Estilo', 'Distancia', 'codgenero', 'Cat. Posta', 'tiempo_final', 'posicion', 'Nadador 1', 'Nadador 2', 'Nadador 3', 'Nadador 4']].sort_values('fecha', ascending=False), 
+                     use_container_width=True, hide_index=True)
