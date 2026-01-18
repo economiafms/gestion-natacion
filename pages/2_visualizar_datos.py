@@ -59,17 +59,49 @@ def tiempo_a_segundos(t_str):
 # --- 4. ESTRUCTURA DE PESTAÑAS ---
 tab1, tab2, tab3 = st.tabs(["👥 Padrón General", "👤 Ficha del Nadador", "🏊‍♂️ Todos los Relevos"])
 
-# --- TAB 1: PADRÓN ---
+# --- TAB 1: PADRÓN GENERAL Y MEDALLERO NOB ---
 with tab1:
-    st.subheader("Listado de Nadadores")
+    st.markdown("### 🔴⚫ COMPLEJO ACUATICO DE NEWELL'S OLD BOYS")
+    st.subheader("¡VAMOS POR LA COPA!")
+    
+    # Procesamiento del Medallero General
+    df_tiempos_nob = data['tiempos'].copy()
+    df_relevos_nob = data['relevos'].copy()
+    
+    # Conteo Individual
+    med_ind = df_tiempos_nob.groupby(['codnadador', 'posicion']).size().unstack(fill_value=0)
+    
+    # Conteo Relevos (se suma si el nadador participó en cualquier posición)
+    relevistas = []
+    for i in range(1, 5):
+        relevistas.append(df_relevos_nob[['nadador_' + str(i), 'posicion']].rename(columns={'nadador_' + str(i): 'codnadador'}))
+    df_rel_all = pd.concat(relevistas)
+    med_rel = df_rel_all.groupby(['codnadador', 'posicion']).size().unstack(fill_value=0)
+    
+    # Unir Medalleros
+    medallero_total = med_ind.add(med_rel, fill_value=0)
+    
+    # Preparar DataFrame del Padrón
     df_p = df_nad.copy()
     df_p['fechanac'] = pd.to_datetime(df_p['fechanac'])
     anio_actual = 2026 
     df_p['Edad'] = anio_actual - df_p['fechanac'].dt.year
     df_p['Categoría'] = df_p['Edad'].apply(asignar_cat)
-    st.dataframe(df_p[['Nombre Completo', 'Edad', 'Categoría', 'codgenero']].sort_values('Nombre Completo'), use_container_width=True, hide_index=True)
+    
+    # Integrar medallas al padrón
+    df_p = df_p.merge(medallero_total[[1, 2, 3]], left_on='codnadador', right_index=True, how='left').fillna(0)
+    df_p = df_p.rename(columns={1: '🥇', 2: '🥈', 3: '🥉'})
+    df_p['Total Podios'] = df_p['🥇'] + df_p['🥈'] + df_p['🥉']
+    
+    # Mostrar tabla con estilo NOB
+    st.dataframe(
+        df_p[['Nombre Completo', 'Edad', 'Categoría', '🥇', '🥈', '🥉', 'Total Podios']]
+        .sort_values('Total Podios', ascending=False), 
+        use_container_width=True, 
+        hide_index=True
+    )
 
-# --- TAB 2: FICHA DEL NADADOR ---
+# --- TAB 2: FICHA DEL NADADOR (CON GRÁFICO MEJORADO) ---
 with tab2:
     df_t = data['tiempos'].copy()
     df_t = df_t.merge(data['estilos'], on='codestilo', how='left').merge(data['distancias'], on='coddistancia', how='left').merge(data['piletas'], on='codpileta', how='left')
@@ -79,7 +111,6 @@ with tab2:
     f_nad = st.selectbox("Seleccione un Nadador:", sorted(df_nad['Nombre Completo'].unique().tolist()), index=None, key="key_main_search_nad")
     
     if f_nad:
-        # Info Personal
         info_nadador = df_nad[df_nad['Nombre Completo'] == f_nad].iloc[0]
         id_actual = info_nadador['codnadador']
         fecha_nac_dt = pd.to_datetime(info_nadador['fechanac'])
@@ -96,7 +127,7 @@ with tab2:
         
         st.divider()
 
-        # Medallero
+        # Medallero Individual de Ficha
         pos_ind = df_t[df_t['codnadador'] == id_actual]['posicion'].value_counts()
         df_r_base = data['relevos'].copy()
         cond_rel = (df_r_base['nadador_1'] == id_actual) | (df_r_base['nadador_2'] == id_actual) | \
@@ -138,7 +169,6 @@ with tab2:
         df_final = df_tmp.copy()
         if h_dis_sel != "Todos": df_final = df_final[df_final['Distancia'] == h_dis_sel]
 
-        # --- LÓGICA DEL GRÁFICO (MODIFICADA: MENOR A MAYOR) ---
         if h_est_sel != "Todos" and h_dis_sel != "Todos" and len(df_final) >= 2:
             df_g = df_final.copy().sort_values('fecha')
             df_g['fecha_dt'] = pd.to_datetime(df_g['fecha'])
@@ -150,23 +180,15 @@ with tab2:
                 title=f"Evolución: {f_nad} - {cat_actual} ({h_dis_sel} {h_est_sel})",
                 custom_data=['tiempo', 'Sede_Full', 'cat_en_fecha']
             )
-
-            # Tooltips limpios (sin etiquetas de nombres)
             fig.update_traces(
                 hovertemplate="<b>%{x|%d/%m/%Y}</b><br>"+
                               "%{customdata[0]}<br>"+
                               "%{customdata[1]}<br>"+
                               "%{customdata[2]}<extra></extra>"
             )
-            
-            # Eje Y en orden Menor a Mayor (Estándar)
-            fig.update_yaxes(
-                tickformat="%M:%S.%2f", 
-                title="Tiempo (MM:SS.ms)"
-            )
+            fig.update_yaxes(tickformat="%M:%S.%2f", title="Tiempo (MM:SS.ms)")
             fig.update_xaxes(title="Fecha del Torneo")
             fig.update_layout(height=450, hovermode="closest")
-            
             st.plotly_chart(fig, use_container_width=True)
 
         st.dataframe(df_final[['fecha', 'Estilo', 'Distancia', 'tiempo', 'posicion', 'Sede_Full']].sort_values('fecha', ascending=False), use_container_width=True, hide_index=True)
