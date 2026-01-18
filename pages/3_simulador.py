@@ -71,18 +71,17 @@ def analizar_competitividad(tiempo_seg, suma_edades, genero):
 st.subheader("🧪 Posta Manual")
 with st.container(border=True):
     c1, c2, c3 = st.columns(3)
-    s_reg = c1.selectbox("Reglamento", data['cat_relevos']['tipo_reglamento'].unique(), key="s_reg_m")
-    s_tipo_rel = c2.selectbox("Prueba", ["Libre (Crol)", "Combinado (Medley)"], key="s_tipo_m")
+    s_reg_m = c1.selectbox("Reglamento", data['cat_relevos']['tipo_reglamento'].unique(), key="s_reg_m")
+    s_tipo_m = c2.selectbox("Prueba", ["Libre (Crol)", "Combinado (Medley)"], key="s_tipo_m")
     s_gen_sel = c3.selectbox("Género", ["Masculino (M)", "Femenino (F)", "Mixto (2M-2F)"], key="s_gen_m")
-    
-    # Definición segura de género
     s_gen = "X" if "Mixto" in s_gen_sel else ("M" if "(M)" in s_gen_sel else "F")
 
-    legs = [("Espalda", "E2"), ("Pecho", "E3"), ("Mariposa", "E1"), ("Crol", "E4")] if "Medley" in s_tipo_rel else [("Crol", "E4")] * 4
+    legs = [("Espalda", "E2"), ("Pecho", "E3"), ("Mariposa", "E1"), ("Crol", "E4")] if "Medley" in s_tipo_m else [("Crol", "E4")] * 4
     n_sel = []
     cols = st.columns(4)
     for i, (nom_e, cod_e) in enumerate(legs):
-        aptos = df_nad[df_nad['codnadador'].isin(df_tiempos_50[df_tiempos_50['codestilo'] == cod_e]['codnadador'])]
+        ids_e = df_tiempos_50[df_tiempos_50['codestilo'] == cod_e]['codnadador'].unique()
+        aptos = df_nad[df_nad['codnadador'].isin(ids_e)]
         if s_gen != "X": aptos = aptos[aptos['codgenero'] == s_gen]
         n_sel.append(cols[i].selectbox(f"{nom_e}", sorted(aptos['Nombre Completo'].tolist()), index=None, key=f"man_sel_{i}"))
 
@@ -96,27 +95,29 @@ with st.container(border=True):
                 tiempos_p = [m_loc[n_sel[i]].get(legs[i][1], 999.0) for i in range(4)]
                 total = sum(tiempos_p)
                 se = sum([df_nad[df_nad['Nombre Completo'] == n]['Edad_Master'].iloc[0] for n in n_sel])
-                cat_n, _ = get_cat_info(se, s_reg)
+                cat_n, _ = get_cat_info(se, s_reg_m)
 
-                # --- TABLERO ELECTRÓNICO CONSOLIDADO ---
+                # --- NUEVO TABLERO ELECTRÓNICO (IMPORENTE Y SIN REPETICIONES) ---
                 st.markdown(f"""
-                <div style='background-color: #1e1e1e; padding: 20px; border-radius: 10px; border-left: 10px solid red; color: white; display: flex; justify-content: space-around; align-items: center;'>
+                <div style='background-color: #1e1e1e; padding: 25px; border-radius: 12px; border-left: 15px solid red; color: white; display: flex; justify-content: space-around; align-items: center; box-shadow: 0px 4px 15px rgba(0,0,0,0.3);'>
                     <div style='text-align: center;'>
-                        <small style='color: #888;'>TIEMPO TOTAL</small><br>
-                        <b style='font-size: 35px; font-family: monospace;'>{seg_a_tiempo(total)}</b>
+                        <b style='font-size: 55px; font-family: monospace; line-height: 1;'>{seg_a_tiempo(total)}</b><br>
+                        <small style='color: #888; text-transform: uppercase; letter-spacing: 2px;'>Tiempo Final</small>
                     </div>
+                    <div style='width: 2px; height: 70px; background-color: #444;'></div>
                     <div style='text-align: center;'>
-                        <small style='color: #888;'>CATEGORÍA</small><br>
-                        <b style='font-size: 24px; color: #ff4b4b;'>{cat_n.upper()}</b>
+                        <b style='font-size: 35px; color: #ff4b4b; line-height: 1;'>{cat_n.upper()}</b><br>
+                        <small style='color: #888; text-transform: uppercase; letter-spacing: 2px;'>Categoría</small>
                     </div>
+                    <div style='width: 2px; height: 70px; background-color: #444;'></div>
                     <div style='text-align: center;'>
-                        <small style='color: #888;'>SUMA</small><br>
-                        <b style='font-size: 24px;'>{se} años</b>
+                        <b style='font-size: 35px; line-height: 1;'>{se}</b><br>
+                        <small style='color: #888; text-transform: uppercase; letter-spacing: 2px;'>Suma Años</small>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
 
-                st.write("### ⏱️ Parciales Técnicos")
+                st.write("### ⏱️ Parciales")
                 t_cols = st.columns(4)
                 for i in range(4):
                     t_cols[i].metric(n_sel[i].split(',')[0], seg_a_tiempo(tiempos_p[i]), legs[i][0])
@@ -132,7 +133,7 @@ with st.container(border=True):
                     obs += f"\n\n📋 **ANTECEDENTE:** {ant['tiempo_final']} en **{ip['club']} ({ip['medida']})** el {ant['fecha']}."
                 
                 st.info(obs if obs else "Cálculo finalizado.")
-        else: st.error("Seleccione 4 nadadores únicos.")
+        else: st.error("Seleccione 4 nadadores.")
 
 # --- 5. SIMULADOR POR GRUPO ---
 st.divider()
@@ -146,7 +147,8 @@ with st.container(border=True):
     o_gen = "X" if "Mixto" in o_gen_sel else ("M" if "(M)" in o_gen_sel else "F")
 
 if st.button("🪄 Generar Estrategia Óptima", type="primary", use_container_width=True):
-    if len(pool) < 4: st.warning("⚠️ Seleccione al menos 4 nadadores.")
+    if len(pool) < 4: 
+        st.warning("⚠️ **Observación:** Se necesitan al menos 4 nadadores para conformar un relevo.")
     else:
         try:
             with st.spinner("Procesando mejores combinaciones..."):
@@ -155,7 +157,7 @@ if st.button("🪄 Generar Estrategia Óptima", type="primary", use_container_wi
                     m_map[n].update({'gen': df_nad[df_nad['Nombre Completo'] == n]['codgenero'].iloc[0], 'edad': df_nad[df_nad['Nombre Completo'] == n]['Edad_Master'].iloc[0]})
 
                 legs_o = [("E2", "Espalda"), ("E3", "Pecho"), ("E1", "Mariposa"), ("E4", "Crol")] if "Medley" in o_tipo else [("E4", "Crol")]*4
-                pool_act, propuestas = list(pool), []
+                pool_act, propuestas, cats_ok = list(pool), [], []
 
                 while len(pool_act) >= 4:
                     subset = pool_act[:12] if len(pool_act) > 12 else pool_act
@@ -177,12 +179,17 @@ if st.button("🪄 Generar Estrategia Óptima", type="primary", use_container_wi
                     propuestas.append(mejor)
                     for n in mejor['eq']: pool_act.remove(n)
 
-                for i, p in enumerate(propuestas):
-                    with st.expander(f"POSTA #{i+1}: {p['cat'].upper()} ({seg_a_tiempo(p['t'])})", expanded=True):
-                        st.markdown(f"**TIEMPO:** {seg_a_tiempo(p['t'])} | **SUMA:** {p['se']} años")
-                        cs = st.columns(4)
-                        for j in range(4):
-                            cs[j].write(f"*{legs_o[j][1]}*\n\n{p['eq'][j]}")
-                            cs[j].code(seg_a_tiempo(m_map[p['eq'][j]].get(legs_o[j][0], 999.0)))
+                if not propuestas:
+                    st.info("⚠️ **Observación:** No se encontraron datos o marcas suficientes para conformar relevos según el pedido solicitado.")
+                else:
+                    for i, p in enumerate(propuestas):
+                        with st.expander(f"POSTA #{i+1}: {p['cat'].upper()} ({seg_a_tiempo(p['t'])})", expanded=True):
+                            st.markdown(f"**TIEMPO:** {seg_a_tiempo(p['t'])} | **SUMA:** {p['se']} años")
+                            cs = st.columns(4)
+                            for j in range(4):
+                                cs[j].write(f"*{legs_o[j][1]}*\n\n{p['eq'][j]}")
+                                cs[j].code(seg_a_tiempo(m_map[p['eq'][j]].get(legs_o[j][0], 999.0)))
+                            obs_g = analizar_competitividad(p['t'], p['se'], o_gen)
+                            if obs_g: st.success(obs_g)
         except Exception as e:
             st.error(f"Error en el proceso: {e}")
