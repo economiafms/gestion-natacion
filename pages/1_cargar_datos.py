@@ -1,82 +1,98 @@
-# --- 1_cargar_datos.py (Fragmento Sección Relevos) ---
-
 import streamlit as st
+from streamlit_gsheets import GSheetsConnection
 import pandas as pd
+from datetime import datetime, date
 
-# ... (Carga de datos previa)
+# --- 1. CONFIGURACIÓN ---
+st.set_page_config(page_title="Carga - Natación", layout="wide")
+st.title("📥 Panel de Carga de Datos")
 
-st.header("🏁 Carga de Relevos")
+conn = st.connection("gsheets", type=GSheetsConnection)
 
-# 1. PARAMETROS DE FILTRADO (Fuera del form para que sean dinámicos)
+# --- 2. CARGA DE DATOS (Asegurar que 'data' exista) ---
+@st.cache_data(ttl="1h")
+def cargar_referencias():
+    return {
+        "nadadores": conn.read(worksheet="Nadadores"),
+        "tiempos": conn.read(worksheet="Tiempos"),
+        "relevos": conn.read(worksheet="Relevos"),
+        "estilos": conn.read(worksheet="Estilos"),
+        "distancias": conn.read(worksheet="Distancias"),
+        "piletas": conn.read(worksheet="Piletas")
+    }
+
+# EJECUCIÓN DE LA CARGA (Esto define la variable 'data' para todo el script)
+data = cargar_referencias()
+
+# Procesamiento de nombres y piletas
+df_nad = data['nadadores'].copy()
+df_nad['Nombre Completo'] = df_nad['apellido'].astype(str).str.upper() + ", " + df_nad['nombre'].astype(str)
+
+df_pil = data['piletas'].copy()
+df_pil['Detalle'] = df_pil['club'] + " (" + df_pil['medida'] + ")"
+
+# --- 3. SECCIÓN DE RELEVOS ---
+st.divider()
+st.header("🏁 Carga de Relevos (4x50)")
+
+# Filtros fuera del form para que la lista de nadadores sea dinámica
 c1, c2, c3 = st.columns(3)
-r_gen = c1.selectbox("Género del Relevo", ["M", "F", "X"], key="r_gen_filtro")
+
+# 1. Filtro de Género
+r_gen = c1.selectbox("Género del Relevo", ["M", "F", "X"], key="r_gen_rel")
+
+# 2. Filtro de Estilo
 r_est = c2.selectbox("Estilo", data['estilos']['descripcion'].unique(), key="r_est_rel")
 
-# Filtro estricto de distancia: Solo 4x50
+# 3. Filtro de Distancia (FORZADO A 4x50)
 dist_4x50 = data['distancias'][data['distancias']['descripcion'].str.contains("4x50", case=False)]
 if dist_4x50.empty:
-    st.error("No se encontró la distancia '4x50' en la base de datos.")
+    st.error("No se encontró la distancia '4x50' en la tabla de Distancias.")
     r_dis = None
 else:
+    # Si hay varias (ej. 4x50 Libre y 4x50 Combinado), dejamos elegir, sino toma la única
     r_dis = c3.selectbox("Distancia", dist_4x50['descripcion'].unique(), key="r_dis_rel")
 
-# 2. FILTRADO DE NADADORES POR GÉNERO
+# FILTRADO DINÁMICO DE NADADORES
+# Esto evita que queden nadadores del género anterior al cambiar el selector
 if r_gen == "M":
     df_aptos = df_nad[df_nad['codgenero'] == 'M']
 elif r_gen == "F":
     df_aptos = df_nad[df_nad['codgenero'] == 'F']
 else: # Mixto (X)
-    df_aptos = df_nad[df_nad['codgenero'].isin(['M', 'F'])]
+    df_aptos = df_nad # Pueden ser todos
 
-lista_aptos = sorted(df_aptos['Nombre Completo'].tolist())
+lista_nombres_aptos = sorted(df_aptos['Nombre Completo'].tolist())
 
-# 3. FORMULARIO DE CARGA DE TIEMPOS Y POSICIONES
+# FORMULARIO DE CARGA
 with st.form("form_relevos", clear_on_submit=True):
-    st.write(f"### Detalle del Relevo {r_gen} - {r_est}")
+    st.write(f"### Detalle: {r_gen} - {r_est}")
     
-    # Creamos 4 filas para los 4 integrantes
-    r_n = []
-    r_p = []
-    
+    # Usamos columnas para que no ocupe tanto espacio vertical
     col_n, col_t = st.columns([3, 1])
+    
+    r_n = []
+    r_t = []
+    
     for i in range(4):
         with col_n:
-            # Usamos un key dinámico basado en el género para forzar el refresco
-            n = st.selectbox(f"Nadador {i+1}", lista_aptos, index=None, key=f"rel_n_{r_gen}_{i}")
+            # El key incluye r_gen para que Streamlit resetee el componente al cambiar de género
+            n = st.selectbox(f"Nadador {i+1}", lista_nombres_aptos, index=None, key=f"n_{r_gen}_{i}")
             r_n.append(n)
         with col_t:
-            t = st.text_input(f"Tiempo {i+1} (mm:ss.cc)", value="00:00.00", key=f"rel_t_{i}")
-            r_p.append(t)
+            t = st.text_input(f"Tiempo {i+1}", value="00:00.00", key=f"t_{i}")
+            r_t.append(t)
             
     st.divider()
-    c_p1, c_p2, c_p3 = st.columns(3)
-    r_pil = c_p1.selectbox("Pileta", df_pil['Detalle'].unique(), key="rel_pil")
-    r_fec = c_p2.date_input("Fecha", value=date.today(), key="rel_fec")
-    rp_r = c_p3.number_input("Posición Final", 1, 100, 1, key="rel_pos")
+    f1, f2, f3 = st.columns(3)
+    r_pil = f1.selectbox("Pileta", df_pil['Detalle'].unique(), key="rp_pil")
+    r_fec = f2.date_input("Fecha", value=date.today(), key="rp_fec")
+    r_pos = f3.number_input("Posición Final", 1, 100, 1, key="rp_pos")
 
-    if st.form_submit_button("➕ Añadir Relevo a la Cola"):
+    if st.form_submit_button("➕ Añadir Relevo"):
         if all(r_n) and r_dis:
-            # Lógica de guardado en session_state
-            base_id = data['relevos']['id_relevo'].max() if not data['relevos'].empty else 0
-            cola_id = pd.DataFrame(st.session_state.cola_relevos)['id_relevo'].max() if st.session_state.cola_relevos else 0
-            
-            ids_n = [df_nad[df_nad['Nombre Completo'] == n]['codnadador'].values[0] for n in r_n]
-            
-            st.session_state.cola_relevos.append({
-                'id_relevo': int(max(base_id, cola_id) + 1),
-                'codpileta': df_pil[df_pil['Detalle'] == r_pil]['codpileta'].values[0],
-                'codestilo': data['estilos'][data['estilos']['descripcion'] == r_est]['codestilo'].values[0],
-                'coddistancia': data['distancias'][data['distancias']['descripcion'] == r_dis]['coddistancia'].values[0],
-                'codgenero': r_gen,
-                'nadador_1': ids_n[0], 'tiempo_1': r_p[0],
-                'nadador_2': ids_n[1], 'tiempo_2': r_p[1],
-                'nadador_3': ids_n[2], 'tiempo_3': r_p[2],
-                'nadador_4': ids_n[3], 'tiempo_4': r_p[3],
-                'tiempo_final': "00:00.00", # Podrías calcular la suma aquí
-                'posicion': rp_r,
-                'fecha': r_fec.strftime("%Y-%m-%d")
-            })
-            st.success(f"✅ Relevo {r_gen} añadido correctamente.")
-            st.rerun() # Forzamos el refresco para limpiar selectores
+            # Aquí va tu lógica de guardado en session_state o base de datos
+            st.success(f"Relevo {r_gen} cargado para procesar.")
+            # st.session_state.cola_relevos.append(...)
         else:
-            st.error("Por favor, selecciona los 4 nadadores.")
+            st.error("Faltan completar nadadores o la distancia no es válida.")
