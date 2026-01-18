@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import datetime, date
 
 # --- 1. CONFIGURACIÓN E INTERFAZ ---
-st.set_page_config(page_title="Carga - Natación", layout="wide")
+st.set_page_config(page_title="Carga - Natación", layout="wide", initial_sidebar_state="collapsed")
 st.title("📥 Panel de Carga de Datos")
 
 conn = st.connection("gsheets", type=GSheetsConnection)
@@ -79,6 +79,7 @@ if total > 0:
 # ==========================================
 # 5. MENÚ DE NAVEGACIÓN
 # ==========================================
+# Usamos radio buttons para mantener la pestaña activa tras el rerun
 seccion_activa = st.radio("📍 Seleccionar Sección de Carga:", 
                           ["👤 Nadadores", "⏱️ Individuales", "🏊‍♂️ Relevos"], 
                           horizontal=True, 
@@ -99,15 +100,11 @@ if seccion_activa == "👤 Nadadores":
             c3, c4 = st.columns(2)
             n_gen = c3.selectbox("Género", ["M", "F"], index=None, placeholder="Seleccionar...")
             
-            # FORMATO DE FECHA: DD/MM/YYYY
             hoy = date.today()
-            n_fec = c4.date_input(
-                "Fecha Nacimiento", 
-                value=date(1990, 1, 1), 
-                min_value=date(hoy.year - 100, 1, 1), 
-                max_value=date(hoy.year - 18, 12, 31),
-                format="DD/MM/YYYY"  # <--- CAMBIO AQUÍ
-            )
+            n_fec = c4.date_input("Fecha Nacimiento", value=date(1990, 1, 1), 
+                                  min_value=date(hoy.year - 100, 1, 1), 
+                                  max_value=date(hoy.year - 18, 12, 31),
+                                  format="DD/MM/YYYY")
 
             st.write("") 
             if st.form_submit_button("Guardar Nadador", use_container_width=True):
@@ -119,7 +116,7 @@ if seccion_activa == "👤 Nadadores":
                         'nombre': n_nom.title(), 'apellido': n_ape.title(),
                         'fechanac': n_fec.strftime('%Y-%m-%d'), 'codgenero': n_gen
                     })
-                    st.rerun() # Recarga la página y pone el foco arriba
+                    st.rerun()
                 else: st.warning("Completa Nombre, Apellido y Género.")
 
 # --- SECCIÓN 2: TIEMPOS INDIVIDUALES ---
@@ -127,6 +124,7 @@ elif seccion_activa == "⏱️ Individuales":
     with st.container(border=True):
         st.subheader("Carga Individual")
         with st.form("f_ind", clear_on_submit=True):
+            # El primer campo es el Nadador, ideal para encadenar cargas
             t_nad = st.selectbox("Nadador", lista_nombres, index=None, placeholder="Buscar apellido...")
             
             c1, c2 = st.columns(2)
@@ -145,8 +143,7 @@ elif seccion_activa == "⏱️ Individuales":
             with cc: vc = st.number_input("Cent", 0, 99, 0, format="%02d")
             
             c3, c4 = st.columns(2)
-            # FORMATO DE FECHA: DD/MM/YYYY
-            v_fec = c3.date_input("Fecha Torneo", value=date.today(), format="DD/MM/YYYY") # <--- CAMBIO AQUÍ
+            v_fec = c3.date_input("Fecha Torneo", value=date.today(), format="DD/MM/YYYY")
             v_pos = c4.number_input("Posición", 1, 100, 1)
 
             st.write("")
@@ -168,6 +165,7 @@ elif seccion_activa == "⏱️ Individuales":
 
 # --- SECCIÓN 3: RELEVOS ---
 elif seccion_activa == "🏊‍♂️ Relevos":
+    # Filtros externos (dinámicos)
     with st.container(border=True):
         st.subheader("Configuración del Relevo")
         r_gen = st.selectbox("Género del Equipo", ["M", "F", "X"], index=None, placeholder="Seleccionar género primero...")
@@ -179,9 +177,10 @@ elif seccion_activa == "🏊‍♂️ Relevos":
         else:
             ld = lista_nombres 
         
-        # Filtro 4x50
+        # Filtro automático 4x50
         lista_dist_4x50 = data['distancias'][data['distancias']['descripcion'].str.contains("4x50", case=False, na=False)]['descripcion'].unique()
 
+    # Formulario de Carga
     with st.container(border=True):
         with st.form("f_rel", clear_on_submit=True):
             c1, c2, c3 = st.columns(3)
@@ -211,8 +210,7 @@ elif seccion_activa == "🏊‍♂️ Relevos":
             with rc: rvc = st.number_input("Cent", 0, 99, 0, key="rcr", format="%02d")
             
             c4, c5 = st.columns(2)
-            # FORMATO DE FECHA: DD/MM/YYYY
-            rf_r = c4.date_input("Fecha", value=date.today(), format="DD/MM/YYYY", key="rf_r") # <--- CAMBIO AQUÍ
+            rf_r = c4.date_input("Fecha", value=date.today(), format="DD/MM/YYYY", key="rf_r")
             rp_r = c5.number_input("Posición", 1, 100, 1, key="rp_r")
 
             st.write("")
