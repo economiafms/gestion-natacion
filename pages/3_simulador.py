@@ -22,8 +22,8 @@ def cargar_datos_sim():
             "piletas": conn.read(worksheet="Piletas")
         }
         df_n = data['nadadores'].copy()
+        # Formato APELLIDO, Nombre obligatorio para evitar duplicados
         df_n['Nombre Completo'] = df_n['apellido'].astype(str).str.upper() + ", " + df_n['nombre'].astype(str)
-        # Año base para cálculo Master
         df_n['Edad_Master'] = 2026 - pd.to_datetime(df_n['fechanac']).dt.year
         df_t_50 = data['tiempos'][data['tiempos']['coddistancia'] == 'D1'].copy()
         return data, df_n, df_t_50
@@ -51,28 +51,36 @@ def get_cat_info(suma, reg):
     regs = data['cat_relevos'][data['cat_relevos']['tipo_reglamento'] == reg]
     for _, r in regs.iterrows():
         if r['suma_min'] <= suma <= r['suma_max']: 
-            return r['descripcion'], r['suma_min'] # Retornamos suma_min para ordenar
+            return r['descripcion'], r['suma_min']
     return f"Suma {int(suma)}", suma
 
-# --- ESTILO DE TARJETA MEJORADA ---
+def analizar_competitividad(tiempo_seg, suma_edades, genero):
+    benchmarks = {"M": {119: 112, 159: 115, 199: 119, 239: 130}, "F": {119: 132, 159: 135, 199: 145, 239: 165}, "X": {119: 120, 159: 124, 199: 128, 239: 145}}
+    limites = sorted(benchmarks.get(genero, {}).keys())
+    cat_techo = next((l for l in limites if suma_edades <= l), 999)
+    if cat_techo in benchmarks.get(genero, {}):
+        meta = benchmarks[genero][cat_techo]
+        if tiempo_seg <= meta: return f"🔥 **NIVEL CENARD.** Podio ({seg_a_tiempo(meta)})."
+        elif tiempo_seg <= meta + 10: return f"✨ **NIVEL COMPETITIVO.** Cerca de marcas de podio."
+    return ""
+
 def render_tarjeta_resumen(tiempo, categoria, suma, dark=False):
     bg = "#1e1e1e" if dark else "#f0f2f6"
     text = "#ffffff" if dark else "#31333F"
-    border = "red"
     st.markdown(f"""
-        <div style='background-color: {bg}; padding: 15px; border-radius: 10px; border-left: 8px solid {border}; color: {text}; margin-bottom: 20px; box-shadow: 2px 2px 5px rgba(0,0,0,0.1);'>
+        <div style='background-color: {bg}; padding: 12px; border-radius: 10px; border-left: 8px solid red; color: {text}; margin-bottom: 15px;'>
             <div style='display: flex; justify-content: space-around; align-items: center; flex-wrap: wrap;'>
-                <div style='text-align: center; margin: 5px 15px;'>
-                    <small style='text-transform: uppercase; color: #888; font-weight: bold;'>Tiempo</small><br>
-                    <span style='font-size: 28px; font-family: monospace; font-weight: bold;'>{tiempo}</span>
+                <div style='text-align: center;'>
+                    <b style='font-size: 26px; font-family: monospace;'>{tiempo}</b><br>
+                    <small style='color: #888;'>TIEMPO TOTAL</small>
                 </div>
-                <div style='text-align: center; margin: 5px 15px;'>
-                    <small style='text-transform: uppercase; color: #888; font-weight: bold;'>Categoría</small><br>
-                    <span style='font-size: 22px; color: #ff4b4b; font-weight: bold;'>{categoria.upper()}</span>
+                <div style='text-align: center;'>
+                    <b style='font-size: 20px; color: #ff4b4b;'>{categoria.upper()}</b><br>
+                    <small style='color: #888;'>CATEGORÍA</small>
                 </div>
-                <div style='text-align: center; margin: 5px 15px;'>
-                    <small style='text-transform: uppercase; color: #888; font-weight: bold;'>Suma</small><br>
-                    <span style='font-size: 22px; font-weight: bold;'>{suma} <small>años</small></span>
+                <div style='text-align: center;'>
+                    <b style='font-size: 20px;'>{suma} <small>años</small></b><br>
+                    <small style='color: #888;'>SUMA</small>
                 </div>
             </div>
         </div>
@@ -103,19 +111,42 @@ with st.container(border=True):
             se = sum([df_nad[df_nad['Nombre Completo'] == n]['Edad_Master'].iloc[0] for n in n_sel])
             cat_n, _ = get_cat_info(se, s_reg_m)
 
-            # Render de tarjeta mejorada (Posta Manual)
             render_tarjeta_resumen(seg_a_tiempo(total), cat_n, se)
 
             t_cols = st.columns(4)
             for i in range(4):
-                t_cols[i].metric(n_sel[i].split(',')[0], seg_a_tiempo(tiempos_p[i]))
-        else: st.error("Seleccione 4 nadadores.")
+                t_cols[i].metric(n_sel[i], seg_a_tiempo(tiempos_p[i])) # Muestra Apellido, Nombre
 
-# --- 5. SIMULADOR POR GRUPO (ORDENADO Y MEJORADO) ---
+            # --- OBSERVACIONES ---
+            st.markdown("---")
+            st.markdown("### 📋 Observaciones")
+            obs_lista = []
+            
+            comp = analizar_competitividad(total, se, s_gen)
+            if comp: obs_lista.append(comp)
+            
+            ids_a = sorted([int(df_nad[df_nad['Nombre Completo'] == n]['codnadador'].iloc[0]) for n in n_sel])
+            hist = data['relevos'][data['relevos'].apply(lambda r: sorted([int(r['nadador_1']), int(r['nadador_2']), int(r['nadador_3']), int(r['nadador_4'])]) == ids_a if pd.notnull(r['nadador_1']) else False, axis=1)]
+            if not hist.empty:
+                ant = hist.sort_values('tiempo_final').iloc[0]
+                ip = dict_piletas.get(ant['codpileta'], {"club": "Sede ?", "medida": "-"})
+                obs_lista.append(f"⏱️ **ANTECEDENTE:** Marcaron **{ant['tiempo_final']}** en {ip['club']} ({ip['medida']}) el {ant['fecha']}.")
+            
+            mejor_t, mejor_o = total, n_sel
+            for p in itertools.permutations(n_sel):
+                tp = sum([m_loc[p[idx]].get(legs[idx][1], 999.0) for idx in range(4)])
+                if tp < (mejor_t - 0.05): mejor_t, mejor_o = tp, p
+            if mejor_t < total:
+                obs_lista.append(f"💡 **ORDEN:** Bajan a **{seg_a_tiempo(mejor_t)}** alternando orden de salida.")
+
+            if obs_lista:
+                for item in obs_lista: st.info(item)
+
+# --- 5. SIMULADOR POR GRUPO ---
 st.divider()
 st.subheader("🎯 Simulador por grupo de nadadores")
 with st.container(border=True):
-    pool = st.multiselect("Seleccionar nadadores del grupo:", sorted(df_nad['Nombre Completo'].tolist()), key="pool_opt_g")
+    pool = st.multiselect("Seleccionar nadadores:", sorted(df_nad['Nombre Completo'].tolist()), key="pool_opt_g")
     c1, c2, c3 = st.columns(3)
     o_reg = c1.selectbox("Reglamento", data['cat_relevos']['tipo_reglamento'].unique(), key="o_reg_g")
     o_tipo = c2.radio("Estilo de Prueba", ["Libre (Crol)", "Combinado (Medley)"], horizontal=True)
@@ -123,9 +154,9 @@ with st.container(border=True):
     o_gen = "X" if "Mixto" in o_gen_sel else ("M" if "(M)" in o_gen_sel else "F")
 
 if st.button("🪄 Generar Estrategia Óptima", type="primary", use_container_width=True):
-    if len(pool) < 4: st.warning("⚠️ Seleccione al menos 4 nadadores.")
+    if len(pool) < 4: st.warning("Seleccione al menos 4 nadadores.")
     else:
-        with st.spinner("Calculando mejores combinaciones..."):
+        with st.spinner("Calculando..."):
             m_map = {n: {r['codestilo']: tiempo_a_seg(r['tiempo']) for _, r in df_tiempos_50[df_tiempos_50['codnadador'] == df_nad[df_nad['Nombre Completo'] == n]['codnadador'].iloc[0]].iterrows()} for n in pool}
             for n in pool: m_map[n].update({'gen': df_nad[df_nad['Nombre Completo'] == n]['codgenero'].iloc[0], 'edad': df_nad[df_nad['Nombre Completo'] == n]['Edad_Master'].iloc[0]})
             legs_o = [("E2", "Espalda"), ("E3", "Pecho"), ("E1", "Mariposa"), ("E4", "Crol")] if "Medley" in o_tipo else [("E4", "Crol")]*4
@@ -143,23 +174,21 @@ if st.button("🪄 Generar Estrategia Óptima", type="primary", use_container_wi
                     cn, s_min = get_cat_info(se, o_reg)
                     resultados.append({'eq': mo, 't': mt, 'cat': cn, 'se': se, 's_min': s_min})
 
-            if not resultados:
-                st.info("No se encontraron combinaciones válidas.")
+            if not resultados: st.info("No se encontraron combinaciones.")
             else:
-                # ORDENAMIENTO POR CATEGORÍA (Menor a mayor edad)
                 df_res = pd.DataFrame(resultados).sort_values(by=['s_min', 't'])
-                
                 for cat_nombre, group in df_res.groupby('cat', sort=False):
                     st.markdown(f"### 🚩 {cat_nombre.upper()}")
                     for idx, row in group.head(2).iterrows():
                         label = "EQUIPO A" if idx == group.index[0] else "EQUIPO B"
                         with st.expander(f"{label} - {seg_a_tiempo(row['t'])}", expanded=True if idx == group.index[0] else False):
-                            
-                            # Render de tarjeta mejorada (Simulador Grupo)
                             render_tarjeta_resumen(seg_a_tiempo(row['t']), row['cat'], row['se'], dark=True)
-                            
                             cs = st.columns(4)
                             for j in range(4):
                                 cs[j].write(f"**{legs_o[j][1]}**")
-                                cs[j].write(row['eq'][j].split(',')[0])
+                                cs[j].write(row['eq'][j]) # Muestra Apellido, Nombre
                                 cs[j].code(seg_a_tiempo(m_map[row['eq'][j]].get(legs_o[j][0], 999.0)))
+                            
+                            st.markdown("**Observaciones:**")
+                            comp_g = analizar_competitividad(row['t'], row['se'], o_gen)
+                            if comp_g: st.success(comp_g)
