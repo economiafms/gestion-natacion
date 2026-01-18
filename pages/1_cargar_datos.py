@@ -44,7 +44,7 @@ df_pil['Detalle'] = df_pil['club'].astype(str) + " (" + df_pil['medida'].astype(
 lista_piletas = df_pil['Detalle'].unique()
 lista_reglamentos = data['cat_relevos']['tipo_reglamento'].unique().tolist() if not data['cat_relevos'].empty else ["FED"]
 
-# Separadores visuales para inputs de tiempo
+# Separadores visuales
 sep = "<div style='text-align: center; font-size: 20px; font-weight: bold; margin-top: 30px;'>:</div>"
 sep_dot = "<div style='text-align: center; font-size: 20px; font-weight: bold; margin-top: 30px;'>.</div>"
 
@@ -77,9 +77,8 @@ if total > 0:
         st.rerun()
 
 # ==========================================
-# 5. MENÚ DE NAVEGACIÓN (Solución al reset)
+# 5. MENÚ DE NAVEGACIÓN
 # ==========================================
-# Usamos radio buttons horizontales en lugar de tabs para mantener el estado activo al recargar
 seccion_activa = st.radio("📍 Seleccionar Sección de Carga:", 
                           ["👤 Nadadores", "⏱️ Individuales", "🏊‍♂️ Relevos"], 
                           horizontal=True, 
@@ -91,15 +90,24 @@ if seccion_activa == "👤 Nadadores":
     with st.container(border=True):
         st.subheader("Nuevo Nadador")
         with st.form("f_nad", clear_on_submit=True):
+            # Fila 1
             c1, c2 = st.columns(2)
             n_nom = c1.text_input("Nombre")
             n_ape = c2.text_input("Apellido")
             
+            # Fila 2
             c3, c4 = st.columns(2)
             n_gen = c3.selectbox("Género", ["M", "F"], index=None, placeholder="Seleccionar...")
             
+            # FORMATO DE FECHA: DD/MM/YYYY
             hoy = date.today()
-            n_fec = c4.date_input("Fecha Nacimiento", value=date(1990, 1, 1), min_value=date(hoy.year - 100, 1, 1), max_value=date(hoy.year - 18, 12, 31))
+            n_fec = c4.date_input(
+                "Fecha Nacimiento", 
+                value=date(1990, 1, 1), 
+                min_value=date(hoy.year - 100, 1, 1), 
+                max_value=date(hoy.year - 18, 12, 31),
+                format="DD/MM/YYYY"  # <--- CAMBIO AQUÍ
+            )
 
             st.write("") 
             if st.form_submit_button("Guardar Nadador", use_container_width=True):
@@ -111,7 +119,7 @@ if seccion_activa == "👤 Nadadores":
                         'nombre': n_nom.title(), 'apellido': n_ape.title(),
                         'fechanac': n_fec.strftime('%Y-%m-%d'), 'codgenero': n_gen
                     })
-                    st.rerun()
+                    st.rerun() # Recarga la página y pone el foco arriba
                 else: st.warning("Completa Nombre, Apellido y Género.")
 
 # --- SECCIÓN 2: TIEMPOS INDIVIDUALES ---
@@ -137,7 +145,8 @@ elif seccion_activa == "⏱️ Individuales":
             with cc: vc = st.number_input("Cent", 0, 99, 0, format="%02d")
             
             c3, c4 = st.columns(2)
-            v_fec = c3.date_input("Fecha Torneo", value=date.today())
+            # FORMATO DE FECHA: DD/MM/YYYY
+            v_fec = c3.date_input("Fecha Torneo", value=date.today(), format="DD/MM/YYYY") # <--- CAMBIO AQUÍ
             v_pos = c4.number_input("Posición", 1, 100, 1)
 
             st.write("")
@@ -157,30 +166,26 @@ elif seccion_activa == "⏱️ Individuales":
                     st.rerun()
                 else: st.warning("Faltan datos obligatorios.")
 
-# --- SECCIÓN 3: RELEVOS (CON TUS VALIDACIONES) ---
+# --- SECCIÓN 3: RELEVOS ---
 elif seccion_activa == "🏊‍♂️ Relevos":
-    # 1. Filtros Externos (Para que sean dinámicos)
     with st.container(border=True):
         st.subheader("Configuración del Relevo")
         r_gen = st.selectbox("Género del Equipo", ["M", "F", "X"], index=None, placeholder="Seleccionar género primero...")
         
-        # VALIDACIÓN 1: Filtro dinámico de nadadores según género seleccionado
         if r_gen == "M":
             ld = df_nad[df_nad['codgenero'] == 'M']['Nombre Completo'].sort_values().unique()
         elif r_gen == "F":
             ld = df_nad[df_nad['codgenero'] == 'F']['Nombre Completo'].sort_values().unique()
         else:
-            ld = lista_nombres # Todos
+            ld = lista_nombres 
         
-        # VALIDACIÓN 2: Filtro de distancias (Solo 4x50)
+        # Filtro 4x50
         lista_dist_4x50 = data['distancias'][data['distancias']['descripcion'].str.contains("4x50", case=False, na=False)]['descripcion'].unique()
 
-    # 2. Formulario de Carga
     with st.container(border=True):
         with st.form("f_rel", clear_on_submit=True):
-            # VALIDACIÓN 3: Campos por defecto vacíos (index=None)
             c1, c2, c3 = st.columns(3)
-            r_pil = c1.selectbox("Sede", lista_piletas, index=None, placeholder="Seleccionar sede...")
+            r_pil = c1.selectbox("Sede", lista_piletas, index=None, placeholder="Sede...")
             r_est = c2.selectbox("Estilo", data['estilos']['descripcion'].unique(), index=None, placeholder="Estilo...")
             r_dis = c3.selectbox("Distancia", lista_dist_4x50, index=None, placeholder="Solo 4x50")
             r_reg = st.selectbox("Reglamento", lista_reglamentos, index=None, placeholder="Reglamento...")
@@ -192,7 +197,6 @@ elif seccion_activa == "🏊‍♂️ Relevos":
             for i in range(1, 5):
                 ca, cb = st.columns([0.7, 0.3]) 
                 with ca:
-                    # Key dinámica para resetear los selectores si cambia el género
                     r_n.append(st.selectbox(f"Nadador {i}", ld, index=None, key=f"rn_{r_gen}_{i}", placeholder="Buscar..."))
                 with cb:
                     r_p.append(st.text_input(f"P{i}", placeholder="00.00", key=f"rp_{i}"))
@@ -206,9 +210,9 @@ elif seccion_activa == "🏊‍♂️ Relevos":
             with rs2: st.markdown(sep_dot, unsafe_allow_html=True)
             with rc: rvc = st.number_input("Cent", 0, 99, 0, key="rcr", format="%02d")
             
-            # VALIDACIÓN 4: Fecha del día por defecto
             c4, c5 = st.columns(2)
-            rf_r = c4.date_input("Fecha", value=date.today(), key="rf_r")
+            # FORMATO DE FECHA: DD/MM/YYYY
+            rf_r = c4.date_input("Fecha", value=date.today(), format="DD/MM/YYYY", key="rf_r") # <--- CAMBIO AQUÍ
             rp_r = c5.number_input("Posición", 1, 100, 1, key="rp_r")
 
             st.write("")
@@ -227,6 +231,6 @@ elif seccion_activa == "🏊‍♂️ Relevos":
                         'tiempo_final': f"{rvm:02d}:{rvs:02d}.{rvc:02d}", 'posicion': int(rp_r), 'fecha': rf_r.strftime('%Y-%m-%d'), 'tipo_reglamento': r_reg
                     })
                     st.success("Relevo guardado en cola.")
-                    st.rerun() # Al hacer rerun, como estamos usando RADIO BUTTON, se mantiene en esta sección.
+                    st.rerun()
                 else:
-                    st.error("Faltan datos obligatorios (Género, Sede, Distancia o Integrantes).")
+                    st.error("Faltan datos obligatorios.")
