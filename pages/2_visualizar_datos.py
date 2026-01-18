@@ -61,17 +61,17 @@ tab1, tab2, tab3 = st.tabs(["👥 Padrón General", "👤 Ficha del Nadador", "�
 
 # --- TAB 1: PADRÓN GENERAL Y MEDALLERO NOB ---
 with tab1:
-    st.markdown("### 🔴⚫ COMPLEJO ACUATICO DE NEWELL'S OLD BOYS")
-    st.subheader("¡VAMOS POR LA COPA!")
+    st.markdown("<h1 style='text-align: center; color: red;'>🔴⚫ COMPLEJO ACUATICO DE NEWELL'S OLD BOYS</h1>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align: center;'>¡VAMOS POR LA COPA!</h3>", unsafe_allow_html=True)
     
-    # Procesamiento del Medallero General
+    # --- PROCESAMIENTO DEL MEDALLERO ---
     df_tiempos_nob = data['tiempos'].copy()
     df_relevos_nob = data['relevos'].copy()
     
     # Conteo Individual
     med_ind = df_tiempos_nob.groupby(['codnadador', 'posicion']).size().unstack(fill_value=0)
     
-    # Conteo Relevos (se suma si el nadador participó en cualquier posición)
+    # Conteo Relevos
     relevistas = []
     for i in range(1, 5):
         relevistas.append(df_relevos_nob[['nadador_' + str(i), 'posicion']].rename(columns={'nadador_' + str(i): 'codnadador'}))
@@ -80,8 +80,24 @@ with tab1:
     
     # Unir Medalleros
     medallero_total = med_ind.add(med_rel, fill_value=0)
+    # Asegurar que existan las columnas 1, 2 y 3
+    for pos in [1, 2, 3]:
+        if pos not in medallero_total.columns: medallero_total[pos] = 0
+
+    # --- MÉTRICAS TOTALES DEL CLUB ---
+    total_oros = int(medallero_total[1].sum())
+    total_platas = int(medallero_total[2].sum())
+    total_bronces = int(medallero_total[3].sum())
     
-    # Preparar DataFrame del Padrón
+    st.divider()
+    col_t1, col_t2, col_t3, col_t4 = st.columns(4)
+    col_t1.metric("🥇 Oros Club", total_oros)
+    col_t2.metric("🥈 Platas Club", total_platas)
+    col_t3.metric("🥉 Bronces Club", total_bronces)
+    col_t4.metric("🏆 Total Medallas", total_oros + total_platas + total_bronces)
+    st.divider()
+
+    # --- TABLA DEL PADRÓN ---
     df_p = df_nad.copy()
     df_p['fechanac'] = pd.to_datetime(df_p['fechanac'])
     anio_actual = 2026 
@@ -93,10 +109,9 @@ with tab1:
     df_p = df_p.rename(columns={1: '🥇', 2: '🥈', 3: '🥉'})
     df_p['Total Podios'] = df_p['🥇'] + df_p['🥈'] + df_p['🥉']
     
-    # Mostrar tabla con estilo NOB
     st.dataframe(
         df_p[['Nombre Completo', 'Edad', 'Categoría', '🥇', '🥈', '🥉', 'Total Podios']]
-        .sort_values('Total Podios', ascending=False), 
+        .sort_values(['Total Podios', '🥇'], ascending=False), 
         use_container_width=True, 
         hide_index=True
     )
