@@ -4,8 +4,8 @@ import pandas as pd
 from datetime import datetime, date
 
 # --- 1. CONFIGURACIÓN E INTERFAZ ---
-st.set_page_config(page_title="Carga - Natación", layout="wide", initial_sidebar_state="collapsed")
-st.title("📥 Panel de Carga")
+st.set_page_config(page_title="Carga - Natación", layout="wide")
+st.title("📥 Panel de Carga de Datos")
 
 conn = st.connection("gsheets", type=GSheetsConnection)
 
@@ -44,12 +44,12 @@ df_pil['Detalle'] = df_pil['club'].astype(str) + " (" + df_pil['medida'].astype(
 lista_piletas = df_pil['Detalle'].unique()
 lista_reglamentos = data['cat_relevos']['tipo_reglamento'].unique().tolist() if not data['cat_relevos'].empty else ["FED"]
 
-# Separador visual para inputs de tiempo
+# Separadores visuales para inputs de tiempo
 sep = "<div style='text-align: center; font-size: 20px; font-weight: bold; margin-top: 30px;'>:</div>"
 sep_dot = "<div style='text-align: center; font-size: 20px; font-weight: bold; margin-top: 30px;'>.</div>"
 
 # ==========================================
-# 4. PANEL DE SINCRONIZACIÓN (DISEÑO ALERT)
+# 4. PANEL DE SINCRONIZACIÓN
 # ==========================================
 total = len(st.session_state.cola_tiempos) + len(st.session_state.cola_nadadores) + len(st.session_state.cola_relevos)
 
@@ -77,31 +77,31 @@ if total > 0:
         st.rerun()
 
 # ==========================================
-# 5. PESTAÑAS DE CARGA (DISEÑO TARJETAS)
+# 5. MENÚ DE NAVEGACIÓN (Solución al reset)
 # ==========================================
-tab1, tab2, tab3 = st.tabs(["👤 Nadadores", "⏱️ Individuales", "🏊‍♂️ Relevos"])
+# Usamos radio buttons horizontales en lugar de tabs para mantener el estado activo al recargar
+seccion_activa = st.radio("📍 Seleccionar Sección de Carga:", 
+                          ["👤 Nadadores", "⏱️ Individuales", "🏊‍♂️ Relevos"], 
+                          horizontal=True, 
+                          label_visibility="collapsed")
+st.divider()
 
-# --- TAB 1: NADADORES ---
-with tab1:
+# --- SECCIÓN 1: NADADORES ---
+if seccion_activa == "👤 Nadadores":
     with st.container(border=True):
         st.subheader("Nuevo Nadador")
         with st.form("f_nad", clear_on_submit=True):
-            # Fila 1: Datos Personales (2 columnas para mejor visualización mobile)
             c1, c2 = st.columns(2)
             n_nom = c1.text_input("Nombre")
             n_ape = c2.text_input("Apellido")
             
-            # Fila 2: Detalles
             c3, c4 = st.columns(2)
             n_gen = c3.selectbox("Género", ["M", "F"], index=None, placeholder="Seleccionar...")
             
-            # Lógica de fechas
             hoy = date.today()
-            fecha_max = date(hoy.year - 18, 12, 31) 
-            fecha_min = date(hoy.year - 100, 1, 1)
-            n_fec = c4.date_input("Fecha Nacimiento", value=date(1990, 1, 1), min_value=fecha_min, max_value=fecha_max)
+            n_fec = c4.date_input("Fecha Nacimiento", value=date(1990, 1, 1), min_value=date(hoy.year - 100, 1, 1), max_value=date(hoy.year - 18, 12, 31))
 
-            st.write("") # Espacio
+            st.write("") 
             if st.form_submit_button("Guardar Nadador", use_container_width=True):
                 if n_nom and n_ape and n_gen:
                     base_id = data['nadadores']['codnadador'].max() if not data['nadadores'].empty else 0
@@ -114,24 +114,20 @@ with tab1:
                     st.rerun()
                 else: st.warning("Completa Nombre, Apellido y Género.")
 
-# --- TAB 2: TIEMPOS INDIVIDUALES ---
-with tab2:
+# --- SECCIÓN 2: TIEMPOS INDIVIDUALES ---
+elif seccion_activa == "⏱️ Individuales":
     with st.container(border=True):
         st.subheader("Carga Individual")
         with st.form("f_ind", clear_on_submit=True):
-            # Bloque 1: Quién y Dónde
             t_nad = st.selectbox("Nadador", lista_nombres, index=None, placeholder="Buscar apellido...")
             
             c1, c2 = st.columns(2)
-            t_est = c1.selectbox("Estilo", data['estilos']['descripcion'].unique(), index=None)
-            t_dis = c2.selectbox("Distancia", data['distancias']['descripcion'].unique(), index=None)
+            t_est = c1.selectbox("Estilo", data['estilos']['descripcion'].unique(), index=None, placeholder="Estilo...")
+            t_dis = c2.selectbox("Distancia", data['distancias']['descripcion'].unique(), index=None, placeholder="Distancia...")
             
-            # Corrección solicitada: Sede vacía por defecto
             t_pil = st.selectbox("Sede / Pileta", lista_piletas, index=None, placeholder="Seleccionar sede...") 
             
             st.divider()
-            
-            # Bloque 2: Resultado (Diseño compacto)
             st.write("**Tiempo Realizado**")
             cm, cs1, cs, cs2, cc = st.columns([1, 0.2, 1, 0.2, 1])
             with cm: vm = st.number_input("Min", 0, 59, 0, format="%02d")
@@ -159,16 +155,16 @@ with tab2:
                     })
                     st.success("Tiempo guardado.")
                     st.rerun()
-                else: st.warning("Faltan datos obligatorios (Nadador, Estilo, Distancia o Sede).")
+                else: st.warning("Faltan datos obligatorios.")
 
-# --- TAB 3: RELEVOS (CON VALIDACIONES) ---
-with tab3:
-    # 1. Filtros "Fuera del Form" para dinamismo
+# --- SECCIÓN 3: RELEVOS (CON TUS VALIDACIONES) ---
+elif seccion_activa == "🏊‍♂️ Relevos":
+    # 1. Filtros Externos (Para que sean dinámicos)
     with st.container(border=True):
         st.subheader("Configuración del Relevo")
         r_gen = st.selectbox("Género del Equipo", ["M", "F", "X"], index=None, placeholder="Seleccionar género primero...")
         
-        # Lógica de Filtrado Dinámico de Nadadores
+        # VALIDACIÓN 1: Filtro dinámico de nadadores según género seleccionado
         if r_gen == "M":
             ld = df_nad[df_nad['codgenero'] == 'M']['Nombre Completo'].sort_values().unique()
         elif r_gen == "F":
@@ -176,29 +172,27 @@ with tab3:
         else:
             ld = lista_nombres # Todos
         
-        # Filtro de distancias (Solo 4x50)
+        # VALIDACIÓN 2: Filtro de distancias (Solo 4x50)
         lista_dist_4x50 = data['distancias'][data['distancias']['descripcion'].str.contains("4x50", case=False, na=False)]['descripcion'].unique()
 
     # 2. Formulario de Carga
     with st.container(border=True):
         with st.form("f_rel", clear_on_submit=True):
-            # Fila de Configuración
+            # VALIDACIÓN 3: Campos por defecto vacíos (index=None)
             c1, c2, c3 = st.columns(3)
-            r_pil = c1.selectbox("Sede", lista_piletas, index=None, placeholder="Sede...")
+            r_pil = c1.selectbox("Sede", lista_piletas, index=None, placeholder="Seleccionar sede...")
             r_est = c2.selectbox("Estilo", data['estilos']['descripcion'].unique(), index=None, placeholder="Estilo...")
             r_dis = c3.selectbox("Distancia", lista_dist_4x50, index=None, placeholder="Solo 4x50")
-            r_reg = st.selectbox("Reglamento", lista_reglamentos, index=None)
+            r_reg = st.selectbox("Reglamento", lista_reglamentos, index=None, placeholder="Reglamento...")
 
             st.divider()
             st.write("👥 **Integrantes**")
             
-            # Loop de Nadadores (Diseño Mobile: Stackeado es mejor, pero usamos columnas asimétricas)
             r_n, r_p = [], []
             for i in range(1, 5):
-                # En mobile, columns([3,1]) funciona bien para nombre largo + input corto
                 ca, cb = st.columns([0.7, 0.3]) 
                 with ca:
-                    # Key dinámica para resetear filtro
+                    # Key dinámica para resetear los selectores si cambia el género
                     r_n.append(st.selectbox(f"Nadador {i}", ld, index=None, key=f"rn_{r_gen}_{i}", placeholder="Buscar..."))
                 with cb:
                     r_p.append(st.text_input(f"P{i}", placeholder="00.00", key=f"rp_{i}"))
@@ -212,6 +206,7 @@ with tab3:
             with rs2: st.markdown(sep_dot, unsafe_allow_html=True)
             with rc: rvc = st.number_input("Cent", 0, 99, 0, key="rcr", format="%02d")
             
+            # VALIDACIÓN 4: Fecha del día por defecto
             c4, c5 = st.columns(2)
             rf_r = c4.date_input("Fecha", value=date.today(), key="rf_r")
             rp_r = c5.number_input("Posición", 1, 100, 1, key="rp_r")
@@ -232,6 +227,6 @@ with tab3:
                         'tiempo_final': f"{rvm:02d}:{rvs:02d}.{rvc:02d}", 'posicion': int(rp_r), 'fecha': rf_r.strftime('%Y-%m-%d'), 'tipo_reglamento': r_reg
                     })
                     st.success("Relevo guardado en cola.")
-                    st.rerun()
+                    st.rerun() # Al hacer rerun, como estamos usando RADIO BUTTON, se mantiene en esta sección.
                 else:
-                    st.error("Faltan datos: Género, Sede, Distancia o Integrantes completos.")
+                    st.error("Faltan datos obligatorios (Género, Sede, Distancia o Integrantes).")
