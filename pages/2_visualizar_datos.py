@@ -162,37 +162,36 @@ def calcular_grupo_relevo(row_rel, df_cats):
         return f"Suma {suma_edades}"
     except: return "-"
 
-# --- PREPARACIÓN DE DATOS Y CORRECCIÓN DE COLUMNAS (FIX KEYERROR) ---
+# --- UNIFICACIÓN DE DATOS (FIX Piletas y Columnas) ---
 df_full = data['tiempos'].copy()
-df_full = df_full.merge(data['estilos'], on='codestilo').merge(data['distancias'], on='coddistancia').merge(data['piletas'], on='codpileta')
 
-# Renombrar columnas dinámicas de descripciones
-if 'descripcion_x' in df_full.columns: 
-    df_full = df_full.rename(columns={'descripcion_x': 'Estilo'})
-elif 'descripcion' in df_full.columns:
-    # Si Estilos no tenía conflictos, puede llamarse 'descripcion'
-    df_full = df_full.rename(columns={'descripcion': 'Estilo'})
+# 1. Merge Estilos y Distancias
+df_full = df_full.merge(data['estilos'], on='codestilo', how='left')
+df_full = df_full.merge(data['distancias'], on='coddistancia', how='left')
 
-if 'descripcion_y' in df_full.columns: 
-    df_full = df_full.rename(columns={'descripcion_y': 'Distancia'})
+# 2. Merge Piletas (Aquí suele fallar si hay columnas repetidas como 'club')
+# Usamos suffixes para diferenciar: _t (tabla tiempos) vs _p (tabla piletas)
+df_full = df_full.merge(data['piletas'], on='codpileta', how='left', suffixes=('_t', '_p'))
 
-# BLOQUE DE SEGURIDAD PARA CLUB Y MEDIDA (EVITA KEYERROR)
-if 'club' not in df_full.columns:
-    if 'club_x' in df_full.columns:
-        df_full['club'] = df_full['club_x'].fillna(df_full['club_y'] if 'club_y' in df_full.columns else 'NOB')
-    elif 'club_y' in df_full.columns:
-        df_full['club'] = df_full['club_y']
-    else:
-        df_full['club'] = 'NOB'
+# 3. Limpieza y Renombrado de Columnas
+if 'descripcion_x' in df_full.columns: df_full = df_full.rename(columns={'descripcion_x': 'Estilo'})
+elif 'descripcion' in df_full.columns: df_full = df_full.rename(columns={'descripcion': 'Estilo'})
 
+if 'descripcion_y' in df_full.columns: df_full = df_full.rename(columns={'descripcion_y': 'Distancia'})
+
+# 4. Consolidar CLUB y MEDIDA
+# Si existe club_p (del archivo piletas), lo usamos. Si no, usamos club_t (del archivo tiempos).
+if 'club_p' in df_full.columns:
+    df_full['club'] = df_full['club_p'].fillna(df_full['club_t'] if 'club_t' in df_full.columns else 'NOB')
+elif 'club_t' in df_full.columns:
+    df_full['club'] = df_full['club_t']
+# Si 'club' ya existía y no se duplicó, se mantiene.
+
+# Asegurar que 'medida' exista (viene de Piletas)
 if 'medida' not in df_full.columns:
-    if 'medida_x' in df_full.columns: 
-        df_full['medida'] = df_full['medida_x']
-    elif 'medida_y' in df_full.columns: 
-        df_full['medida'] = df_full['medida_y']
-    else: 
-        df_full['medida'] = '-' # Valor por defecto si no existe
-# ---------------------------------------------------------------
+    df_full['medida'] = '-' # Valor por defecto si falla el cruce
+
+# --- FIN UNIFICACIÓN ---
 
 df_t_c = data['tiempos'].copy(); df_r_c = data['relevos'].copy()
 df_t_c['posicion'] = pd.to_numeric(df_t_c['posicion'], errors='coerce').fillna(0).astype(int)
@@ -339,22 +338,23 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
     mis_relevos = mr_base[cond_rel].copy()
     
     if not mis_relevos.empty:
-        mis_relevos = mis_relevos.merge(data['estilos'], on='codestilo').merge(data['distancias'], on='coddistancia').merge(data['piletas'], on='codpileta')
+        # Merge seguro para relevos
+        mis_relevos = mis_relevos.merge(data['estilos'], on='codestilo', how='left')
+        mis_relevos = mis_relevos.merge(data['distancias'], on='coddistancia', how='left')
+        mis_relevos = mis_relevos.merge(data['piletas'], on='codpileta', how='left', suffixes=('_t', '_p'))
         
-        # Corrección de nombres post-merge en Relevos también
+        # Limpieza Nombres y Club
         if 'descripcion_x' in mis_relevos.columns: mis_relevos = mis_relevos.rename(columns={'descripcion_x': 'Estilo'})
+        elif 'descripcion' in mis_relevos.columns: mis_relevos = mis_relevos.rename(columns={'descripcion': 'Estilo'})
+        
         if 'descripcion_y' in mis_relevos.columns: mis_relevos = mis_relevos.rename(columns={'descripcion_y': 'Distancia'})
         
-        # Limpieza Club/Medida en Relevos
-        if 'club' not in mis_relevos.columns:
-            if 'club_x' in mis_relevos.columns: mis_relevos['club'] = mis_relevos['club_x']
-            elif 'club_y' in mis_relevos.columns: mis_relevos['club'] = mis_relevos['club_y']
-            else: mis_relevos['club'] = 'NOB'
+        if 'club_p' in mis_relevos.columns:
+            mis_relevos['club'] = mis_relevos['club_p'].fillna('NOB')
+        elif 'club' in mis_relevos.columns: pass
+        else: mis_relevos['club'] = 'NOB'
             
-        if 'medida' not in mis_relevos.columns:
-            if 'medida_x' in mis_relevos.columns: mis_relevos['medida'] = mis_relevos['medida_x']
-            elif 'medida_y' in mis_relevos.columns: mis_relevos['medida'] = mis_relevos['medida_y']
-            else: mis_relevos['medida'] = '-'
+        if 'medida' not in mis_relevos.columns: mis_relevos['medida'] = '-'
 
         mis_relevos = mis_relevos.sort_values('fecha', ascending=False)
         
@@ -435,21 +435,21 @@ def render_tab_relevos_general():
     st.markdown("### Historial de Postas")
     mr_all = data['relevos'].copy()
     if not mr_all.empty:
-        mr_all = mr_all.merge(data['estilos'], on='codestilo').merge(data['distancias'], on='coddistancia').merge(data['piletas'], on='codpileta')
+        # Merge seguro para relevos general
+        mr_all = mr_all.merge(data['estilos'], on='codestilo', how='left')
+        mr_all = mr_all.merge(data['distancias'], on='coddistancia', how='left')
+        mr_all = mr_all.merge(data['piletas'], on='codpileta', how='left', suffixes=('_t', '_p'))
         
-        # Corrección Nombres Columnas
         if 'descripcion_x' in mr_all.columns: mr_all = mr_all.rename(columns={'descripcion_x': 'Estilo'})
+        elif 'descripcion' in mr_all.columns: mr_all = mr_all.rename(columns={'descripcion': 'Estilo'})
+        
         if 'descripcion_y' in mr_all.columns: mr_all = mr_all.rename(columns={'descripcion_y': 'Distancia'})
         
-        # Corrección Club/Medida
-        if 'club' not in mr_all.columns:
-            if 'club_x' in mr_all.columns: mr_all['club'] = mr_all['club_x']
-            elif 'club_y' in mr_all.columns: mr_all['club'] = mr_all['club_y']
-            else: mr_all['club'] = 'NOB'
-        if 'medida' not in mr_all.columns:
-            if 'medida_x' in mr_all.columns: mr_all['medida'] = mr_all['medida_x']
-            elif 'medida_y' in mr_all.columns: mr_all['medida'] = mr_all['medida_y']
-            else: mr_all['medida'] = '-'
+        if 'club_p' in mr_all.columns: mr_all['club'] = mr_all['club_p'].fillna('NOB')
+        elif 'club' in mr_all.columns: pass
+        else: mr_all['club'] = 'NOB'
+            
+        if 'medida' not in mr_all.columns: mr_all['medida'] = '-'
 
         c1, c2 = st.columns(2)
         fg_est = c1.selectbox("Estilo", ["Todos"] + sorted(mr_all['Estilo'].unique().tolist()), key="fg_est")
@@ -478,6 +478,9 @@ def render_tab_relevos_general():
             elif p_rel > 0: pos_icon = f"Pos: {p_rel}"
             else: pos_icon = ""
 
+            club_r = r.get('club', 'NOB')
+            medida_r = r.get('medida', '-')
+
             st.markdown(f"""
             <div class="mobile-card" style="border-left: 4px solid #9C27B0;">
                 <div class="relay-header">
@@ -491,7 +494,7 @@ def render_tab_relevos_general():
                     </div>
                 </div>
                 <div class="relay-meta">
-                    <span>📅 {r['fecha']} • {r['club']} ({r['medida']})</span>
+                    <span>📅 {r['fecha']} • {club_r} ({medida_r})</span>
                 </div>
                 <div class="swimmer-grid">{html_grid}</div>
             </div>""", unsafe_allow_html=True)
