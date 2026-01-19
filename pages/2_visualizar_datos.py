@@ -124,7 +124,6 @@ if not data: st.stop()
 df_nad = data['nadadores'].copy()
 df_nad['Nombre Completo'] = df_nad['apellido'].astype(str).str.upper() + ", " + df_nad['nombre'].astype(str)
 dict_id_nombre = df_nad.set_index('codnadador')['Nombre Completo'].to_dict()
-# Diccionario para buscar el año de nacimiento por ID (para calcular edades en relevos)
 df_nad['anio_nac'] = pd.to_datetime(df_nad['fechanac'], errors='coerce').dt.year.fillna(0).astype(int)
 dict_id_anionac = df_nad.set_index('codnadador')['anio_nac'].to_dict()
 
@@ -163,10 +162,37 @@ def calcular_grupo_relevo(row_rel, df_cats):
         return f"Suma {suma_edades}"
     except: return "-"
 
-# Mezclamos con piletas para tener el dato de 'medida'
+# --- PREPARACIÓN DE DATOS Y CORRECCIÓN DE COLUMNAS (FIX KEYERROR) ---
 df_full = data['tiempos'].copy()
 df_full = df_full.merge(data['estilos'], on='codestilo').merge(data['distancias'], on='coddistancia').merge(data['piletas'], on='codpileta')
-df_full = df_full.rename(columns={'descripcion_x': 'Estilo', 'descripcion_y': 'Distancia'})
+
+# Renombrar columnas dinámicas de descripciones
+if 'descripcion_x' in df_full.columns: 
+    df_full = df_full.rename(columns={'descripcion_x': 'Estilo'})
+elif 'descripcion' in df_full.columns:
+    # Si Estilos no tenía conflictos, puede llamarse 'descripcion'
+    df_full = df_full.rename(columns={'descripcion': 'Estilo'})
+
+if 'descripcion_y' in df_full.columns: 
+    df_full = df_full.rename(columns={'descripcion_y': 'Distancia'})
+
+# BLOQUE DE SEGURIDAD PARA CLUB Y MEDIDA (EVITA KEYERROR)
+if 'club' not in df_full.columns:
+    if 'club_x' in df_full.columns:
+        df_full['club'] = df_full['club_x'].fillna(df_full['club_y'] if 'club_y' in df_full.columns else 'NOB')
+    elif 'club_y' in df_full.columns:
+        df_full['club'] = df_full['club_y']
+    else:
+        df_full['club'] = 'NOB'
+
+if 'medida' not in df_full.columns:
+    if 'medida_x' in df_full.columns: 
+        df_full['medida'] = df_full['medida_x']
+    elif 'medida_y' in df_full.columns: 
+        df_full['medida'] = df_full['medida_y']
+    else: 
+        df_full['medida'] = '-' # Valor por defecto si no existe
+# ---------------------------------------------------------------
 
 df_t_c = data['tiempos'].copy(); df_r_c = data['relevos'].copy()
 df_t_c['posicion'] = pd.to_numeric(df_t_c['posicion'], errors='coerce').fillna(0).astype(int)
@@ -266,7 +292,7 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
         
         st.divider()
 
-    # --- HISTORIAL (MODIFICADO: Medida de pileta y Posición más grande) ---
+    # --- HISTORIAL COMPLETO ---
     st.subheader("📜 Historial Completo")
     with st.expander("Filtrar Historial"):
         h1, h2 = st.columns(2)
@@ -288,13 +314,16 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
             else: medal_str = "-"
         except: medal_str = "-"
 
-        # AJUSTE: medida pileta + posición size 15px
+        # USO DE GET PARA EVITAR KEYERROR
+        club_txt = r.get('club', 'NOB')
+        medida_txt = r.get('medida', '-')
+
         st.markdown(f"""
         <div class="mobile-card" style="padding:10px;">
             <div style="display:flex; justify-content:space-between; align-items: flex-start;">
                 <div style="flex:1;">
                     <div style="font-weight:bold; color:white; font-size:15px;">{r['Distancia']} {r['Estilo']}</div>
-                    <div style="font-size:12px; color:#aaa; margin-top:4px;">📅 {r['fecha']} • {r['club']} ({r['medida']})</div>
+                    <div style="font-size:12px; color:#aaa; margin-top:4px;">📅 {r['fecha']} • {club_txt} ({medida_txt})</div>
                 </div>
                 <div style="text-align: right; min-width: 80px;">
                     <div style="font-family:monospace; font-weight:bold; color:#4CAF50; font-size:18px;">{r['tiempo']}</div>
@@ -303,7 +332,7 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
             </div>
         </div>""", unsafe_allow_html=True)
 
-    # 5. MIS RELEVOS (MODIFICADO: Sin decimales + Grupo + Medida Pileta)
+    # 5. MIS RELEVOS
     st.subheader("🏊‍♂️ Mis Relevos")
     mr_base = data['relevos'].copy()
     cond_rel = (mr_base['nadador_1'] == target_id) | (mr_base['nadador_2'] == target_id) | (mr_base['nadador_3'] == target_id) | (mr_base['nadador_4'] == target_id)
@@ -311,7 +340,22 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
     
     if not mis_relevos.empty:
         mis_relevos = mis_relevos.merge(data['estilos'], on='codestilo').merge(data['distancias'], on='coddistancia').merge(data['piletas'], on='codpileta')
-        mis_relevos = mis_relevos.rename(columns={'descripcion_x': 'Estilo', 'descripcion_y': 'Distancia'})
+        
+        # Corrección de nombres post-merge en Relevos también
+        if 'descripcion_x' in mis_relevos.columns: mis_relevos = mis_relevos.rename(columns={'descripcion_x': 'Estilo'})
+        if 'descripcion_y' in mis_relevos.columns: mis_relevos = mis_relevos.rename(columns={'descripcion_y': 'Distancia'})
+        
+        # Limpieza Club/Medida en Relevos
+        if 'club' not in mis_relevos.columns:
+            if 'club_x' in mis_relevos.columns: mis_relevos['club'] = mis_relevos['club_x']
+            elif 'club_y' in mis_relevos.columns: mis_relevos['club'] = mis_relevos['club_y']
+            else: mis_relevos['club'] = 'NOB'
+            
+        if 'medida' not in mis_relevos.columns:
+            if 'medida_x' in mis_relevos.columns: mis_relevos['medida'] = mis_relevos['medida_x']
+            elif 'medida_y' in mis_relevos.columns: mis_relevos['medida'] = mis_relevos['medida_y']
+            else: mis_relevos['medida'] = '-'
+
         mis_relevos = mis_relevos.sort_values('fecha', ascending=False)
         
         for _, r in mis_relevos.iterrows():
@@ -336,7 +380,9 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
             elif p_rel > 0: pos_icon = f"Pos: {p_rel}"
             else: pos_icon = ""
             
-            # AJUSTE: Agregar medida pileta
+            club_r = r.get('club', 'NOB')
+            medida_r = r.get('medida', '-')
+
             st.markdown(f"""
             <div class="mobile-card" style="border-left: 4px solid #E91E63;">
                 <div class="relay-header">
@@ -350,7 +396,7 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
                     </div>
                 </div>
                 <div class="relay-meta">
-                    <span>📅 {r['fecha']} • {r['club']} ({r['medida']})</span>
+                    <span>📅 {r['fecha']} • {club_r} ({medida_r})</span>
                 </div>
                 <div class="swimmer-grid">{html_grid}</div>
             </div>""", unsafe_allow_html=True)
@@ -390,8 +436,21 @@ def render_tab_relevos_general():
     mr_all = data['relevos'].copy()
     if not mr_all.empty:
         mr_all = mr_all.merge(data['estilos'], on='codestilo').merge(data['distancias'], on='coddistancia').merge(data['piletas'], on='codpileta')
-        mr_all = mr_all.rename(columns={'descripcion_x': 'Estilo', 'descripcion_y': 'Distancia'})
         
+        # Corrección Nombres Columnas
+        if 'descripcion_x' in mr_all.columns: mr_all = mr_all.rename(columns={'descripcion_x': 'Estilo'})
+        if 'descripcion_y' in mr_all.columns: mr_all = mr_all.rename(columns={'descripcion_y': 'Distancia'})
+        
+        # Corrección Club/Medida
+        if 'club' not in mr_all.columns:
+            if 'club_x' in mr_all.columns: mr_all['club'] = mr_all['club_x']
+            elif 'club_y' in mr_all.columns: mr_all['club'] = mr_all['club_y']
+            else: mr_all['club'] = 'NOB'
+        if 'medida' not in mr_all.columns:
+            if 'medida_x' in mr_all.columns: mr_all['medida'] = mr_all['medida_x']
+            elif 'medida_y' in mr_all.columns: mr_all['medida'] = mr_all['medida_y']
+            else: mr_all['medida'] = '-'
+
         c1, c2 = st.columns(2)
         fg_est = c1.selectbox("Estilo", ["Todos"] + sorted(mr_all['Estilo'].unique().tolist()), key="fg_est")
         fg_gen = c2.selectbox("Género", ["Todos", "M", "F", "X"], key="fg_gen")
@@ -419,7 +478,6 @@ def render_tab_relevos_general():
             elif p_rel > 0: pos_icon = f"Pos: {p_rel}"
             else: pos_icon = ""
 
-            # AJUSTE: Agregar medida pileta
             st.markdown(f"""
             <div class="mobile-card" style="border-left: 4px solid #9C27B0;">
                 <div class="relay-header">
