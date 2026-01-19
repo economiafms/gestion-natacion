@@ -105,13 +105,12 @@ def cerrar_sesion():
     st.rerun()
 
 def intentar_desbloqueo():
-    # USAMOS SECRETS REALES
     try:
         sec_user = st.secrets["admin"]["usuario"]
         sec_pass = st.secrets["admin"]["password"]
     except:
-        sec_user = "admin"
-        sec_pass = "admin"
+        sec_user = "entrenador"
+        sec_pass = "nob1903"
 
     if st.session_state.u_in == sec_user and st.session_state.p_in == sec_pass: 
         st.session_state.admin_unlocked = True
@@ -187,9 +186,8 @@ def render_graficos_comunes(df_n):
             chart = alt.Chart(df_n).mark_bar(cornerRadius=3).encode(x=alt.X('Categoria', sort=orden, title=None), y=alt.Y('count()', title=None), color=alt.Color('codgenero', legend=None, scale=colors), tooltip=['Categoria', 'codgenero', 'count()']).properties(height=200)
             st.altair_chart(chart, use_container_width=True)
 
-# --- 7. DASHBOARD COMÚN (Header y Club Stats) ---
+# --- 7. DASHBOARD COMÚN ---
 def dashboard_common_structure():
-    # Encabezado Institucional Interno
     st.markdown("""
         <div style='text-align: center; margin-bottom: 20px;'>
             <h3 style='color: white; font-size: 20px; margin: 0;'>BIENVENIDOS AL COMPLEJO ACUÁTICO</h3>
@@ -247,6 +245,7 @@ def dashboard_m():
     st.write("")
     if st.button("⏱️ Simulador de Postas", type="primary", use_container_width=True): st.switch_page("pages/3_simulador.py")
 
+    # --- ZONA DE ACCESO PROFESOR ---
     st.write(""); st.write("")
     col_space, col_lock = st.columns([8, 1])
     with col_lock:
@@ -276,7 +275,7 @@ def dashboard_n():
     st.divider()
     if st.button("Cerrar Sesión", type="secondary"): cerrar_sesion()
 
-# --- 10. RUTEO FINAL Y PANTALLA DE ACCESO DECORADA ---
+# --- 10. RUTEO FINAL ---
 pg_dash_m = st.Page(dashboard_m, title="Inicio", icon="🏠")
 pg_dash_n = st.Page(dashboard_n, title="Mi Perfil", icon="🏊")
 pg_datos = st.Page("pages/2_visualizar_datos.py", title="Base de Datos", icon="🗃️")
@@ -315,18 +314,10 @@ if not st.session_state.role:
                 letter-spacing: 1px;
                 opacity: 0.9;
             }
-            .access-label {
-                color: #888;
-                font-size: 13px;
-                text-transform: uppercase;
-                letter-spacing: 2px;
-                margin-top: 20px;
-                margin-bottom: 10px;
-            }
         </style>
         
         <div class="login-container">
-            <img src="https://upload.wikimedia.org/wikipedia/commons/4/4e/Newell%27s_Old_Boys_shield.svg" width="120">
+            <div style="font-size: 40px; margin-bottom: 10px;">🔴⚫ 🏊 👧👦 🏊 ⚫🔴</div>
             <div class="nob-title">NEWELL'S OLD BOYS</div>
             <div class="nob-quote">"Del deporte sos la gloria"</div>
         </div>
