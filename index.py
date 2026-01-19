@@ -7,28 +7,35 @@ from datetime import datetime
 # --- 1. CONFIGURACIÓN DEL SITIO ---
 st.set_page_config(page_title="NOB Natación", layout="centered", initial_sidebar_state="collapsed")
 
-# --- 2. SISTEMA DE NAVEGACIÓN (Router) ---
-# Definimos las páginas apuntando a tus archivos existentes
+# --- 2. GESTIÓN DE ESTADO (ADMIN) ---
+# Inicializamos el estado de administrador en False si no existe
+if "admin_mode" not in st.session_state:
+    st.session_state.admin_mode = False
+
+# Verificamos si se activó vía URL (?access=admin) o vía botón oculto
+params = st.query_params
+if params.get("access") == "admin":
+    st.session_state.admin_mode = True
+
+# --- 3. SISTEMA DE NAVEGACIÓN (Router Dinámico) ---
+# Definimos las páginas
 pg_dashboard = st.Page(lambda: dashboard_main(), title="Inicio", icon="🏠")
-pg_datos = st.Page("pages/2_visualizar_datos.py", title="Base de Datos", icon="🗃️") # <--- CORREGIDO AQUÍ
+pg_datos = st.Page("pages/2_visualizar_datos.py", title="Base de Datos", icon="🗃️")
 pg_ranking = st.Page("pages/4_ranking.py", title="Ranking", icon="🏆")
 pg_simulador = st.Page("pages/3_simulador.py", title="Simulador", icon="⏱️")
 pg_carga = st.Page("pages/1_cargar_datos.py", title="Carga", icon="⚙️")
 
-# Lógica de Seguridad (Solo admin ve Carga)
-params = st.query_params
-es_admin = params.get("access") == "admin"
-
-if es_admin:
+# Si está en modo admin, mostramos la página de carga en el menú
+if st.session_state.admin_mode:
     pg = st.navigation({
         "Club": [pg_dashboard, pg_datos, pg_ranking, pg_simulador],
         "Admin": [pg_carga]
     })
 else:
-    # Usuario normal ve todo menos Carga
+    # Si no, menú estándar
     pg = st.navigation([pg_dashboard, pg_datos, pg_ranking, pg_simulador])
 
-# --- 3. CONEXIÓN DE DATOS ---
+# --- 4. CONEXIÓN DE DATOS ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 @st.cache_data(ttl="1h")
@@ -41,7 +48,7 @@ def cargar_kpis():
         }
     except: return None
 
-# --- 4. FUNCIÓN AUXILIAR: CATEGORÍAS ---
+# --- 5. FUNCIÓN AUXILIAR: CATEGORÍAS ---
 def calcular_categoria(anio_nac):
     anio_actual = datetime.now().year
     edad = anio_actual - anio_nac
@@ -61,9 +68,9 @@ def calcular_categoria(anio_nac):
     elif 75 <= edad <= 79: return "K"
     else: return "L+"
 
-# --- 5. DASHBOARD PRINCIPAL (Mobile Friendly) ---
+# --- 6. DASHBOARD PRINCIPAL ---
 def dashboard_main():
-    # Encabezado Compacto
+    # Encabezado
     c_img, c_txt = st.columns([1, 4])
     with c_img:
         st.image("https://upload.wikimedia.org/wikipedia/commons/4/4e/Newell%27s_Old_Boys_shield.svg", width=55)
@@ -86,34 +93,35 @@ def dashboard_main():
 
         st.write("") 
 
-        # --- SECCIÓN 2: ACCESOS RÁPIDOS (2 Columnas grandes) ---
+        # --- SECCIÓN 2: ACCESOS RÁPIDOS ---
         c_btn1, c_btn2 = st.columns(2)
         with c_btn1:
             if st.button("🗃️ Base de Datos", type="secondary", use_container_width=True):
-                st.switch_page("pages/2_visualizar_datos.py") # <--- CONECTADO
+                st.switch_page("pages/2_visualizar_datos.py")
         with c_btn2:
             if st.button("🏆 Ver Ranking", type="secondary", use_container_width=True):
                 st.switch_page("pages/4_ranking.py")
 
-        # Botón extra ancho completo para Simulador
         st.write("")
         if st.button("⏱️ Ir al Simulador de Postas", type="primary", use_container_width=True):
             st.switch_page("pages/3_simulador.py")
 
         st.divider()
 
-        # --- SECCIÓN 3: GRÁFICOS VISUALES ---
+        # --- SECCIÓN 3: GRÁFICOS (COLORES ACTUALIZADOS) ---
         if not df_n.empty:
             df_n['Anio'] = pd.to_datetime(df_n['fechanac']).dt.year
             df_n['Categoria'] = df_n['Anio'].apply(calcular_categoria)
             
-            # Pestañas limpias
             tab_gen, tab_cat = st.tabs(["Género", "Categorías Master"])
+
+            # COLORES DEFINIDOS: Azul (#1f77b4) y Rosa (#FF69B4)
+            escala_colores = alt.Scale(domain=['M', 'F'], range=['#1f77b4', '#FF69B4'])
 
             with tab_gen:
                 base = alt.Chart(df_n).encode(theta=alt.Theta("count()", stack=True))
                 pie = base.mark_arc(outerRadius=100, innerRadius=60).encode(
-                    color=alt.Color("codgenero", scale=alt.Scale(domain=['M', 'F'], range=['#1f77b4', '#ff7f0e']), legend=None),
+                    color=alt.Color("codgenero", scale=escala_colores, legend=None),
                     tooltip=["codgenero", "count()"]
                 )
                 text = base.mark_text(radius=130).encode(
@@ -121,28 +129,38 @@ def dashboard_main():
                 )
                 st.altair_chart(pie + text, use_container_width=True)
                 
-                # Leyenda simple centrada
+                # Leyenda Manual Actualizada
                 st.markdown("""
                 <div style="text-align: center; font-size: 14px; margin-bottom: 10px;">
-                    <span style="color: #1f77b4;">● Masculino</span> &nbsp;&nbsp; 
-                    <span style="color: #ff7f0e;">● Femenino</span>
+                    <span style="color: #1f77b4; font-weight: bold;">● Masculino</span> &nbsp;&nbsp;&nbsp; 
+                    <span style="color: #FF69B4; font-weight: bold;">● Femenino</span>
                 </div>
                 """, unsafe_allow_html=True)
 
             with tab_cat:
-                # Orden lógico de categorías (no alfabético)
                 orden_cat = ["Juvenil", "PRE", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L+"]
-                
                 chart_cat = alt.Chart(df_n).mark_bar(cornerRadius=3).encode(
                     x=alt.X('Categoria', sort=orden_cat, title=None),
                     y=alt.Y('count()', title='Nadadores'),
-                    color=alt.Color('codgenero', legend=None, scale=alt.Scale(range=['#1f77b4', '#ff7f0e'])),
+                    color=alt.Color('codgenero', legend=None, scale=escala_colores),
                     tooltip=['Categoria', 'codgenero', 'count()']
                 ).properties(height=250)
-                
                 st.altair_chart(chart_cat, use_container_width=True)
 
     else: st.info("Conectando con Google Sheets...")
+
+    # --- BOTÓN OCULTO DE ACCESO ADMIN ---
+    st.write("")
+    st.write("")
+    st.write("")
+    
+    # Creamos columnas para empujar el botón a la derecha y hacerlo pequeño
+    _, c_oculto = st.columns([10, 1]) 
+    with c_oculto:
+        # El botón es solo un candado pequeño
+        if st.button("🔒", key="btn_admin_access", help="Acceso Admin", type="tertiary"):
+            st.session_state.admin_mode = True
+            st.rerun() # Recargamos para que aparezca el menú nuevo
 
 # --- EJECUCIÓN ---
 pg.run()
