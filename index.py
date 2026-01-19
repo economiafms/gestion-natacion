@@ -1,253 +1,279 @@
 import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
-import altair as alt
 from datetime import datetime
 import time
 
-# --- 1. CONFIGURACIÓN DEL SITIO ---
-st.set_page_config(page_title="NOB Natación", layout="centered", initial_sidebar_state="collapsed")
+# --- 1. CONFIGURACIÓN ---
+st.set_page_config(page_title="Acceso NOB", layout="centered", initial_sidebar_state="collapsed")
 
-# --- 2. GESTIÓN DE ESTADO Y LOGIN ---
-if "admin_mode" not in st.session_state:
-    st.session_state.admin_mode = False
+# --- 2. ESTADO DE SESIÓN ---
+if "role" not in st.session_state: st.session_state.role = None
+if "user_name" not in st.session_state: st.session_state.user_name = None
+if "user_id" not in st.session_state: st.session_state.user_id = None
+if "nro_socio" not in st.session_state: st.session_state.nro_socio = None
 
-if "show_login" not in st.session_state:
-    st.session_state.show_login = False
-
-# Función de verificación
-def verificar_login():
-    try:
-        sec_user = st.secrets["admin"]["usuario"]
-        sec_pass = st.secrets["admin"]["password"]
-    except:
-        st.error("Falta configurar secrets.toml")
-        return
-
-    input_user = st.session_state.get("input_user", "")
-    input_pass = st.session_state.get("input_pass", "")
-
-    if input_user == sec_user and input_pass == sec_pass:
-        st.session_state.admin_mode = True
-        st.session_state.show_login = False
-        st.success("¡Bienvenido Leproso!")
-        time.sleep(1)
-        st.rerun()
-    else:
-        st.error("Usuario o contraseña incorrectos")
-
-def logout():
-    st.session_state.admin_mode = False
-    st.rerun()
-
-# --- 3. SISTEMA DE NAVEGACIÓN ---
-pg_dashboard = st.Page(lambda: dashboard_main(), title="Inicio", icon="🏠")
-pg_datos = st.Page("pages/2_visualizar_datos.py", title="Base de Datos", icon="🗃️")
-pg_ranking = st.Page("pages/4_ranking.py", title="Ranking", icon="🏆")
-pg_simulador = st.Page("pages/3_simulador.py", title="Simulador", icon="⏱️")
-pg_carga = st.Page("pages/1_cargar_datos.py", title="Carga", icon="⚙️")
-
-if st.session_state.admin_mode:
-    pg = st.navigation({
-        "Club": [pg_dashboard, pg_datos, pg_ranking, pg_simulador],
-        "Admin": [pg_carga]
-    })
-else:
-    pg = st.navigation([pg_dashboard, pg_datos, pg_ranking, pg_simulador])
-
-# --- 4. CONEXIÓN DE DATOS ---
+# --- 3. CONEXIÓN ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 @st.cache_data(ttl="1h")
-def cargar_kpis():
+def cargar_auth():
     try:
         return {
             "nadadores": conn.read(worksheet="Nadadores"),
+            "users": conn.read(worksheet="User"),
             "tiempos": conn.read(worksheet="Tiempos"),
-            "relevos": conn.read(worksheet="Relevos")
+            "relevos": conn.read(worksheet="Relevos"),
+            "categorias": conn.read(worksheet="Categorias") # Necesario para la card
         }
     except: return None
 
-# --- 5. FUNCIÓN AUXILIAR ---
-def calcular_categoria(anio_nac):
-    anio_actual = datetime.now().year
-    edad = anio_actual - anio_nac
-    if edad < 20: return "Juvenil"
-    elif 20 <= edad <= 24: return "PRE"
-    elif 25 <= edad <= 29: return "A"
-    elif 30 <= edad <= 34: return "B"
-    elif 35 <= edad <= 39: return "C"
-    elif 40 <= edad <= 44: return "D"
-    elif 45 <= edad <= 49: return "E"
-    elif 50 <= edad <= 54: return "F"
-    elif 55 <= edad <= 59: return "G"
-    elif 60 <= edad <= 64: return "H"
-    elif 65 <= edad <= 69: return "I"
-    elif 70 <= edad <= 74: return "J"
-    elif 75 <= edad <= 79: return "K"
-    else: return "L+"
+db = cargar_auth()
 
-# --- 6. DASHBOARD PRINCIPAL ---
-def dashboard_main():
-    # --- TÍTULO PERSONALIZADO ---
+# --- 4. FUNCIONES AUXILIARES ---
+def calcular_categoria(edad, df_cat):
+    try:
+        for _, r in df_cat.iterrows():
+            if r['edad_min'] <= edad <= r['edad_max']: return r['nombre_cat']
+        return "-"
+    except: return "-"
+
+# --- 5. LÓGICA DE LOGIN ---
+def validar_socio():
+    raw_input = st.session_state.input_socio
+    socio_limpio = raw_input.split("-")[0].strip()
+    
+    if not socio_limpio:
+        st.warning("Ingrese un número.")
+        return
+
+    if db:
+        df_u = db['users']
+        df_n = db['nadadores']
+        
+        df_u['nrosocio'] = df_u['nrosocio'].astype(str).str.strip()
+        df_n['nrosocio'] = df_n['nrosocio'].astype(str).str.strip()
+        
+        usuario = df_u[df_u['nrosocio'] == socio_limpio]
+        
+        if not usuario.empty:
+            perfil = usuario.iloc[0]['perfil'].upper()
+            datos = df_n[df_n['nrosocio'] == socio_limpio]
+            
+            if not datos.empty:
+                st.session_state.role = perfil
+                st.session_state.user_name = f"{datos.iloc[0]['nombre']} {datos.iloc[0]['apellido']}"
+                st.session_state.user_id = datos.iloc[0]['codnadador']
+                st.session_state.nro_socio = socio_limpio
+                st.success(f"¡Bienvenido {datos.iloc[0]['nombre']}!")
+                time.sleep(0.5)
+                st.rerun()
+            else:
+                st.error("Perfil activo pero sin datos de nadador asociados.")
+        else:
+            st.error("Número de socio no registrado en el sistema.")
+
+def cerrar_sesion():
+    st.session_state.role = None
+    st.rerun()
+
+# --- ESTILOS CSS (Unificados para Index y Card) ---
+st.markdown("""
+<style>
+    /* Tarjeta tipo Padrón */
+    .padron-card {
+        background-color: #262730;
+        border: 1px solid #444;
+        border-radius: 12px;
+        padding: 15px;
+        margin-top: 10px;
+        margin-bottom: 5px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        transition: transform 0.2s;
+    }
+    .padron-card:hover {
+        border-color: #E30613;
+        transform: scale(1.01);
+    }
+    .p-col-left { flex: 2; text-align: left; border-right: 1px solid #555; padding-right: 10px; }
+    .p-col-center { flex: 2; text-align: center; padding: 0 10px; }
+    .p-col-right { flex: 1; text-align: right; padding-left: 10px; border-left: 1px solid #555; }
+    
+    .p-name { font-weight: bold; font-size: 18px; color: white; margin-bottom: 5px; }
+    .p-meta { font-size: 13px; color: #ccc; }
+    .p-medals { font-size: 16px; display: flex; justify-content: center; gap: 8px; margin-top: 5px;}
+    .p-total { font-size: 26px; color: #FFD700; font-weight: bold; line-height: 1; }
+    .p-cat { font-size: 18px; color: #4CAF50; font-weight: bold; margin-top: 5px; }
+    
+    /* KPI Boxes del Club */
+    .kpi-box { background-color: #262730; padding: 15px; border-radius: 10px; text-align: center; border: 1px solid #444; width: 48%; }
+    .medallero-box { background-color: #1E1E1E; border: 1px solid #333; border-radius: 10px; padding: 12px; margin-bottom: 25px; }
+</style>
+""", unsafe_allow_html=True)
+
+
+# --- 6. DASHBOARD "M" (MASTER / GENERAL) ---
+def dashboard_m():
+    # TÍTULO INSTITUCIONAL
     st.markdown("""
         <div style='text-align: center; margin-bottom: 25px;'>
-            <h3 style='color: white; font-size: 22px; margin: 0; padding: 0; font-weight: normal; letter-spacing: 1px;'>
-                BIENVENIDOS AL COMPLEJO ACUÁTICO
-            </h3>
-            <h1 style='color: #E30613; font-size: 36px; margin-top: 5px; padding: 0; font-weight: 800; text-transform: uppercase; text-shadow: 2px 2px 4px #000000;'>
-                🔴⚫ NEWELL'S OLD BOYS ⚫🔴
-            </h1>
+            <h3 style='color: white; font-size: 22px; margin: 0; font-weight: normal; letter-spacing: 1px;'>BIENVENIDOS AL COMPLEJO ACUÁTICO</h3>
+            <h1 style='color: #E30613; font-size: 36px; margin-top: 5px; padding: 0; font-weight: 800; text-transform: uppercase; text-shadow: 2px 2px 4px #000000;'>🔴⚫ NEWELL'S OLD BOYS ⚫🔴</h1>
+        </div>
+    """, unsafe_allow_html=True)
+    st.divider()
+    
+    if db:
+        df_nad = db['nadadores']
+        df_t = db['tiempos'].copy()
+        df_r = db['relevos'].copy()
+        
+        # Cálculos Globales
+        df_t['posicion'] = pd.to_numeric(df_t['posicion'], errors='coerce').fillna(0)
+        df_r['posicion'] = pd.to_numeric(df_r['posicion'], errors='coerce').fillna(0)
+        
+        t_oro = len(df_t[df_t['posicion']==1]) + len(df_r[df_r['posicion']==1])
+        t_plata = len(df_t[df_t['posicion']==2]) + len(df_r[df_r['posicion']==2])
+        t_bronce = len(df_t[df_t['posicion']==3]) + len(df_r[df_r['posicion']==3])
+        total_med = t_oro + t_plata + t_bronce
+        
+        # KPIs Club
+        st.markdown(f"""
+        <div style="display: flex; justify-content: space-between; gap: 10px; margin-bottom: 10px;">
+            <div class="kpi-box"><div style="font-size: 32px; font-weight: bold; color: white;">{len(df_nad)}</div><div style="font-size: 13px; color: #ccc;">🏊‍♂️ Nadadores</div></div>
+            <div class="kpi-box"><div style="font-size: 32px; font-weight: bold; color: white;">{len(df_t)+len(df_r)}</div><div style="font-size: 13px; color: #ccc;">⏱️ Registros</div></div>
+        </div>
+        <div class="medallero-box">
+            <div style="text-align:center; font-size:11px; color:#aaa; margin-bottom:8px; font-weight:bold;">MEDALLERO HISTÓRICO</div>
+            <div style="display: flex; justify-content: space-between; gap: 2px;">
+                <div style="flex:1; text-align:center;"><div style="font-size:22px; color:#FFD700;">🥇 {t_oro}</div></div>
+                <div style="flex:1; text-align:center; border-left:1px solid #333;"><div style="font-size:22px; color:#C0C0C0;">🥈 {t_plata}</div></div>
+                <div style="flex:1; text-align:center; border-left:1px solid #333;"><div style="font-size:22px; color:#CD7F32;">🥉 {t_bronce}</div></div>
+                <div style="flex:1; text-align:center; border-left:1px solid #333; background:rgba(255,255,255,0.05);"><div style="font-size:22px; color:#fff;">★ {total_med}</div></div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Botones M
+        c1, c2 = st.columns(2)
+        with c1: 
+            if st.button("🗃️ Base de Datos", use_container_width=True): st.switch_page("pages/2_visualizar_datos.py")
+        with c2: 
+            if st.button("🏆 Ver Ranking", use_container_width=True): st.switch_page("pages/4_ranking.py")
+        st.write("")
+        if st.button("⏱️ Simulador de Postas", type="primary", use_container_width=True): st.switch_page("pages/3_simulador.py")
+        
+        st.divider()
+        if st.button("Cerrar Sesión"): cerrar_sesion()
+
+# --- 7. DASHBOARD "N" (NADADOR - HÍBRIDO) ---
+def dashboard_n():
+    # 1. ENCABEZADO IDÉNTICO AL GENERAL (Requerido)
+    st.markdown("""
+        <div style='text-align: center; margin-bottom: 25px;'>
+            <h3 style='color: white; font-size: 22px; margin: 0; font-weight: normal; letter-spacing: 1px;'>BIENVENIDOS AL COMPLEJO ACUÁTICO</h3>
+            <h1 style='color: #E30613; font-size: 36px; margin-top: 5px; padding: 0; font-weight: 800; text-transform: uppercase; text-shadow: 2px 2px 4px #000000;'>🔴⚫ NEWELL'S OLD BOYS ⚫🔴</h1>
         </div>
     """, unsafe_allow_html=True)
     
     st.divider()
-
-    data = cargar_kpis()
     
-    if data:
-        # Usamos .copy() para no alterar la caché y asegurar cálculos limpios
-        df_n = data['nadadores'].copy()
-        df_t = data['tiempos'].copy()
-        df_r = data['relevos'].copy()
+    if db:
+        # Calcular KPIs globales para mostrar contexto del club
+        df_nad_club = db['nadadores']
+        df_t_club = db['tiempos']
+        df_r_club = db['relevos']
         
-        # --- CÁLCULO ROBUSTO DE MEDALLAS ---
-        # 1. Asegurar que 'posicion' sea número (convierte '1', '1.0' o 1 a número real)
-        if 'posicion' in df_t.columns:
-            df_t['posicion'] = pd.to_numeric(df_t['posicion'], errors='coerce').fillna(0)
-        else:
-            df_t['posicion'] = 0
+        # --- CÁLCULOS ESPECÍFICOS DEL NADADOR LOGUEADO ---
+        my_id = st.session_state.user_id
+        
+        # Datos Personales
+        me = df_nad_club[df_nad_club['codnadador'] == my_id].iloc[0]
+        try:
+            edad = datetime.now().year - pd.to_datetime(me['fechanac']).year
+        except: edad = 0
+        cat = calcular_categoria(edad, db['categorias'])
+        
+        # Datos de Medallas PROPIAS
+        df_t_club['posicion'] = pd.to_numeric(df_t_club['posicion'], errors='coerce').fillna(0)
+        df_r_club['posicion'] = pd.to_numeric(df_r_club['posicion'], errors='coerce').fillna(0)
+        
+        # Indiv
+        mis_oros_i = len(df_t_club[(df_t_club['codnadador']==my_id) & (df_t_club['posicion']==1)])
+        mis_platas_i = len(df_t_club[(df_t_club['codnadador']==my_id) & (df_t_club['posicion']==2)])
+        mis_bronces_i = len(df_t_club[(df_t_club['codnadador']==my_id) & (df_t_club['posicion']==3)])
+        
+        # Relevos
+        cond_rel = (df_r_club['nadador_1'] == my_id) | (df_r_club['nadador_2'] == my_id) | (df_r_club['nadador_3'] == my_id) | (df_r_club['nadador_4'] == my_id)
+        mis_relevos = df_r_club[cond_rel]
+        mis_oros_r = len(mis_relevos[mis_relevos['posicion']==1])
+        mis_platas_r = len(mis_relevos[mis_relevos['posicion']==2])
+        mis_bronces_r = len(mis_relevos[mis_relevos['posicion']==3])
+        
+        m_oro = mis_oros_i + mis_oros_r
+        m_plata = mis_platas_i + mis_platas_r
+        m_bronce = mis_bronces_i + mis_bronces_r
+        m_total = m_oro + m_plata + m_bronce
 
-        if 'posicion' in df_r.columns:
-            df_r['posicion'] = pd.to_numeric(df_r['posicion'], errors='coerce').fillna(0)
-        else:
-            df_r['posicion'] = 0
-            
-        # 2. Conteo Individual
-        oro_ind = len(df_t[df_t['posicion'] == 1])
-        plata_ind = len(df_t[df_t['posicion'] == 2])
-        bronce_ind = len(df_t[df_t['posicion'] == 3])
-        
-        # 3. Conteo Relevos
-        oro_rel = len(df_r[df_r['posicion'] == 1])
-        plata_rel = len(df_r[df_r['posicion'] == 2])
-        bronce_rel = len(df_r[df_r['posicion'] == 3])
-        
-        # 4. Totales Combinados
-        tot_oro = oro_ind + oro_rel
-        tot_plata = plata_ind + plata_rel
-        tot_bronce = bronce_ind + bronce_rel
-        tot_gral = tot_oro + tot_plata + tot_bronce
-
-        # --- SECCIÓN 1: KPIs ---
-        cant_nad = len(df_n)
-        cant_reg = len(df_t) + len(df_r) # Sumamos registros indiv + relevos para el total real
-        
+        # 2. MOSTRAR KPIs DEL CLUB (Contexto)
+        cant_nad = len(df_nad_club)
+        cant_reg = len(df_t_club) + len(df_r_club)
         st.markdown(f"""
-        <div style="display: flex; justify-content: space-between; gap: 10px; margin-bottom: 10px;">
-            <div style="background-color: #262730; padding: 15px; border-radius: 10px; width: 48%; text-align: center; border: 1px solid #444; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
-                <div style="font-size: 32px; font-weight: bold; color: white;">{cant_nad}</div>
-                <div style="font-size: 13px; color: #ccc; text-transform: uppercase;">🏊‍♂️ Nadadores</div>
+        <div style="display: flex; justify-content: space-between; gap: 10px; margin-bottom: 20px;">
+            <div class="kpi-box"><div style="font-size: 32px; font-weight: bold; color: white;">{cant_nad}</div><div style="font-size: 13px; color: #ccc;">🏊‍♂️ Nadadores</div></div>
+            <div class="kpi-box"><div style="font-size: 32px; font-weight: bold; color: white;">{cant_reg}</div><div style="font-size: 13px; color: #ccc;">⏱️ Registros</div></div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.write("### 👤 Tu Perfil")
+        
+        # 3. CARD DEL NADADOR (La que pediste)
+        st.markdown(f"""
+        <div class="padron-card">
+            <div class="p-col-left">
+                <div class="p-name">{me['nombre']} {me['apellido']}</div>
+                <div class="p-meta">{edad} años (al 31/12) • {me['codgenero']}</div>
             </div>
-            <div style="background-color: #262730; padding: 15px; border-radius: 10px; width: 48%; text-align: center; border: 1px solid #444; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
-                <div style="font-size: 32px; font-weight: bold; color: white;">{cant_reg}</div>
-                <div style="font-size: 13px; color: #ccc; text-transform: uppercase;">⏱️ Registros</div>
+            <div class="p-col-center">
+                <div class="p-medals">
+                    <span>🥇{m_oro}</span> <span>🥈{m_plata}</span> <span>🥉{m_bronce}</span>
+                </div>
+            </div>
+            <div class="p-col-right">
+                <div class="p-total">★ {m_total}</div>
+                <div class="p-cat">{cat}</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
         
-        # --- NUEVA SECCIÓN: MEDALLERO HISTÓRICO ---
-        st.markdown(f"""
-        <div style="background-color: #1E1E1E; border: 1px solid #333; border-radius: 10px; padding: 12px; margin-bottom: 25px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
-            <div style="text-align:center; font-size:11px; color:#aaa; margin-bottom:8px; letter-spacing:2px; font-weight:bold;">MEDALLERO HISTÓRICO (IND + RELEVOS)</div>
-            <div style="display: flex; justify-content: space-between; gap: 2px;">
-                <div style="flex:1; text-align:center;">
-                    <div style="font-size:22px; font-weight:bold; color:#FFD700;">🥇 {tot_oro}</div>
-                    <div style="font-size:10px; color:#888;">ORO</div>
-                </div>
-                <div style="flex:1; text-align:center; border-left:1px solid #333;">
-                    <div style="font-size:22px; font-weight:bold; color:#C0C0C0;">🥈 {tot_plata}</div>
-                    <div style="font-size:10px; color:#888;">PLATA</div>
-                </div>
-                <div style="flex:1; text-align:center; border-left:1px solid #333;">
-                    <div style="font-size:22px; font-weight:bold; color:#CD7F32;">🥉 {tot_bronce}</div>
-                    <div style="font-size:10px; color:#888;">BRONCE</div>
-                </div>
-                <div style="flex:1; text-align:center; border-left:1px solid #333; background:rgba(255,255,255,0.05); border-radius:4px;">
-                    <div style="font-size:22px; font-weight:bold; color:#fff;">★ {tot_gral}</div>
-                    <div style="font-size:10px; color:#888;">TOTAL</div>
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        # --- SECCIÓN 2: ACCESOS RÁPIDOS ---
-        c_btn1, c_btn2 = st.columns(2)
-        with c_btn1:
-            if st.button("🗃️ Base de Datos", type="secondary", use_container_width=True):
-                st.switch_page("pages/2_visualizar_datos.py")
-        with c_btn2:
-            if st.button("🏆 Ver Ranking", type="secondary", use_container_width=True):
-                st.switch_page("pages/4_ranking.py")
-
-        st.write("")
-        if st.button("⏱️ Ir al Simulador de Postas", type="primary", use_container_width=True):
-            st.switch_page("pages/3_simulador.py")
-
+        # BOTÓN DE REDIRECCIÓN A SU FICHA
+        if st.button("Ver Mi Ficha Completa ➝", type="primary", use_container_width=True):
+            st.switch_page("pages/2_visualizar_datos.py")
+        
         st.divider()
+        if st.button("Cerrar Sesión", type="secondary"): cerrar_sesion()
 
-        # --- SECCIÓN 3: GRÁFICOS ---
-        if not df_n.empty:
-            df_n['Anio'] = pd.to_datetime(df_n['fechanac']).dt.year
-            df_n['Categoria'] = df_n['Anio'].apply(calcular_categoria)
-            
-            tab_gen, tab_cat = st.tabs(["Género", "Categorías Master"])
-            escala_colores = alt.Scale(domain=['M', 'F'], range=['#1f77b4', '#FF69B4']) 
+# --- 8. RUTEO ---
+pg_dash_m = st.Page(dashboard_m, title="Inicio", icon="🏠")
+pg_dash_n = st.Page(dashboard_n, title="Mi Perfil", icon="🏊")
+pg_datos = st.Page("pages/2_visualizar_datos.py", title="Base de Datos", icon="🗃️")
+pg_ranking = st.Page("pages/4_ranking.py", title="Ranking", icon="🏆")
+pg_simulador = st.Page("pages/3_simulador.py", title="Simulador", icon="⏱️")
 
-            with tab_gen:
-                base = alt.Chart(df_n).encode(theta=alt.Theta("count()", stack=True))
-                pie = base.mark_arc(outerRadius=100, innerRadius=60).encode(
-                    color=alt.Color("codgenero", scale=escala_colores, legend=None),
-                    tooltip=["codgenero", "count()"]
-                )
-                text = base.mark_text(radius=130).encode(
-                    text=alt.Text("count()"), order=alt.Order("codgenero"), color=alt.value("white") 
-                )
-                st.altair_chart(pie + text, use_container_width=True)
-                st.markdown("""<div style="text-align: center; font-size: 14px; margin-bottom: 10px;">
-                    <span style="color: #1f77b4; font-weight: bold;">● Masculino</span> &nbsp;&nbsp;&nbsp; 
-                    <span style="color: #FF69B4; font-weight: bold;">● Femenino</span></div>""", unsafe_allow_html=True)
+if not st.session_state.role:
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.image("https://upload.wikimedia.org/wikipedia/commons/4/4e/Newell%27s_Old_Boys_shield.svg", width=100)
+    st.title("Acceso Socios")
+    st.text_input("Nº Socio", key="input_socio", placeholder="Ej: 123456-01")
+    if st.button("Ingresar", type="primary", use_container_width=True): validar_socio()
 
-            with tab_cat:
-                orden_cat = ["Juvenil", "PRE", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L+"]
-                chart_cat = alt.Chart(df_n).mark_bar(cornerRadius=3).encode(
-                    x=alt.X('Categoria', sort=orden_cat, title=None),
-                    y=alt.Y('count()', title='Nadadores'),
-                    color=alt.Color('codgenero', legend=None, scale=escala_colores),
-                    tooltip=['Categoria', 'codgenero', 'count()']
-                ).properties(height=250)
-                st.altair_chart(chart_cat, use_container_width=True)
+elif st.session_state.role == "M":
+    pg = st.navigation({"Principal": [pg_dash_m], "Herramientas": [pg_datos, pg_ranking, pg_simulador]})
+    pg.run()
 
-    else: st.info("Conectando con Google Sheets...")
-
-    # --- ZONA DE LOGIN OCULTA ---
-    st.write(""); st.write("")
-    
-    if st.session_state.admin_mode:
-        if st.button("🔒 Cerrar Sesión Admin", type="primary"):
-            logout()
-    else:
-        _, c_oculto = st.columns([10, 1]) 
-        with c_oculto:
-            if st.button("🔒", key="btn_unlock", type="tertiary"):
-                st.session_state.show_login = not st.session_state.show_login
-
-        if st.session_state.show_login:
-            st.markdown("### Acceso Entrenadores")
-            with st.form("login_form"):
-                st.text_input("Usuario", key="input_user")
-                st.text_input("Contraseña", type="password", key="input_pass")
-                st.form_submit_button("Ingresar", on_click=verificar_login)
-
-# --- EJECUCIÓN ---
-pg.run()
+elif st.session_state.role == "N":
+    pg = st.navigation([pg_dash_n, pg_datos])
+    pg.run()
