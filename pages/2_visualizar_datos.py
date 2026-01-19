@@ -7,7 +7,7 @@ import plotly.express as px
 # --- 1. CONFIGURACIÓN ---
 st.set_page_config(page_title="Base de Datos", layout="centered")
 
-# --- SEGURIDAD: VERIFICACIÓN DE ROL ---
+# --- SEGURIDAD ---
 if "role" not in st.session_state or not st.session_state.role:
     st.warning("⚠️ Acceso denegado. Por favor, inicia sesión desde el Inicio.")
     st.stop()
@@ -89,9 +89,17 @@ st.markdown("""
         margin-bottom: 12px;
         box-shadow: 0 2px 4px rgba(0,0,0,0.2);
     }
-    .relay-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #555; padding-bottom: 8px; margin-bottom: 8px; }
+    /* Header Relevos: Ajustado para mostrar más info */
+    .relay-header { 
+        display: flex; 
+        justify-content: space-between; 
+        align-items: center; 
+        border-bottom: 1px solid #555; 
+        padding-bottom: 8px; 
+        margin-bottom: 8px; 
+    }
     .relay-title { font-weight: bold; font-size: 15px; color: white; }
-    .relay-time { font-family: monospace; font-weight: bold; font-size: 20px; color: #4CAF50; }
+    .relay-time { font-family: monospace; font-weight: bold; font-size: 18px; color: #4CAF50; text-align: right;}
     .relay-meta { font-size: 12px; color: #aaa; display: flex; justify-content: space-between; margin-bottom: 10px; }
     
     .swimmer-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px; color: #eee; }
@@ -113,6 +121,8 @@ def cargar_visualizacion():
             "distancias": conn.read(worksheet="Distancias"),
             "piletas": conn.read(worksheet="Piletas"),
             "categorias": conn.read(worksheet="Categorias"),
+            # AGREGAMOS CATEGORIAS DE RELEVOS PARA MOSTRAR EL GRUPO
+            "cat_relevos": conn.read(worksheet="Categorias_Relevos")
         }
     except Exception as e: return None
 
@@ -145,7 +155,7 @@ df_full = df_full.rename(columns={'descripcion_x': 'Estilo', 'descripcion_y': 'D
 
 # Preparar Medallero General
 df_t_c = data['tiempos'].copy(); df_r_c = data['relevos'].copy()
-# --- CORRECCIÓN 1: Asegurar que la posición sea ENTERO globalmente ---
+# Convertimos posición a numérico, forzando a entero (quita decimales)
 df_t_c['posicion'] = pd.to_numeric(df_t_c['posicion'], errors='coerce').fillna(0).astype(int)
 df_r_c['posicion'] = pd.to_numeric(df_r_c['posicion'], errors='coerce').fillna(0).astype(int)
 
@@ -256,7 +266,7 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
     df_hist = df_hist.sort_values('fecha', ascending=False)
     
     for _, r in df_hist.head(20).iterrows():
-        # Cálculo medalla/posición entero
+        # Cálculo medalla/posición entero y limpio
         try: 
             pos_val = int(r['posicion'])
             if pos_val == 1: medal_str = "🥇 1º"
@@ -269,28 +279,36 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
         # DISEÑO FLEX PARA PONER POSICIÓN DEBAJO DEL TIEMPO
         st.markdown(f"""
         <div class="mobile-card" style="padding:10px;">
-            <div style="display:flex; justify-content:space-between; align-items: flex-start;">
+            <div style="display:flex; justify-content:space-between; align-items: center;">
                 <div style="flex:1;">
                     <div style="font-weight:bold; color:white; font-size:15px;">{r['Distancia']} {r['Estilo']}</div>
                     <div style="font-size:12px; color:#aaa; margin-top:4px;">📅 {r['fecha']} • {r['club']}</div>
                 </div>
-                
-                <div style="text-align: right;">
+                <div style="text-align: right; min-width: 80px;">
                     <div style="font-family:monospace; font-weight:bold; color:#4CAF50; font-size:18px;">{r['tiempo']}</div>
                     <div style="font-size:13px; color:#ddd; font-weight:bold; margin-top:2px;">{medal_str}</div>
                 </div>
             </div>
         </div>""", unsafe_allow_html=True)
 
-    # 5. MIS RELEVOS (MODIFICADO: Sin decimales en posición)
+    # 5. MIS RELEVOS (MODIFICADO: Sin decimales + Grupo)
     st.subheader("🏊‍♂️ Mis Relevos")
     mr_base = data['relevos'].copy()
     cond_rel = (mr_base['nadador_1'] == target_id) | (mr_base['nadador_2'] == target_id) | (mr_base['nadador_3'] == target_id) | (mr_base['nadador_4'] == target_id)
     mis_relevos = mr_base[cond_rel].copy()
     
     if not mis_relevos.empty:
+        # Mezclamos con estilos, distancias, piletas y AHORA CON CATEGORÍAS DE RELEVO
         mis_relevos = mis_relevos.merge(data['estilos'], on='codestilo').merge(data['distancias'], on='coddistancia').merge(data['piletas'], on='codpileta')
+        
+        # Intentamos mezclar con categorías si existe la columna, si no, manejamos el error suavemente
+        try:
+            mis_relevos = mis_relevos.merge(data['cat_relevos'], on='cod_cat_relevo', how='left')
+        except: pass # Si falla, simplemente no mostrará el grupo
+
         mis_relevos = mis_relevos.rename(columns={'descripcion_x': 'Estilo', 'descripcion_y': 'Distancia'})
+        
+        # Ordenamos
         mis_relevos = mis_relevos.sort_values('fecha', ascending=False)
         
         for _, r in mis_relevos.iterrows():
@@ -300,10 +318,11 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
                 nom = dict_id_nombre.get(nid, "??").split(',')[0]
                 t = str(r[f'tiempo_{k}']).strip()
                 if t and t not in ["00.00", "0", "None", "nan"]: nom += f" ({t})"
+                
                 border_style = "border: 1px solid #E91E63;" if nid == target_id else ""
                 html_grid += f"<div class='swimmer-item' style='{border_style}'>{k}. {nom}</div>"
             
-            # Formato posición SIN DECIMAL
+            # Posición Entera
             try: p_rel = int(r['posicion'])
             except: p_rel = 0
             
@@ -312,16 +331,24 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
             elif p_rel == 3: pos_icon = "🥉 3º"
             elif p_rel > 0: pos_icon = f"Pos: {p_rel}"
             else: pos_icon = ""
-            
+
+            # Grupo (descripción de la categoría)
+            grupo_txt = r['descripcion'] if 'descripcion' in r and pd.notna(r['descripcion']) else r.get('cod_cat_relevo', '-')
+
             st.markdown(f"""
             <div class="mobile-card" style="border-left: 4px solid #E91E63;">
                 <div class="relay-header">
-                    <div class="relay-title">{r['Distancia']} {r['Estilo']}</div>
-                    <div class="relay-time">{r['tiempo_final']}</div>
+                    <div>
+                        <div class="relay-title">{r['Distancia']} {r['Estilo']}</div>
+                        <div style="font-size:11px; color:#aaa;">{grupo_txt} ({r['codgenero']})</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div class="relay-time">{r['tiempo_final']}</div>
+                        <div style="font-size:12px; color:#ddd; font-weight:bold;">{pos_icon}</div>
+                    </div>
                 </div>
                 <div class="relay-meta">
                     <span>📅 {r['fecha']} • {r['club']}</span>
-                    <span style="font-weight:bold; color:#FFD700;">{pos_icon}</span>
                 </div>
                 <div class="swimmer-grid">{html_grid}</div>
             </div>""", unsafe_allow_html=True)
@@ -361,6 +388,11 @@ def render_tab_relevos_general():
     mr_all = data['relevos'].copy()
     if not mr_all.empty:
         mr_all = mr_all.merge(data['estilos'], on='codestilo').merge(data['distancias'], on='coddistancia').merge(data['piletas'], on='codpileta')
+        
+        # Merge con categorías para mostrar grupo
+        try: mr_all = mr_all.merge(data['cat_relevos'], on='cod_cat_relevo', how='left')
+        except: pass
+
         mr_all = mr_all.rename(columns={'descripcion_x': 'Estilo', 'descripcion_y': 'Distancia'})
         
         c1, c2 = st.columns(2)
@@ -379,7 +411,7 @@ def render_tab_relevos_general():
                 if t and t not in ["00.00", "0", "None", "nan"]: nom += f" <b>({t})</b>"
                 html_grid += f"<div class='swimmer-item'>{k}. {nom}</div>"
 
-            # Formato posición SIN DECIMAL
+            # Posición entera
             try: p_rel = int(r['posicion'])
             except: p_rel = 0
             
@@ -389,15 +421,23 @@ def render_tab_relevos_general():
             elif p_rel > 0: pos_icon = f"Pos: {p_rel}"
             else: pos_icon = ""
 
+            # Grupo texto
+            grupo_txt = r['descripcion'] if 'descripcion' in r and pd.notna(r['descripcion']) else r.get('cod_cat_relevo', '-')
+
             st.markdown(f"""
             <div class="mobile-card" style="border-left: 4px solid #9C27B0;">
                 <div class="relay-header">
-                    <div class="relay-title">{r['Distancia']} {r['Estilo']} ({r['codgenero']})</div>
-                    <div class="relay-time">{r['tiempo_final']}</div>
+                    <div>
+                        <div class="relay-title">{r['Distancia']} {r['Estilo']}</div>
+                        <div style="font-size:11px; color:#aaa;">{grupo_txt} ({r['codgenero']})</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div class="relay-time">{r['tiempo_final']}</div>
+                        <div style="font-size:12px; color:#ddd; font-weight:bold;">{pos_icon}</div>
+                    </div>
                 </div>
                 <div class="relay-meta">
                     <span>📅 {r['fecha']} • {r['club']}</span>
-                    <span style="font-weight:bold; color:#FFD700;">{pos_icon}</span>
                 </div>
                 <div class="swimmer-grid">{html_grid}</div>
             </div>""", unsafe_allow_html=True)
@@ -427,7 +467,7 @@ else:
     with tab2:
         lista_nombres = sorted(df_nad['Nombre Completo'].unique().tolist())
         
-        # LÓGICA DE PRE-SELECCIÓN
+        # --- LÓGICA DE PRE-SELECCIÓN (Mantenida intacta) ---
         idx_defecto = 0
         pre_seleccion = st.session_state.get("nadador_seleccionado")
         
