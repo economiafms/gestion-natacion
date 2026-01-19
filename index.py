@@ -3,36 +3,54 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 import altair as alt
 from datetime import datetime
+import time
 
 # --- 1. CONFIGURACIÓN DEL SITIO ---
 st.set_page_config(page_title="NOB Natación", layout="centered", initial_sidebar_state="collapsed")
 
-# --- 2. GESTIÓN DE ESTADO (ADMIN) ---
-# Inicializamos el estado de administrador en False si no existe
+# --- 2. GESTIÓN DE ESTADO Y LOGIN ---
 if "admin_mode" not in st.session_state:
     st.session_state.admin_mode = False
 
-# Verificamos si se activó vía URL (?access=admin) o vía botón oculto
-params = st.query_params
-if params.get("access") == "admin":
-    st.session_state.admin_mode = True
+if "show_login" not in st.session_state:
+    st.session_state.show_login = False
 
-# --- 3. SISTEMA DE NAVEGACIÓN (Router Dinámico) ---
-# Definimos las páginas
+# Función de verificación de contraseña
+def verificar_login():
+    # Buscamos las credenciales en st.secrets
+    sec_user = st.secrets["admin"]["usuario"]
+    sec_pass = st.secrets["admin"]["password"]
+
+    input_user = st.session_state["input_user"]
+    input_pass = st.session_state["input_pass"]
+
+    if input_user == sec_user and input_pass == sec_pass:
+        st.session_state.admin_mode = True
+        st.session_state.show_login = False
+        st.success("¡Bienvenido Entrenador!")
+        time.sleep(1)
+        st.rerun()
+    else:
+        st.error("Usuario o contraseña incorrectos")
+
+# Logout
+def logout():
+    st.session_state.admin_mode = False
+    st.rerun()
+
+# --- 3. SISTEMA DE NAVEGACIÓN ---
 pg_dashboard = st.Page(lambda: dashboard_main(), title="Inicio", icon="🏠")
 pg_datos = st.Page("pages/2_visualizar_datos.py", title="Base de Datos", icon="🗃️")
 pg_ranking = st.Page("pages/4_ranking.py", title="Ranking", icon="🏆")
 pg_simulador = st.Page("pages/3_simulador.py", title="Simulador", icon="⏱️")
 pg_carga = st.Page("pages/1_cargar_datos.py", title="Carga", icon="⚙️")
 
-# Si está en modo admin, mostramos la página de carga en el menú
 if st.session_state.admin_mode:
     pg = st.navigation({
         "Club": [pg_dashboard, pg_datos, pg_ranking, pg_simulador],
         "Admin": [pg_carga]
     })
 else:
-    # Si no, menú estándar
     pg = st.navigation([pg_dashboard, pg_datos, pg_ranking, pg_simulador])
 
 # --- 4. CONEXIÓN DE DATOS ---
@@ -48,11 +66,10 @@ def cargar_kpis():
         }
     except: return None
 
-# --- 5. FUNCIÓN AUXILIAR: CATEGORÍAS ---
+# --- 5. FUNCIONES AUXILIARES ---
 def calcular_categoria(anio_nac):
     anio_actual = datetime.now().year
     edad = anio_actual - anio_nac
-    
     if edad < 20: return "Juvenil"
     elif 20 <= edad <= 24: return "PRE"
     elif 25 <= edad <= 29: return "A"
@@ -86,14 +103,14 @@ def dashboard_main():
         df_n = data['nadadores']
         df_t = data['tiempos']
         
-        # --- SECCIÓN 1: KPIs ---
+        # KPIs
         k1, k2 = st.columns(2)
         k1.metric("🏊‍♂️ Plantel", f"{len(df_n)}", "Nadadores")
         k2.metric("⏱️ Registros", f"{len(df_t)}", "Total marcas")
 
         st.write("") 
 
-        # --- SECCIÓN 2: ACCESOS RÁPIDOS ---
+        # ACCESOS RÁPIDOS
         c_btn1, c_btn2 = st.columns(2)
         with c_btn1:
             if st.button("🗃️ Base de Datos", type="secondary", use_container_width=True):
@@ -108,14 +125,12 @@ def dashboard_main():
 
         st.divider()
 
-        # --- SECCIÓN 3: GRÁFICOS (COLORES ACTUALIZADOS) ---
+        # GRÁFICOS
         if not df_n.empty:
             df_n['Anio'] = pd.to_datetime(df_n['fechanac']).dt.year
             df_n['Categoria'] = df_n['Anio'].apply(calcular_categoria)
             
             tab_gen, tab_cat = st.tabs(["Género", "Categorías Master"])
-
-            # COLORES DEFINIDOS: Azul (#1f77b4) y Rosa (#FF69B4)
             escala_colores = alt.Scale(domain=['M', 'F'], range=['#1f77b4', '#FF69B4'])
 
             with tab_gen:
@@ -128,14 +143,9 @@ def dashboard_main():
                     text=alt.Text("count()"), order=alt.Order("codgenero"), color=alt.value("white") 
                 )
                 st.altair_chart(pie + text, use_container_width=True)
-                
-                # Leyenda Manual Actualizada
-                st.markdown("""
-                <div style="text-align: center; font-size: 14px; margin-bottom: 10px;">
+                st.markdown("""<div style="text-align: center; font-size: 14px; margin-bottom: 10px;">
                     <span style="color: #1f77b4; font-weight: bold;">● Masculino</span> &nbsp;&nbsp;&nbsp; 
-                    <span style="color: #FF69B4; font-weight: bold;">● Femenino</span>
-                </div>
-                """, unsafe_allow_html=True)
+                    <span style="color: #FF69B4; font-weight: bold;">● Femenino</span></div>""", unsafe_allow_html=True)
 
             with tab_cat:
                 orden_cat = ["Juvenil", "PRE", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L+"]
@@ -149,18 +159,28 @@ def dashboard_main():
 
     else: st.info("Conectando con Google Sheets...")
 
-    # --- BOTÓN OCULTO DE ACCESO ADMIN ---
-    st.write("")
+    # --- ZONA DE LOGIN OCULTA ---
     st.write("")
     st.write("")
     
-    # Creamos columnas para empujar el botón a la derecha y hacerlo pequeño
-    _, c_oculto = st.columns([10, 1]) 
-    with c_oculto:
-        # El botón es solo un candado pequeño
-        if st.button("🔒", key="btn_admin_access", help="Acceso Admin", type="tertiary"):
-            st.session_state.admin_mode = True
-            st.rerun() # Recargamos para que aparezca el menú nuevo
+    # Si ya es admin, mostrar botón de salir
+    if st.session_state.admin_mode:
+        if st.button("🔒 Cerrar Sesión Admin", type="primary"):
+            logout()
+    else:
+        # Si NO es admin, mostrar el candadito discreto
+        _, c_oculto = st.columns([10, 1]) 
+        with c_oculto:
+            if st.button("🔒", key="btn_unlock", type="tertiary"):
+                st.session_state.show_login = not st.session_state.show_login
+
+        # Si tocó el candado, desplegar el formulario de login
+        if st.session_state.show_login:
+            st.markdown("### Acceso Entrenadores")
+            with st.form("login_form"):
+                st.text_input("Usuario", key="input_user")
+                st.text_input("Contraseña", type="password", key="input_pass")
+                st.form_submit_button("Ingresar", on_click=verificar_login)
 
 # --- EJECUCIÓN ---
 pg.run()
