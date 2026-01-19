@@ -15,6 +15,7 @@ if "user_id" not in st.session_state: st.session_state.user_id = None
 if "nro_socio" not in st.session_state: st.session_state.nro_socio = None
 if "admin_unlocked" not in st.session_state: st.session_state.admin_unlocked = False 
 if "show_login_form" not in st.session_state: st.session_state.show_login_form = False 
+if "nadador_seleccionado" not in st.session_state: st.session_state.nadador_seleccionado = None
 
 # --- 3. CONEXIÓN ---
 conn = st.connection("gsheets", type=GSheetsConnection)
@@ -100,7 +101,24 @@ def cerrar_sesion():
     st.session_state.role = None
     st.session_state.admin_unlocked = False
     st.session_state.show_login_form = False
+    st.session_state.nadador_seleccionado = None
     st.rerun()
+
+def intentar_desbloqueo():
+    # USAMOS SECRETS REALES
+    try:
+        sec_user = st.secrets["admin"]["usuario"]
+        sec_pass = st.secrets["admin"]["password"]
+    except:
+        sec_user = "admin"
+        sec_pass = "admin"
+
+    if st.session_state.u_in == sec_user and st.session_state.p_in == sec_pass: 
+        st.session_state.admin_unlocked = True
+        st.session_state.show_login_form = False
+        st.rerun()
+    else: 
+        st.error("Credenciales incorrectas")
 
 # --- 6. COMPONENTES VISUALES ---
 def render_personal_card(user_id, db):
@@ -171,6 +189,7 @@ def render_graficos_comunes(df_n):
 
 # --- 7. DASHBOARD COMÚN (Header y Club Stats) ---
 def dashboard_common_structure():
+    # Encabezado Institucional Interno
     st.markdown("""
         <div style='text-align: center; margin-bottom: 20px;'>
             <h3 style='color: white; font-size: 20px; margin: 0;'>BIENVENIDOS AL COMPLEJO ACUÁTICO</h3>
@@ -220,7 +239,6 @@ def dashboard_m():
     dashboard_common_structure()
     st.divider()
     
-    # Herramientas del Profesor/Master
     c1, c2 = st.columns(2)
     with c1: 
         if st.button("🗃️ Base de Datos", use_container_width=True): st.switch_page("pages/2_visualizar_datos.py")
@@ -229,7 +247,6 @@ def dashboard_m():
     st.write("")
     if st.button("⏱️ Simulador de Postas", type="primary", use_container_width=True): st.switch_page("pages/3_simulador.py")
 
-    # --- ZONA DE ACCESO PROFESOR (SECRETS) ---
     st.write(""); st.write("")
     col_space, col_lock = st.columns([8, 1])
     with col_lock:
@@ -240,24 +257,9 @@ def dashboard_m():
     if st.session_state.show_login_form and not st.session_state.admin_unlocked:
         with st.form("admin_login"):
             st.markdown("###### Acceso Profesor")
-            u_in = st.text_input("Usuario")
-            p_in = st.text_input("Contraseña", type="password")
-            if st.form_submit_button("Desbloquear"):
-                # --- CORRECCIÓN AQUÍ: USO DE SECRETS ---
-                try:
-                    secret_user = st.secrets["admin"]["usuario"]
-                    secret_pass = st.secrets["admin"]["password"]
-                except:
-                    # Fallback por si no están configurados, para no romper la app
-                    secret_user = "entrenador"
-                    secret_pass = "nob1903"
-                    
-                if u_in == secret_user and p_in == secret_pass:
-                    st.session_state.admin_unlocked = True
-                    st.session_state.show_login_form = False
-                    st.rerun()
-                else:
-                    st.error("Credenciales incorrectas")
+            st.text_input("Usuario", key="u_in")
+            st.text_input("Contraseña", type="password", key="p_in")
+            st.form_submit_button("Desbloquear", on_click=intentar_desbloqueo)
     
     if st.session_state.admin_unlocked:
         st.success("🔓 Gestión Habilitada (Ver menú lateral)")
@@ -274,7 +276,7 @@ def dashboard_n():
     st.divider()
     if st.button("Cerrar Sesión", type="secondary"): cerrar_sesion()
 
-# --- 10. RUTEO FINAL ---
+# --- 10. RUTEO FINAL Y PANTALLA DE ACCESO DECORADA ---
 pg_dash_m = st.Page(dashboard_m, title="Inicio", icon="🏠")
 pg_dash_n = st.Page(dashboard_n, title="Mi Perfil", icon="🏊")
 pg_datos = st.Page("pages/2_visualizar_datos.py", title="Base de Datos", icon="🗃️")
@@ -283,11 +285,57 @@ pg_simulador = st.Page("pages/3_simulador.py", title="Simulador", icon="⏱️")
 pg_carga = st.Page("pages/1_cargar_datos.py", title="Carga", icon="⚙️")
 
 if not st.session_state.role:
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.image("https://upload.wikimedia.org/wikipedia/commons/4/4e/Newell%27s_Old_Boys_shield.svg", width=100)
-    st.title("Acceso Socios")
-    st.text_input("Nº Socio", key="input_socio", placeholder="Ej: 123456-01")
-    if st.button("Ingresar", type="primary", use_container_width=True): validar_socio()
+    # --- PANTALLA DE LOGIN DECORADA ---
+    st.markdown("""
+        <style>
+            .login-container {
+                text-align: center;
+                padding: 30px;
+                border-radius: 20px;
+                background: linear-gradient(180deg, #121212 0%, #000000 100%);
+                border: 2px solid #333;
+                margin-bottom: 20px;
+                box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            }
+            .nob-title {
+                font-size: 38px;
+                font-weight: 900;
+                color: #E30613;
+                text-transform: uppercase;
+                margin: 10px 0 5px 0;
+                line-height: 1;
+                text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            }
+            .nob-quote {
+                font-size: 18px;
+                font-style: italic;
+                color: #ffffff;
+                margin-bottom: 20px;
+                font-family: serif;
+                letter-spacing: 1px;
+                opacity: 0.9;
+            }
+            .access-label {
+                color: #888;
+                font-size: 13px;
+                text-transform: uppercase;
+                letter-spacing: 2px;
+                margin-top: 20px;
+                margin-bottom: 10px;
+            }
+        </style>
+        
+        <div class="login-container">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/4/4e/Newell%27s_Old_Boys_shield.svg" width="120">
+            <div class="nob-title">NEWELL'S OLD BOYS</div>
+            <div class="nob-quote">"Del deporte sos la gloria"</div>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown("<div style='text-align:center; color:#aaa; font-size:14px; margin-bottom:5px;'>ACCESO SOCIOS</div>", unsafe_allow_html=True)
+    
+    st.text_input("Ingrese Nro de Socio", key="input_socio", placeholder="Ej: 123456-01", label_visibility="collapsed")
+    if st.button("INGRESAR", type="primary", use_container_width=True): validar_socio()
 
 elif st.session_state.role == "M":
     pages_m = [pg_dash_m, pg_datos, pg_ranking, pg_simulador]
