@@ -338,3 +338,4 @@ elif st.session_state.role == "M":
 
 elif st.session_state.role == "N":
     pg = st.navigation([pg_dash_n, pg_datos])
+
