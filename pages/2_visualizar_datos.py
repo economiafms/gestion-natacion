@@ -7,7 +7,7 @@ import plotly.express as px
 # --- 1. CONFIGURACIÓN ---
 st.set_page_config(page_title="Base de Datos", layout="centered")
 
-# --- SEGURIDAD: VERIFICACIÓN DE ROL ---
+# --- SEGURIDAD ---
 if "role" not in st.session_state or not st.session_state.role:
     st.warning("⚠️ Acceso denegado. Por favor, inicia sesión desde el Inicio.")
     st.stop()
@@ -17,7 +17,7 @@ mi_id = st.session_state.user_id
 
 st.title("📊 Base de Datos del Club")
 
-# --- CSS PERSONALIZADO (TU ESTILO ORIGINAL MANTENIDO) ---
+# --- CSS PERSONALIZADO ---
 st.markdown("""
 <style>
     /* TARJETA PADRÓN */
@@ -42,7 +42,7 @@ st.markdown("""
     .p-total { font-size: 28px; color: #FFD700; font-weight: bold; line-height: 1; }
     .p-cat { font-size: 18px; color: #4CAF50; font-weight: bold; margin-top: 5px; }
 
-    /* FICHA TÉCNICA - ROJO NOB */
+    /* FICHA TÉCNICA */
     .ficha-header {
         background: linear-gradient(135deg, #8B0000 0%, #3E0000 100%);
         padding: 20px;
@@ -92,6 +92,8 @@ st.markdown("""
     .relay-title { font-weight: bold; font-size: 15px; color: white; }
     .relay-time { font-family: monospace; font-weight: bold; font-size: 20px; color: #4CAF50; }
     .relay-meta { font-size: 12px; color: #aaa; display: flex; justify-content: space-between; margin-bottom: 10px; }
+    
+    /* GRILLA DE NADADORES EN RELEVOS (RECUPERADA) */
     .swimmer-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px; color: #eee; }
     .swimmer-item { background: rgba(255,255,255,0.05); padding: 4px 8px; border-radius: 4px; }
 </style>
@@ -120,6 +122,8 @@ if not data: st.stop()
 # --- 3. PROCESAMIENTO GLOBAL ---
 df_nad = data['nadadores'].copy()
 df_nad['Nombre Completo'] = df_nad['apellido'].astype(str).str.upper() + ", " + df_nad['nombre'].astype(str)
+
+# DICCIONARIO CLAVE PARA NOMBRES (RECUPERADO)
 dict_id_nombre = df_nad.set_index('codnadador')['Nombre Completo'].to_dict()
 
 def tiempo_a_segundos(t_str):
@@ -137,12 +141,11 @@ def asignar_cat(edad):
         return "-"
     except: return "-"
 
-# Preparamos el dataframe full para que esté listo para todos
 df_full = data['tiempos'].copy()
 df_full = df_full.merge(data['estilos'], on='codestilo').merge(data['distancias'], on='coddistancia').merge(data['piletas'], on='codpileta')
 df_full = df_full.rename(columns={'descripcion_x': 'Estilo', 'descripcion_y': 'Distancia'})
 
-# Preparar Medallero General (Necesario para pasar datos a la ficha individual)
+# Preparar Medallero General
 df_t_c = data['tiempos'].copy(); df_r_c = data['relevos'].copy()
 df_t_c['posicion'] = pd.to_numeric(df_t_c['posicion'], errors='coerce').fillna(0).astype(int)
 df_r_c['posicion'] = pd.to_numeric(df_r_c['posicion'], errors='coerce').fillna(0).astype(int)
@@ -156,22 +159,19 @@ for p in [1,2,3]:
     if p not in medallero.columns: medallero[p] = 0
 medallero = medallero.rename(columns={1: 'Oro', 2: 'Plata', 3: 'Bronce'})
 
-# Padrón enriquecido (lo usamos en ambas vistas)
 df_view = df_nad.merge(medallero, left_on='codnadador', right_index=True, how='left').fillna(0)
 df_view['Total'] = df_view['Oro'] + df_view['Plata'] + df_view['Bronce']
 
 
 # ==============================================================================
-#  FUNCIONES REUTILIZABLES (LA LÓGICA CORE)
+#  FUNCIONES REUTILIZABLES
 # ==============================================================================
 
 def render_tab_ficha(target_id, unique_key_suffix=""):
-    """Dibuja TODA la lógica de la Ficha Técnica para un ID dado"""
     if not target_id: return
 
     info = df_nad[df_nad['codnadador'] == target_id].iloc[0]
     
-    # Datos personales
     try: 
         nac = pd.to_datetime(info['fechanac'])
         edad = datetime.now().year - nac.year
@@ -179,13 +179,11 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
     except: edad = 0; nac_str = "-"
     cat = asignar_cat(edad)
     
-    # Medallas
     row_m = df_view[df_view['codnadador'] == target_id]
     if not row_m.empty:
         o, pl, br = int(row_m.iloc[0]['Oro']), int(row_m.iloc[0]['Plata']), int(row_m.iloc[0]['Bronce'])
     else: o, pl, br = 0, 0, 0
 
-    # 1. CABECERA
     st.markdown(f"""
     <div class="ficha-header">
         <div class="ficha-name">{info['nombre']} {info['apellido']}</div>
@@ -203,7 +201,7 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
 
     mis_t = df_full[df_full['codnadador'] == target_id].copy()
 
-    # 2. MEJORES MARCAS
+    # MEJORES MARCAS
     if not mis_t.empty:
         st.subheader("✨ Mejores Marcas (PB)")
         mis_t['segundos'] = mis_t['tiempo'].apply(tiempo_a_segundos)
@@ -220,7 +218,7 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
 
         st.divider()
 
-        # 3. GRÁFICO
+        # GRÁFICO
         st.subheader("📈 Evolución de Tiempos")
         conteo = mis_t.groupby(['Estilo', 'Distancia']).size().reset_index(name='count')
         validos = conteo[conteo['count'] >= 2]
@@ -246,7 +244,7 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
         
         st.divider()
 
-    # 4. HISTORIAL
+    # HISTORIAL
     st.subheader("📜 Historial Completo")
     with st.expander("Filtrar Historial"):
         h1, h2 = st.columns(2)
@@ -271,7 +269,7 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
             </div>
         </div>""", unsafe_allow_html=True)
 
-    # 5. MIS RELEVOS
+    # 5. MIS RELEVOS (RESTAURADO COMPLETO)
     st.subheader("🏊‍♂️ Mis Relevos")
     mr_base = data['relevos'].copy()
     cond_rel = (mr_base['nadador_1'] == target_id) | (mr_base['nadador_2'] == target_id) | (mr_base['nadador_3'] == target_id) | (mr_base['nadador_4'] == target_id)
@@ -283,7 +281,25 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
         mis_relevos = mis_relevos.sort_values('fecha', ascending=False)
         
         for _, r in mis_relevos.iterrows():
+            # --- LÓGICA RESTAURADA: Armar la grilla de compañeros ---
+            html_grid = ""
+            for k in range(1, 5):
+                nid_companero = r[f'nadador_{k}']
+                # Buscamos el nombre en el diccionario global recuperado
+                nom = dict_id_nombre.get(nid_companero, "??").split(',')[0]
+                
+                t_parcial = str(r[f'tiempo_{k}']).strip()
+                if t_parcial and t_parcial not in ["00.00", "0", "None", "nan"]: 
+                    nom += f" ({t_parcial})"
+                
+                # Resaltar si soy yo
+                if nid_companero == target_id:
+                    html_grid += f"<div class='swimmer-item' style='border:1px solid #E91E63;'>{k}. {nom}</div>"
+                else:
+                    html_grid += f"<div class='swimmer-item'>{k}. {nom}</div>"
+            
             pos_icon = "🥇" if r['posicion'] == 1 else ("🥈" if r['posicion'] == 2 else ("🥉" if r['posicion'] == 3 else ""))
+            
             st.markdown(f"""
             <div class="mobile-card" style="border-left: 4px solid #E91E63;">
                 <div class="relay-header">
@@ -294,11 +310,11 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
                     <span>📅 {r['fecha']} • {r['club']}</span>
                     <span style="font-weight:bold; color:#FFD700;">{pos_icon} Pos: {r['posicion']}</span>
                 </div>
+                <div class="swimmer-grid">{html_grid}</div>
             </div>""", unsafe_allow_html=True)
     else: st.info("Sin relevos.")
 
 def render_tab_padron():
-    """Dibuja el Padrón General (Solo para M)"""
     st.markdown("### 🏆 Padrón y Medallero")
     filtro = st.text_input("Buscar Nadador:", placeholder="Nombre...")
     df_show = df_view.sort_values('Total', ascending=False)
@@ -322,13 +338,12 @@ def render_tab_padron():
             <div class="p-col-right"><div class="p-total">★ {t}</div><div class="p-cat">{cat}</div></div>
         </div>
         """, unsafe_allow_html=True)
-        # Botón para ir a Ficha (Solo en perfil M)
+        
         if st.button(f"Ver Ficha {row['nombre']} ➝", key=f"btn_p_{row['codnadador']}", use_container_width=True):
             st.session_state.nadador_seleccionado = row['Nombre Completo']
             st.rerun()
 
 def render_tab_relevos_general():
-    """Dibuja el Historial de Relevos Completo (Solo para M)"""
     st.markdown("### Historial de Postas")
     mr_all = data['relevos'].copy()
     if not mr_all.empty:
@@ -343,6 +358,15 @@ def render_tab_relevos_general():
         if fg_gen != "Todos": mr_all = mr_all[mr_all['codgenero'] == fg_gen]
         
         for _, r in mr_all.sort_values('fecha', ascending=False).head(20).iterrows():
+            # Grilla interna también para el historial general
+            html_grid = ""
+            for k in range(1, 5):
+                nid = r[f'nadador_{k}']
+                nom = dict_id_nombre.get(nid, "??").split(',')[0]
+                t = str(r[f'tiempo_{k}']).strip()
+                if t and t not in ["00.00", "0", "None", "nan"]: nom += f" <b>({t})</b>"
+                html_grid += f"<div class='swimmer-item'>{k}. {nom}</div>"
+
             medal = "🥇" if r['posicion'] == 1 else ("🥈" if r['posicion'] == 2 else ("🥉" if r['posicion'] == 3 else ""))
             st.markdown(f"""
             <div class="mobile-card" style="border-left: 4px solid #9C27B0;">
@@ -354,56 +378,37 @@ def render_tab_relevos_general():
                     <span>📅 {r['fecha']} • {r['club']}</span>
                     <span style="font-weight:bold; color:#FFD700;">{medal} Pos: {r['posicion']}</span>
                 </div>
+                <div class="swimmer-grid">{html_grid}</div>
             </div>""", unsafe_allow_html=True)
 
 
 # ==============================================================================
-#  LÓGICA PRINCIPAL: ¿QUÉ MUESTRO SEGÚN EL ROL?
+#  LÓGICA PRINCIPAL
 # ==============================================================================
 
 if rol == "N":
-    # --- ROL NADADOR: VISTA LIMITADA ---
     tab_yo, tab_otro = st.tabs(["👤 Mi Ficha", "🔍 Consultar Compañero"])
-    
-    with tab_yo:
-        # Se muestra SU propia ficha directamente
-        render_tab_ficha(mi_id, unique_key_suffix="_me")
-        
+    with tab_yo: render_tab_ficha(mi_id, unique_key_suffix="_me")
     with tab_otro:
         st.markdown("##### Consulta por DNI")
-        st.info("Ingresa el DNI de tu compañero para ver sus estadísticas.")
         dni_in = st.text_input("DNI del Nadador", placeholder="Ej: 30123456")
-        
         if dni_in:
-            # Buscar por DNI (Como string para evitar problemas de formato)
             encontrado = df_nad[df_nad['dni'].astype(str).str.contains(dni_in.strip())]
-            if not encontrado.empty:
-                id_comp = encontrado.iloc[0]['codnadador']
-                render_tab_ficha(id_comp, unique_key_suffix="_friend")
-            else:
-                st.error("No se encontró ningún nadador con ese DNI.")
+            if not encontrado.empty: render_tab_ficha(encontrado.iloc[0]['codnadador'], unique_key_suffix="_friend")
+            else: st.error("No encontrado.")
 
 else:
-    # --- ROL MASTER (M): VISTA COMPLETA ORIGINAL ---
     tab1, tab2, tab3 = st.tabs(["👥 Padrón", "👤 Ficha Técnica", "🏊‍♂️ Relevos"])
-    
-    with tab1:
-        render_tab_padron()
-        
+    with tab1: render_tab_padron()
     with tab2:
-        # Recuperar índice si hay selección previa (desde index o padrón)
         lista_nombres = sorted(df_nad['Nombre Completo'].unique().tolist())
         idx_sel = 0
         target = st.session_state.get("nadador_seleccionado")
-        if not target: target = st.session_state.user_name # Por defecto yo mismo
-        
+        if not target: target = st.session_state.user_name
         if target in lista_nombres: idx_sel = lista_nombres.index(target)
 
         f_nad = st.selectbox("Seleccionar Atleta:", lista_nombres, index=idx_sel)
-        
         if f_nad:
             id_actual = df_nad[df_nad['Nombre Completo'] == f_nad].iloc[0]['codnadador']
             render_tab_ficha(id_actual, unique_key_suffix="_master")
-            
-    with tab3:
-        render_tab_relevos_general()
+    with tab3: render_tab_relevos_general()
