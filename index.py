@@ -7,12 +7,14 @@ import time
 st.set_page_config(page_title="Acceso NOB", layout="centered")
 
 # --- 2. GESTIÓN DE ESTADO ---
+# Inicializamos TODAS las variables críticas aquí para evitar errores
 if "role" not in st.session_state: st.session_state.role = None
 if "user_name" not in st.session_state: st.session_state.user_name = None
 if "user_id" not in st.session_state: st.session_state.user_id = None
 if "nro_socio" not in st.session_state: st.session_state.nro_socio = None
 if "admin_unlocked" not in st.session_state: st.session_state.admin_unlocked = False 
 if "ver_nadador_especifico" not in st.session_state: st.session_state.ver_nadador_especifico = None
+if "show_login_form" not in st.session_state: st.session_state.show_login_form = False # Agregado por seguridad
 
 # --- 3. CONEXIÓN ---
 conn = st.connection("gsheets", type=GSheetsConnection)
@@ -67,17 +69,15 @@ def validar_socio():
             st.error("Número de socio no registrado.")
 
 def cerrar_sesion():
-    st.session_state.role = None
-    st.session_state.user_name = None
-    st.session_state.user_id = None
-    st.session_state.admin_unlocked = False
+    for key in st.session_state.keys():
+        del st.session_state[key]
     st.rerun()
 
-# --- 5. PANTALLA DE LOGIN (Función Interna) ---
+# --- 5. PANTALLA DE LOGIN ---
 def login_screen():
+    st.markdown("""<style>[data-testid="stSidebar"] {display: none;}</style>""", unsafe_allow_html=True)
     st.markdown("""
         <style>
-            [data-testid="stSidebar"] {display: none;} /* Ocultar sidebar solo en login */
             .login-container {
                 text-align: center;
                 padding: 30px;
@@ -106,64 +106,45 @@ def login_screen():
                 opacity: 0.9;
             }
         </style>
-        
         <div class="login-container">
             <div style="font-size: 40px; margin-bottom: 10px;">🔴⚫ 🏊 ⚫🔴</div>
             <div class="nob-title">NEWELL'S OLD BOYS</div>
             <div class="nob-quote">"Del deporte sos la gloria"</div>
         </div>
     """, unsafe_allow_html=True)
-    
     st.markdown("<div style='text-align:center; color:#aaa; font-size:14px; margin-bottom:5px;'>ACCESO SOCIOS</div>", unsafe_allow_html=True)
     st.text_input("Ingrese Nro de Socio", key="input_socio", placeholder="Ej: 123456-01", label_visibility="collapsed")
     if st.button("INGRESAR", type="primary", use_container_width=True):
         validar_socio()
 
-# --- 6. DEFINICIÓN DE PÁGINAS ---
-# Referenciamos los archivos físicos en la carpeta pages/
+# --- 6. PÁGINAS ---
 pg_inicio = st.Page("pages/1_inicio.py", title="Inicio", icon="🏠")
 pg_datos = st.Page("pages/2_visualizar_datos.py", title="Base de Datos", icon="🗃️")
 pg_ranking = st.Page("pages/4_ranking.py", title="Ranking", icon="🏆")
 pg_simulador = st.Page("pages/3_simulador.py", title="Simulador", icon="⏱️")
 pg_carga = st.Page("pages/1_cargar_datos.py", title="Carga de Datos", icon="⚙️")
-
-# Pagina "ficticia" para el login
 pg_login_obj = st.Page(login_screen, title="Acceso", icon="🔒")
 
-# --- 7. RUTEO Y NAVEGACIÓN (EL CEREBRO) ---
-
+# --- 7. RUTEO ---
 if not st.session_state.role:
-    # CASO 1: NO LOGUEADO -> Solo ve Login
     pg = st.navigation([pg_login_obj])
     pg.run()
-
 else:
-    # CASO 2: LOGUEADO -> Configuramos el menú según el ROL
-    
-    # Menú Común (Para todos)
+    # Menú
     menu_pages = {"Principal": [pg_inicio, pg_datos]}
     
-    # Si es Master (M) o Profe (P), agregamos herramientas avanzadas
     if st.session_state.role in ["M", "P"]:
         menu_pages["Herramientas"] = [pg_ranking, pg_simulador]
-        
-        # Si desbloqueó el candado (admin), agregamos Carga
         if st.session_state.admin_unlocked:
             menu_pages["Administración"] = [pg_carga]
             
-    # Creamos la navegación con las páginas seleccionadas
     pg = st.navigation(menu_pages)
     
-    # --- BARRA LATERAL (SIDEBAR) ---
+    # --- SIDEBAR LIMPIO (Solo botón cerrar sesión) ---
     with st.sidebar:
-        # Info del usuario
-        st.markdown(f"Hola, **{st.session_state.user_name.split()[0]}**")
-        st.caption(f"Perfil: {st.session_state.role}")
-        st.divider()
-        
-        # Botón de Cerrar Sesión (Siempre visible en el menú)
+        # Espaciador para empujar el botón abajo si se desea, o simplemente directo
+        st.write("") 
         if st.button("Cerrar Sesión", type="secondary", use_container_width=True):
             cerrar_sesion()
             
-    # Ejecutamos la página seleccionada
     pg.run()
