@@ -353,7 +353,7 @@ def render_tab_padron():
         """, unsafe_allow_html=True)
         
         if st.button(f"Ver Ficha {row['nombre']} ➝", key=f"btn_p_{row['codnadador']}", use_container_width=True):
-            st.session_state.ver_nadador_especifico = row['Nombre Completo']
+            st.session_state.nadador_seleccionado = row['Nombre Completo']
             st.rerun()
 
 def render_tab_relevos_general():
@@ -429,16 +429,18 @@ else:
         
         # LÓGICA DE PRE-SELECCIÓN
         idx_defecto = 0
-        solicitado = st.session_state.get("ver_nadador_especifico")
+        pre_seleccion = st.session_state.get("nadador_seleccionado")
         
-        if solicitado and solicitado in lista_nombres:
-            idx_defecto = lista_nombres.index(solicitado)
-        elif mi_nombre in lista_nombres:
-            idx_defecto = lista_nombres.index(mi_nombre)
+        if not pre_seleccion and mi_nombre in lista_nombres:
+            pre_seleccion = mi_nombre
+            
+        if pre_seleccion in lista_nombres:
+            idx_defecto = lista_nombres.index(pre_seleccion)
 
         f_nad = st.selectbox("Seleccionar Atleta:", lista_nombres, index=idx_defecto)
         
         if f_nad:
+            st.session_state.nadador_seleccionado = f_nad
             id_actual = df_nad[df_nad['Nombre Completo'] == f_nad].iloc[0]['codnadador']
             render_tab_ficha(id_actual, unique_key_suffix="_master")
             
