@@ -89,7 +89,7 @@ def calcular_categoria(anio_nac):
 
 # --- 6. DASHBOARD PRINCIPAL ---
 def dashboard_main():
-    # --- TÍTULO PERSONALIZADO (ROJO Y NEGRO) ---
+    # --- TÍTULO PERSONALIZADO ---
     st.markdown("""
         <div style='text-align: center; margin-bottom: 25px;'>
             <h3 style='color: white; font-size: 22px; margin: 0; padding: 0; font-weight: normal; letter-spacing: 1px;'>
@@ -106,34 +106,42 @@ def dashboard_main():
     data = cargar_kpis()
     
     if data:
-        df_n = data['nadadores']
-        df_t = data['tiempos']
-        df_r = data['relevos']
+        # Usamos .copy() para no alterar la caché y asegurar cálculos limpios
+        df_n = data['nadadores'].copy()
+        df_t = data['tiempos'].copy()
+        df_r = data['relevos'].copy()
         
-        # --- CÁLCULO DE MEDALLAS (INDIVIDUAL + RELEVOS) ---
-        # Convertimos a numérico para evitar errores
-        df_t['posicion'] = pd.to_numeric(df_t['posicion'], errors='coerce').fillna(0)
-        df_r['posicion'] = pd.to_numeric(df_r['posicion'], errors='coerce').fillna(0)
-        
-        # Conteo Individual
+        # --- CÁLCULO ROBUSTO DE MEDALLAS ---
+        # 1. Asegurar que 'posicion' sea número (convierte '1', '1.0' o 1 a número real)
+        if 'posicion' in df_t.columns:
+            df_t['posicion'] = pd.to_numeric(df_t['posicion'], errors='coerce').fillna(0)
+        else:
+            df_t['posicion'] = 0
+
+        if 'posicion' in df_r.columns:
+            df_r['posicion'] = pd.to_numeric(df_r['posicion'], errors='coerce').fillna(0)
+        else:
+            df_r['posicion'] = 0
+            
+        # 2. Conteo Individual
         oro_ind = len(df_t[df_t['posicion'] == 1])
         plata_ind = len(df_t[df_t['posicion'] == 2])
         bronce_ind = len(df_t[df_t['posicion'] == 3])
         
-        # Conteo Relevos (Cada relevo cuenta como 1 medalla para el club)
+        # 3. Conteo Relevos
         oro_rel = len(df_r[df_r['posicion'] == 1])
         plata_rel = len(df_r[df_r['posicion'] == 2])
         bronce_rel = len(df_r[df_r['posicion'] == 3])
         
-        # Totales
+        # 4. Totales Combinados
         tot_oro = oro_ind + oro_rel
         tot_plata = plata_ind + plata_rel
         tot_bronce = bronce_ind + bronce_rel
         tot_gral = tot_oro + tot_plata + tot_bronce
 
-        # --- SECCIÓN 1: KPIs (Lado a Lado en Mobile) ---
+        # --- SECCIÓN 1: KPIs ---
         cant_nad = len(df_n)
-        cant_reg = len(df_t)
+        cant_reg = len(df_t) + len(df_r) # Sumamos registros indiv + relevos para el total real
         
         st.markdown(f"""
         <div style="display: flex; justify-content: space-between; gap: 10px; margin-bottom: 10px;">
@@ -148,25 +156,25 @@ def dashboard_main():
         </div>
         """, unsafe_allow_html=True)
         
-        # --- NUEVA SECCIÓN: MEDALLERO HISTÓRICO (Horizontal Compacto) ---
+        # --- NUEVA SECCIÓN: MEDALLERO HISTÓRICO ---
         st.markdown(f"""
-        <div style="background-color: #1E1E1E; border: 1px solid #333; border-radius: 10px; padding: 10px; margin-bottom: 20px;">
-            <div style="text-align:center; font-size:12px; color:#aaa; margin-bottom:5px; letter-spacing:1px;">MEDALLERO HISTÓRICO</div>
-            <div style="display: flex; justify-content: space-between; gap: 5px;">
+        <div style="background-color: #1E1E1E; border: 1px solid #333; border-radius: 10px; padding: 12px; margin-bottom: 25px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+            <div style="text-align:center; font-size:11px; color:#aaa; margin-bottom:8px; letter-spacing:2px; font-weight:bold;">MEDALLERO HISTÓRICO (IND + RELEVOS)</div>
+            <div style="display: flex; justify-content: space-between; gap: 2px;">
                 <div style="flex:1; text-align:center;">
-                    <div style="font-size:20px; font-weight:bold; color:#FFD700;">🥇 {tot_oro}</div>
+                    <div style="font-size:22px; font-weight:bold; color:#FFD700;">🥇 {tot_oro}</div>
                     <div style="font-size:10px; color:#888;">ORO</div>
                 </div>
                 <div style="flex:1; text-align:center; border-left:1px solid #333;">
-                    <div style="font-size:20px; font-weight:bold; color:#C0C0C0;">🥈 {tot_plata}</div>
+                    <div style="font-size:22px; font-weight:bold; color:#C0C0C0;">🥈 {tot_plata}</div>
                     <div style="font-size:10px; color:#888;">PLATA</div>
                 </div>
                 <div style="flex:1; text-align:center; border-left:1px solid #333;">
-                    <div style="font-size:20px; font-weight:bold; color:#CD7F32;">🥉 {tot_bronce}</div>
+                    <div style="font-size:22px; font-weight:bold; color:#CD7F32;">🥉 {tot_bronce}</div>
                     <div style="font-size:10px; color:#888;">BRONCE</div>
                 </div>
                 <div style="flex:1; text-align:center; border-left:1px solid #333; background:rgba(255,255,255,0.05); border-radius:4px;">
-                    <div style="font-size:20px; font-weight:bold; color:#fff;">★ {tot_gral}</div>
+                    <div style="font-size:22px; font-weight:bold; color:#fff;">★ {tot_gral}</div>
                     <div style="font-size:10px; color:#888;">TOTAL</div>
                 </div>
             </div>
@@ -194,7 +202,7 @@ def dashboard_main():
             df_n['Categoria'] = df_n['Anio'].apply(calcular_categoria)
             
             tab_gen, tab_cat = st.tabs(["Género", "Categorías Master"])
-            escala_colores = alt.Scale(domain=['M', 'F'], range=['#1f77b4', '#FF69B4']) # Azul y Rosa
+            escala_colores = alt.Scale(domain=['M', 'F'], range=['#1f77b4', '#FF69B4']) 
 
             with tab_gen:
                 base = alt.Chart(df_n).encode(theta=alt.Theta("count()", stack=True))
@@ -229,7 +237,6 @@ def dashboard_main():
         if st.button("🔒 Cerrar Sesión Admin", type="primary"):
             logout()
     else:
-        # Candado oculto
         _, c_oculto = st.columns([10, 1]) 
         with c_oculto:
             if st.button("🔒", key="btn_unlock", type="tertiary"):
