@@ -1,187 +1,173 @@
 import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
-import time
+import altair as alt
+from datetime import datetime
 
-# --- 1. CONFIGURACIÓN INICIAL ---
-st.set_page_config(page_title="Acceso NOB", layout="centered")
+# --- CONFIGURACIÓN ---
+st.set_page_config(page_title="Inicio", layout="centered")
 
-# --- 2. GESTIÓN DE ESTADO ---
-if "role" not in st.session_state: st.session_state.role = None
-if "user_name" not in st.session_state: st.session_state.user_name = None
-if "user_id" not in st.session_state: st.session_state.user_id = None
-if "nro_socio" not in st.session_state: st.session_state.nro_socio = None
-if "admin_unlocked" not in st.session_state: st.session_state.admin_unlocked = False 
-if "ver_nadador_especifico" not in st.session_state: st.session_state.ver_nadador_especifico = None
+# --- SEGURIDAD ---
+if "role" not in st.session_state or not st.session_state.role:
+    st.switch_page("index.py") # Si entran directo por URL, los manda al login
 
-# --- 3. CONEXIÓN ---
+# --- ESTADO LOCAL ---
+if "show_login_form" not in st.session_state: st.session_state.show_login_form = False
+
+# --- CONEXIÓN ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 @st.cache_data(ttl="1h")
-def cargar_tablas_login():
+def cargar_data_dashboard():
     try:
         return {
             "nadadores": conn.read(worksheet="Nadadores"),
-            "users": conn.read(worksheet="User")
+            "tiempos": conn.read(worksheet="Tiempos"),
+            "relevos": conn.read(worksheet="Relevos"),
+            "categorias": conn.read(worksheet="Categorias")
         }
     except: return None
 
-# --- 4. FUNCIONES LOGIN / LOGOUT ---
-def limpiar_socio(valor):
-    if pd.isna(valor): return ""
-    return str(valor).split('.')[0].strip()
+db = cargar_data_dashboard()
 
-def validar_socio():
-    raw_input = st.session_state.input_socio
-    socio_limpio = raw_input.split("-")[0].strip()
+# --- FUNCIONES AUXILIARES ---
+def calcular_cat_exacta(edad, df_cat):
+    try:
+        for _, r in df_cat.iterrows():
+            if r['edad_min'] <= edad <= r['edad_max']: return r['nombre_cat']
+        return "-"
+    except: return "-"
+
+def calcular_categoria_grafico(anio_nac):
+    anio_actual = datetime.now().year
+    edad = anio_actual - anio_nac
+    if edad < 20: return "Juvenil"
+    elif 20 <= edad <= 24: return "PRE"
+    elif 25 <= edad <= 29: return "A"
+    elif 30 <= edad <= 34: return "B"
+    elif 35 <= edad <= 39: return "C"
+    elif 40 <= edad <= 44: return "D"
+    elif 45 <= edad <= 49: return "E"
+    elif 50 <= edad <= 54: return "F"
+    elif 55 <= edad <= 59: return "G"
+    elif 60 <= edad <= 64: return "H"
+    elif 65 <= edad <= 69: return "I"
+    elif 70 <= edad <= 74: return "J"
+    else: return "K+"
+
+def intentar_desbloqueo():
+    try:
+        sec_user = st.secrets["admin"]["usuario"]
+        sec_pass = st.secrets["admin"]["password"]
+    except:
+        sec_user = "entrenador"; sec_pass = "nob1903"
+
+    if st.session_state.u_in == sec_user and st.session_state.p_in == sec_pass: 
+        st.session_state.admin_unlocked = True
+        st.session_state.show_login_form = False
+        st.rerun() # Al recargar, index.py detectará el unlock y agregará "Carga" al menú
+    else: 
+        st.error("Credenciales incorrectas")
+
+# --- VISUALIZACIÓN ---
+
+# Header
+st.markdown("""
+    <div style='text-align: center; margin-bottom: 25px;'>
+        <h3 style='color: white; font-size: 20px; margin: 0;'>BIENVENIDOS AL COMPLEJO ACUÁTICO</h3>
+        <h1 style='color: #E30613; font-size: 32px; margin: 0; font-weight: 800;'>🔴⚫ NEWELL'S OLD BOYS ⚫🔴</h1>
+    </div>
+""", unsafe_allow_html=True)
+
+# Tarjeta Personal
+if db and st.session_state.user_id:
+    user_id = st.session_state.user_id
+    me = db['nadadores'][db['nadadores']['codnadador'] == user_id].iloc[0]
     
-    if not socio_limpio:
-        st.warning("Ingrese un número.")
-        return
-
-    db = cargar_tablas_login()
-    if db:
-        df_u = db['users'].copy()
-        df_n = db['nadadores'].copy()
-        
-        df_u['nrosocio_str'] = df_u['nrosocio'].apply(limpiar_socio)
-        df_n['nrosocio_str'] = df_n['nrosocio'].apply(limpiar_socio)
-        
-        usuario = df_u[df_u['nrosocio_str'] == socio_limpio]
-        
-        if not usuario.empty:
-            perfil = usuario.iloc[0]['perfil'].upper()
-            datos = df_n[df_n['nrosocio_str'] == socio_limpio]
-            
-            if not datos.empty:
-                st.session_state.role = perfil
-                st.session_state.user_name = f"{datos.iloc[0]['nombre']} {datos.iloc[0]['apellido']}"
-                st.session_state.user_id = datos.iloc[0]['codnadador']
-                st.session_state.nro_socio = socio_limpio
-                st.success(f"¡Bienvenido {datos.iloc[0]['nombre']}!")
-                time.sleep(0.5)
-                st.rerun()
-            else:
-                st.error("Socio válido pero sin ficha de nadador activa.")
-        else:
-            st.error("Número de socio no registrado.")
-
-def cerrar_sesion():
-    for key in st.session_state.keys():
-        del st.session_state[key]
-    st.rerun()
-
-# --- 5. PANTALLA DE LOGIN ---
-def login_screen():
-    # CSS para ocultar sidebar en login
-    st.markdown("""<style>[data-testid="stSidebar"] {display: none;}</style>""", unsafe_allow_html=True)
+    try: edad = datetime.now().year - pd.to_datetime(me['fechanac']).year
+    except: edad = 0
+    cat = calcular_cat_exacta(edad, db['categorias'])
     
-    st.markdown("""
-        <style>
-            .login-container {
-                text-align: center;
-                padding: 30px;
-                border-radius: 20px;
-                background: linear-gradient(180deg, #121212 0%, #000000 100%);
-                border: 2px solid #333;
-                margin-bottom: 20px;
-                box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-            }
-            .nob-title {
-                font-size: 38px;
-                font-weight: 900;
-                color: #E30613;
-                text-transform: uppercase;
-                margin: 10px 0 5px 0;
-                line-height: 1;
-                text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
-            }
-            .nob-quote {
-                font-size: 18px;
-                font-style: italic;
-                color: #ffffff;
-                margin-bottom: 20px;
-                font-family: serif;
-                letter-spacing: 1px;
-                opacity: 0.9;
-            }
-        </style>
-        <div class="login-container">
-            <div style="font-size: 40px; margin-bottom: 10px;">🔴⚫ 🏊 ⚫🔴</div>
-            <div class="nob-title">NEWELL'S OLD BOYS</div>
-            <div class="nob-quote">"Del deporte sos la gloria"</div>
+    df_t = db['tiempos'].copy(); df_r = db['relevos'].copy()
+    df_t['posicion'] = pd.to_numeric(df_t['posicion'], errors='coerce').fillna(0).astype(int)
+    df_r['posicion'] = pd.to_numeric(df_r['posicion'], errors='coerce').fillna(0).astype(int)
+    
+    mis_oros = len(df_t[(df_t['codnadador']==user_id)&(df_t['posicion']==1)]) + len(df_r[((df_r['nadador_1']==user_id)|(df_r['nadador_2']==user_id)|(df_r['nadador_3']==user_id)|(df_r['nadador_4']==user_id))&(df_r['posicion']==1)])
+    mis_platas = len(df_t[(df_t['codnadador']==user_id)&(df_t['posicion']==2)]) + len(df_r[((df_r['nadador_1']==user_id)|(df_r['nadador_2']==user_id)|(df_r['nadador_3']==user_id)|(df_r['nadador_4']==user_id))&(df_r['posicion']==2)])
+    mis_bronces = len(df_t[(df_t['codnadador']==user_id)&(df_t['posicion']==3)]) + len(df_r[((df_r['nadador_1']==user_id)|(df_r['nadador_2']==user_id)|(df_r['nadador_3']==user_id)|(df_r['nadador_4']==user_id))&(df_r['posicion']==3)])
+    mi_total = mis_oros + mis_platas + mis_bronces
+
+    st.write("### 👤 Tu Perfil")
+    st.markdown(f"""
+    <style>
+        .padron-card {{ background-color: #262730; border: 1px solid #444; border-radius: 12px; padding: 15px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 6px rgba(0,0,0,0.3); margin-bottom: 20px; transition: transform 0.2s; }}
+        .padron-card:hover {{ border-color: #E30613; transform: scale(1.01); cursor: pointer; }}
+        .p-total {{ font-size: 26px; color: #FFD700; font-weight: bold; }}
+    </style>
+    <div class="padron-card">
+        <div style="flex: 2; border-right: 1px solid #555;">
+            <div style="font-weight: bold; font-size: 18px; color: white;">{me['nombre']} {me['apellido']}</div>
+            <div style="font-size: 13px; color: #ccc;">{edad} años • {me['codgenero']}</div>
         </div>
-    """, unsafe_allow_html=True)
-    
-    st.markdown("<div style='text-align:center; color:#aaa; font-size:14px; margin-bottom:5px;'>ACCESO SOCIOS</div>", unsafe_allow_html=True)
-    st.text_input("Ingrese Nro de Socio", key="input_socio", placeholder="Ej: 123456-01", label_visibility="collapsed")
-    if st.button("INGRESAR", type="primary", use_container_width=True, key="btn_ingresar_login"):
-        validar_socio()
-
-# --- 6. DEFINICIÓN DE PÁGINAS ---
-pg_inicio = st.Page("pages/1_inicio.py", title="Inicio", icon="🏠")
-pg_datos = st.Page("pages/2_visualizar_datos.py", title="Base de Datos", icon="🗃️")
-pg_ranking = st.Page("pages/4_ranking.py", title="Ranking", icon="🏆")
-pg_simulador = st.Page("pages/3_simulador.py", title="Simulador", icon="⏱️")
-pg_carga = st.Page("pages/1_cargar_datos.py", title="Carga de Datos", icon="⚙️")
-pg_login_obj = st.Page(login_screen, title="Acceso", icon="🔒")
-
-# --- 7. RUTEO Y NAVEGACIÓN ---
-
-if not st.session_state.role:
-    pg = st.navigation([pg_login_obj])
-    pg.run()
-
-else:
-    # --- CSS PARA ORDENAR SIDEBAR (HEADER ARRIBA, MENU ABAJO) ---
-    st.markdown("""
-        <style>
-            /* Mueve el menú nativo hacia abajo */
-            [data-testid="stSidebarNav"] { order: 2; margin-top: 10px; }
-            /* Mueve nuestro contenido personalizado hacia arriba */
-            [data-testid="stSidebarUserContent"] { order: 1; }
-            
-            .user-header {
-                padding: 15px 10px;
-                text-align: center;
-                background: linear-gradient(180deg, #1e1e1e 0%, #121212 100%);
-                border-radius: 8px;
-                border: 1px solid #333;
-                margin-bottom: 10px;
-            }
-        </style>
-    """, unsafe_allow_html=True)
-
-    # DEFINICIÓN DEL MENÚ
-    menu_pages = {"Principal": [pg_inicio, pg_datos]}
-    
-    if st.session_state.role in ["M", "P"]:
-        menu_pages["Herramientas"] = [pg_ranking, pg_simulador]
-        if st.session_state.admin_unlocked:
-            menu_pages["Administración"] = [pg_carga]
-            
-    pg = st.navigation(menu_pages)
-    
-    # --- CONTENIDO SIDEBAR ---
-    with st.sidebar:
-        # 1. CABECERA (Nombre) - Eliminado el rol/perfil visualmente
-        nombre_mostrar = st.session_state.user_name.split()[0] if st.session_state.user_name else "Socio"
-        st.markdown(f"""
-        <div class="user-header">
-            <div style="font-size: 24px; margin-bottom: 5px;">🔴⚫</div>
-            <div style="font-weight: bold; font-size: 17px; color: white;">
-                Hola, {nombre_mostrar}
+        <div style="flex: 2; text-align: center;">
+            <div style="display: flex; justify-content: center; gap: 8px; font-size: 16px;">
+                <span>🥇{mis_oros}</span> <span>🥈{mis_platas}</span> <span>🥉{mis_bronces}</span>
             </div>
         </div>
-        """, unsafe_allow_html=True)
-        
-        # 2. El menú se renderiza automáticamente aquí por st.navigation (orden 2 por CSS)
+        <div style="flex: 1; text-align: right; border-left: 1px solid #555; padding-left: 10px;">
+            <div class="p-total">★ {mi_total}</div>
+            <div style="font-size: 16px; color: #4CAF50; font-weight: bold;">{cat}</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
     
-    # Ejecutamos la página
-    pg.run()
+    # Botón Ver Ficha (Redirige)
+    if st.button("Ver Mi Ficha Completa ➝", type="primary", use_container_width=True):
+        st.session_state.ver_nadador_especifico = st.session_state.user_name
+        st.switch_page("pages/2_visualizar_datos.py")
 
-    # Botón Cerrar Sesión al final de la barra
-    with st.sidebar:
-        st.divider()
-        if st.button("Cerrar Sesión", type="secondary", use_container_width=True, key="btn_logout_sidebar"):
-            cerrar_sesion()
+# Estadísticas Generales
+st.divider()
+with st.expander("📊 Ver Estadísticas Globales del Club", expanded=False):
+    if db:
+        df_n = db['nadadores'].copy()
+        df_n['Anio'] = pd.to_datetime(df_n['fechanac'], errors='coerce').dt.year
+        df_n['Categoria'] = df_n['Anio'].apply(calcular_categoria_grafico)
+        
+        c1, c2 = st.columns(2)
+        with c1:
+            st.metric("Nadadores", len(df_n))
+            base = alt.Chart(df_n).encode(theta=alt.Theta("count()", stack=True))
+            pie = base.mark_arc(outerRadius=60).encode(color=alt.Color("codgenero", legend=None))
+            st.altair_chart(pie, use_container_width=True)
+            
+        with c2:
+            st.metric("Registros", len(db['tiempos']) + len(db['relevos']))
+            chart = alt.Chart(df_n).mark_bar().encode(
+                x=alt.X('Categoria', sort=["Juvenil", "PRE", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K+"]), 
+                y='count()', color='codgenero'
+            ).properties(height=150)
+            st.altair_chart(chart, use_container_width=True)
+
+# Candado del Profesor (Solo si es M o P)
+if st.session_state.role in ["M", "P"]:
+    st.write(""); st.write("")
+    col_space, col_lock = st.columns([8, 1])
+    with col_lock:
+        if not st.session_state.admin_unlocked:
+            if st.button("🔒", help="Desbloquear Funciones Admin", type="tertiary"):
+                st.session_state.show_login_form = not st.session_state.get("show_login_form", False)
+        else:
+            if st.button("🔓", help="Bloquear Funciones Admin"):
+                st.session_state.admin_unlocked = False
+                st.rerun()
+
+    if st.session_state.get("show_login_form") and not st.session_state.get("admin_unlocked"):
+        with st.form("admin_login"):
+            st.write("**Acceso Profesor**")
+            st.text_input("Usuario", key="u_in")
+            st.text_input("Contraseña", type="password", key="p_in")
+            st.form_submit_button("Desbloquear", on_click=intentar_desbloqueo)
+    
+    if st.session_state.admin_unlocked:
+        st.success("✅ Modo Administración Activo: Se agregó 'Carga' al menú lateral.")
