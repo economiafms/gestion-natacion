@@ -14,9 +14,7 @@ if "user_name" not in st.session_state: st.session_state.user_name = None
 if "user_id" not in st.session_state: st.session_state.user_id = None
 if "nro_socio" not in st.session_state: st.session_state.nro_socio = None
 if "admin_unlocked" not in st.session_state: st.session_state.admin_unlocked = False 
-if "show_password" not in st.session_state: st.session_state.show_password = False
-# Variable clave para controlar a quién se muestra en la ficha
-if "nadador_seleccionado" not in st.session_state: st.session_state.nadador_seleccionado = None
+if "show_login_form" not in st.session_state: st.session_state.show_login_form = False # Controla visibilidad del form profe
 
 # --- 3. CONEXIÓN ---
 conn = st.connection("gsheets", type=GSheetsConnection)
@@ -65,7 +63,7 @@ def calcular_cat_exacta(edad, df_cat):
         return "-"
     except: return "-"
 
-# --- 5. LÓGICA LOGIN ---
+# --- 5. LÓGICA LOGIN SOCIO ---
 def validar_socio():
     raw_input = st.session_state.input_socio
     socio_limpio = raw_input.split("-")[0].strip()
@@ -101,15 +99,8 @@ def validar_socio():
 def cerrar_sesion():
     st.session_state.role = None
     st.session_state.admin_unlocked = False
-    st.session_state.nadador_seleccionado = None
+    st.session_state.show_login_form = False
     st.rerun()
-
-def intentar_desbloqueo():
-    if st.session_state.pass_input == "nob1903": 
-        st.session_state.admin_unlocked = True
-        st.session_state.show_password = False
-        st.rerun()
-    else: st.error("Incorrecto")
 
 # --- 6. COMPONENTES VISUALES ---
 def render_personal_card(user_id, db):
@@ -155,11 +146,8 @@ def render_personal_card(user_id, db):
     </div>
     """, unsafe_allow_html=True)
     
-    # --- LOGICA DEL BOTÓN ---
-    # Al hacer click, guardamos el nombre del usuario como 'nadador_seleccionado'
-    # Esto servirá para que la pagina de visualización sepa a quién cargar por defecto.
-    if st.button("Ver Mi Ficha Completa ➝", key=f"btn_ficha_{user_id}", type="primary", use_container_width=True):
-        st.session_state.nadador_seleccionado = st.session_state.user_name # Forzamos la selección
+    if st.button("Ver Mi Ficha Completa ➝", key="btn_ficha_main", type="primary", use_container_width=True):
+        st.session_state.nadador_seleccionado = st.session_state.user_name
         st.switch_page("pages/2_visualizar_datos.py")
     
     st.divider()
@@ -181,7 +169,7 @@ def render_graficos_comunes(df_n):
             chart = alt.Chart(df_n).mark_bar(cornerRadius=3).encode(x=alt.X('Categoria', sort=orden, title=None), y=alt.Y('count()', title=None), color=alt.Color('codgenero', legend=None, scale=colors), tooltip=['Categoria', 'codgenero', 'count()']).properties(height=200)
             st.altair_chart(chart, use_container_width=True)
 
-# --- 7. DASHBOARDS ---
+# --- 7. DASHBOARD COMÚN (Header y Club Stats) ---
 def dashboard_common_structure():
     st.markdown("""
         <div style='text-align: center; margin-bottom: 20px;'>
@@ -227,9 +215,12 @@ def dashboard_common_structure():
         """, unsafe_allow_html=True)
         render_graficos_comunes(db['nadadores'].copy())
 
+# --- 8. DASHBOARD M (MASTER - CON HERRAMIENTAS Y ADMIN) ---
 def dashboard_m():
     dashboard_common_structure()
     st.divider()
+    
+    # Herramientas del Profesor/Master
     c1, c2 = st.columns(2)
     with c1: 
         if st.button("🗃️ Base de Datos", use_container_width=True): st.switch_page("pages/2_visualizar_datos.py")
@@ -238,26 +229,43 @@ def dashboard_m():
     st.write("")
     if st.button("⏱️ Simulador de Postas", type="primary", use_container_width=True): st.switch_page("pages/3_simulador.py")
 
+    # --- ZONA DE ACCESO PROFESOR (CON CLAVE) ---
     st.write(""); st.write("")
     col_space, col_lock = st.columns([8, 1])
     with col_lock:
         if not st.session_state.admin_unlocked:
-            if st.button("🔒", key="lock_m", help="Acceso Admin", type="tertiary"):
-                st.session_state.show_password = not st.session_state.show_password
-    if st.session_state.show_password and not st.session_state.admin_unlocked:
-        c_pass, c_ok = st.columns([3, 1])
-        st.session_state.pass_input = c_pass.text_input("Clave", type="password", label_visibility="collapsed")
-        if c_ok.button("OK"): intentar_desbloqueo()
-    if st.session_state.admin_unlocked: st.success("🔓 Admin Activo.")
+            if st.button("🔒", key="lock_m", help="Acceso Profesor", type="tertiary"):
+                st.session_state.show_login_form = not st.session_state.show_login_form
+    
+    if st.session_state.show_login_form and not st.session_state.admin_unlocked:
+        with st.form("admin_login"):
+            st.markdown("###### Acceso Profesor")
+            u_in = st.text_input("Usuario")
+            p_in = st.text_input("Contraseña", type="password")
+            if st.form_submit_button("Desbloquear"):
+                if u_in == "profe" and p_in == "nob1903":
+                    st.session_state.admin_unlocked = True
+                    st.session_state.show_login_form = False
+                    st.rerun()
+                else:
+                    st.error("Credenciales incorrectas")
+    
+    if st.session_state.admin_unlocked:
+        st.success("🔓 Gestión Habilitada (Ver menú lateral)")
+        if st.button("Bloquear"):
+            st.session_state.admin_unlocked = False
+            st.rerun()
+
     st.divider()
     if st.button("Cerrar Sesión"): cerrar_sesion()
 
+# --- 9. DASHBOARD N (NADADOR - SOLO VISUAL) ---
 def dashboard_n():
     dashboard_common_structure()
     st.divider()
     if st.button("Cerrar Sesión", type="secondary"): cerrar_sesion()
 
-# --- 8. RUTEO ---
+# --- 10. RUTEO FINAL ---
 pg_dash_m = st.Page(dashboard_m, title="Inicio", icon="🏠")
 pg_dash_n = st.Page(dashboard_n, title="Mi Perfil", icon="🏊")
 pg_datos = st.Page("pages/2_visualizar_datos.py", title="Base de Datos", icon="🗃️")
