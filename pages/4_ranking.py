@@ -1,12 +1,10 @@
 import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
-import altair as alt
 
 # --- 1. CONFIGURACIÓN ---
-st.set_page_config(page_title="Ranking - NOB", layout="wide")
-st.title("🏆 Ranking de Mejores Nadadores")
-st.markdown("Visualizá los mejores tiempos históricos del equipo filtrando por prueba.")
+st.set_page_config(page_title="Ranking NOB", layout="centered") # Centered es mejor para mobile que Wide
+st.title("🏆 Ranking Histórico")
 
 conn = st.connection("gsheets", type=GSheetsConnection)
 
@@ -14,148 +12,148 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 @st.cache_data(ttl="1h")
 def cargar_datos_ranking():
     try:
-        data = {
+        return {
             "nadadores": conn.read(worksheet="Nadadores"),
             "tiempos": conn.read(worksheet="Tiempos"),
             "estilos": conn.read(worksheet="Estilos"),
             "distancias": conn.read(worksheet="Distancias"),
             "piletas": conn.read(worksheet="Piletas")
         }
-        return data
-    except Exception as e:
-        st.error(f"Error al conectar con GSheets: {e}")
-        return None
+    except: return None
 
 data = cargar_datos_ranking()
 if not data: st.stop()
 
-# --- 3. PRE-PROCESAMIENTO ---
+# --- 3. PROCESAMIENTO ---
 def tiempo_a_seg(t_str):
-    """Convierte mm:ss.cc a segundos para graficar."""
+    """Convierte tiempo texto a segundos para poder ordenar"""
     try:
         if isinstance(t_str, str):
             partes = t_str.replace('.', ':').split(':')
-            if len(partes) == 3:
-                return float(partes[0]) * 60 + float(partes[1]) + float(partes[2])/100
-            elif len(partes) == 2: # Caso ss.cc
-                return float(partes[0]) + float(partes[1])/100
-        return 999.0
-    except: return 999.0
+            if len(partes) == 3: return float(partes[0])*60 + float(partes[1]) + float(partes[2])/100
+            elif len(partes) == 2: return float(partes[0]) + float(partes[1])/100
+        return 9999.9
+    except: return 9999.9
 
-# Preparamos el DataFrame Maestro
-df_t = data['tiempos'].copy()
-df_n = data['nadadores'].copy()
-df_e = data['estilos'].copy()
-df_d = data['distancias'].copy()
-df_p = data['piletas'].copy()
+# Unificación de tablas
+df_full = data['tiempos'].merge(data['nadadores'], on='codnadador')
+df_full = df_full.merge(data['estilos'], on='codestilo')
+df_full = df_full.merge(data['distancias'], on='coddistancia')
+df_full = df_full.merge(data['piletas'], on='codpileta')
 
-# Crear Nombre Completo
-df_n['Nadador'] = df_n['apellido'].astype(str).str.upper() + ", " + df_n['nombre'].astype(str)
-
-# Merges (Unir todas las tablas en una sola para filtrar fácil)
-df_full = df_t.merge(df_n, on='codnadador', how='left')
-df_full = df_full.merge(df_e, on='codestilo', how='left', suffixes=('', '_est'))
-df_full = df_full.merge(df_d, on='coddistancia', how='left', suffixes=('', '_dist'))
-df_full = df_full.merge(df_p, on='codpileta', how='left', suffixes=('', '_pil'))
-
-# Calcular segundos para ordenamiento
+# Nombre legible y segundos
+df_full['Nadador'] = df_full['apellido'].str.upper() + ", " + df_full['nombre'].str.title()
 df_full['Segundos'] = df_full['tiempo'].apply(tiempo_a_seg)
-df_full['Año'] = pd.to_datetime(df_full['fecha']).dt.year
 
-# Renombrar columnas para claridad
-df_full.rename(columns={
-    'descripcion': 'Estilo', 
-    'descripcion_dist': 'Distancia',
-    'medida': 'Pileta',
-    'club': 'Sede'
-}, inplace=True)
-
-# --- 4. FILTROS LATERALES ---
+# --- 4. FILTROS (SIDEBAR) ---
 with st.sidebar:
-    st.header("🔍 Filtros de Ranking")
+    st.header("Filtros")
+    f_gen = st.radio("Género", ["Masculino", "Femenino", "Todos"], index=2)
     
-    # Filtro Género
-    f_gen = st.radio("Género", ["Masculino", "Femenino", "Todos"], index=0)
-    map_gen = {"Masculino": "M", "Femenino": "F"}
-    
-    # Filtro Pileta (Importante: 25m vs 50m son tiempos distintos)
-    opt_pil = sorted(df_full['Pileta'].dropna().unique())
-    f_pil = st.selectbox("Tamaño de Pileta", opt_pil, index=0 if opt_pil else None)
+    # Filtro Pileta (Esencial separar 25m de 50m)
+    piletas_disp = sorted(df_full['medida'].unique())
+    f_pil = st.selectbox("Pileta", piletas_disp, index=0 if piletas_disp else None)
     
     # Filtro Estilo
-    opt_est = df_full['Estilo'].dropna().unique()
-    f_est = st.selectbox("Estilo", opt_est, index=0 if len(opt_est)>0 else None)
+    estilos_disp = df_full['descripcion_x'].unique()
+    f_est = st.selectbox("Estilo", estilos_disp)
     
-    # Filtro Distancia
-    # Filtramos distancias disponibles para ese estilo para que sea reactivo
-    dist_disponibles = df_full[df_full['Estilo'] == f_est]['Distancia'].unique() if f_est else []
-    f_dist = st.selectbox("Distancia", sorted(dist_disponibles), index=0 if len(dist_disponibles)>0 else None)
+    # Filtro Distancia (Reactivo al estilo)
+    dist_disp = sorted(df_full[df_full['descripcion_x'] == f_est]['descripcion_y'].unique()) if f_est else []
+    f_dist = st.selectbox("Distancia", dist_disp)
 
-    top_n = st.slider("Mostrar Top", 5, 50, 10)
-
-# --- 5. LÓGICA DE FILTRADO Y MEJORES MARCAS ---
+# --- 5. LÓGICA DE RANKING ---
 if f_est and f_dist and f_pil:
-    # 1. Filtrar base
-    df_filtrado = df_full[
-        (df_full['Estilo'] == f_est) & 
-        (df_full['Distancia'] == f_dist) & 
-        (df_full['Pileta'] == f_pil)
-    ]
+    # 1. Filtrar
+    df_r = df_full[
+        (df_full['descripcion_x'] == f_est) & 
+        (df_full['descripcion_y'] == f_dist) & 
+        (df_full['medida'] == f_pil)
+    ].copy()
     
-    # 2. Filtrar género
     if f_gen != "Todos":
-        df_filtrado = df_filtrado[df_filtrado['codgenero'] == map_gen[f_gen]]
+        cod_g = "M" if f_gen == "Masculino" else "F"
+        df_r = df_r[df_r['codgenero'] == cod_g]
 
-    # 3. OBTENER PERSONAL BEST (PB)
-    # Agrupamos por nadador y nos quedamos con el tiempo mínimo (el más rápido)
-    # idx_min obtendrá los índices de las filas con el tiempo mínimo
-    if not df_filtrado.empty:
-        idx_min = df_filtrado.groupby('codnadador')['Segundos'].idxmin()
-        df_ranking = df_filtrado.loc[idx_min].sort_values('Segundos').head(top_n).reset_index(drop=True)
+    if not df_r.empty:
+        # 2. Personal Best (Mejor tiempo histórico por nadador)
+        # Ordenamos por tiempo y quitamos duplicados de nadador (nos quedamos con el mejor)
+        df_ranking = df_r.sort_values('Segundos').drop_duplicates(subset=['codnadador'], keep='first')
+        df_ranking = df_ranking.reset_index(drop=True)
+        df_ranking['Puesto'] = df_ranking.index + 1
         
-        # Agregamos columna de Puesto
-        df_ranking.index = df_ranking.index + 1
-        df_ranking['Puesto'] = df_ranking.index
+        # Calcular diferencia con el 1ro para la barra visual
+        mejor_tiempo = df_ranking.iloc[0]['Segundos']
+        # Invertimos la lógica para la barra de progreso (1.0 es el mejor, el resto baja)
+        df_ranking['Rendimiento'] = mejor_tiempo / df_ranking['Segundos'] 
 
-        # --- 6. VISUALIZACIÓN ---
+        # --- 6. VISUALIZACIÓN MOBILE FIRST ---
         
-        # Tarjetas de Podio
-        if len(df_ranking) >= 3:
-            c1, c2, c3 = st.columns(3)
-            c2.metric("🥇 1er Puesto", f"{df_ranking.iloc[0]['Nadador']}", f"{df_ranking.iloc[0]['tiempo']}")
-            c1.metric("🥈 2do Puesto", f"{df_ranking.iloc[1]['Nadador']}", f"{df_ranking.iloc[1]['tiempo']}")
-            c3.metric("🥉 3er Puesto", f"{df_ranking.iloc[2]['Nadador']}", f"{df_ranking.iloc[2]['tiempo']}")
-            st.divider()
+        # EL CAMPEÓN (Tarjeta Gigante)
+        top1 = df_ranking.iloc[0]
+        st.markdown(f"""
+        <div style="background-color: #FFD700; padding: 20px; border-radius: 15px; text-align: center; color: black; box-shadow: 0 4px 8px rgba(0,0,0,0.2); margin-bottom: 20px;">
+            <div style="font-size: 50px;">🥇</div>
+            <div style="font-size: 24px; font-weight: bold;">{top1['tiempo']}</div>
+            <div style="font-size: 18px;">{top1['Nadador']}</div>
+            <div style="font-size: 12px; opacity: 0.8;">{top1['club']} - {top1['fecha']}</div>
+        </div>
+        """, unsafe_allow_html=True)
 
-        # Gráfico de Barras con Altair
-        st.subheader(f"📊 Gráfico: {f_dist} {f_est} ({f_pil})")
+        # SEGUNDO Y TERCERO (Si existen)
+        c2, c3 = st.columns(2)
+        if len(df_ranking) > 1:
+            top2 = df_ranking.iloc[1]
+            c2.markdown(f"""
+            <div style="background-color: #C0C0C0; padding: 15px; border-radius: 10px; text-align: center; color: black; margin-bottom: 10px;">
+                <div style="font-size: 30px;">🥈</div>
+                <div style="font-weight: bold; font-size: 18px;">{top2['tiempo']}</div>
+                <div style="font-size: 14px;">{top2['Nadador'].split(',')[0]}</div>
+            </div>
+            """, unsafe_allow_html=True)
         
-        chart = alt.Chart(df_ranking).mark_bar().encode(
-            x=alt.X('Segundos', title='Segundos', scale=alt.Scale(zero=False)), # Zero=False para resaltar diferencias
-            y=alt.Y('Nadador', sort='x', title=''),
-            color=alt.Color('Segundos', legend=None, scale=alt.Scale(scheme='teals')),
-            tooltip=['Nadador', 'tiempo', 'fecha', 'Sede']
-        ).properties(height=400)
+        if len(df_ranking) > 2:
+            top3 = df_ranking.iloc[2]
+            c3.markdown(f"""
+            <div style="background-color: #CD7F32; padding: 15px; border-radius: 10px; text-align: center; color: black; margin-bottom: 10px;">
+                <div style="font-size: 30px;">🥉</div>
+                <div style="font-weight: bold; font-size: 18px;">{top3['tiempo']}</div>
+                <div style="font-size: 14px;">{top3['Nadador'].split(',')[0]}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        # TABLA GENERAL (Mejorada para entender visualmente)
+        st.subheader("Clasificación General")
         
-        text = chart.mark_text(
-            align='left',
-            baseline='middle',
-            dx=3,
-            color='white' 
-        ).encode(
-            text='tiempo'
-        )
-
-        st.altair_chart(chart + text, use_container_width=True)
-
-        # Tabla de Datos
-        st.subheader("📝 Tabla de Posiciones")
+        # Configuramos la tabla para que sea interactiva y visual
         st.dataframe(
-            df_ranking[['Puesto', 'Nadador', 'tiempo', 'fecha', 'Sede']],
+            df_ranking[['Puesto', 'Nadador', 'tiempo', 'fecha', 'club', 'Rendimiento']],
+            hide_index=True,
             use_container_width=True,
-            hide_index=True
+            column_config={
+                "Puesto": st.column_config.NumberColumn(
+                    "#", format="%d", width="small"
+                ),
+                "Nadador": st.column_config.TextColumn(
+                    "Atleta", width="medium"
+                ),
+                "tiempo": st.column_config.TextColumn(
+                    "Marca", width="small"
+                ),
+                "fecha": st.column_config.DateColumn(
+                    "Fecha", format="DD/MM/YY", width="small"
+                ),
+                "club": "Sede",
+                "Rendimiento": st.column_config.ProgressColumn(
+                    "Nivel",
+                    help="Comparación visual con el primer puesto",
+                    format=" ", # Oculta el número, deja solo la barra
+                    min_value=0,
+                    max_value=1,
+                ),
+            }
         )
     else:
-        st.info("No hay tiempos registrados con estos filtros.")
+        st.info("No hay tiempos registrados para esta prueba todavía.")
 else:
-    st.warning("Selecciona los filtros en la barra lateral para ver el ranking.")
+    st.write("👈 Selecciona los filtros para ver el ranking.")
