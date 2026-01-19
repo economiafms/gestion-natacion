@@ -68,7 +68,7 @@ def calcular_cat_exacta(edad, df_cat):
 def validar_socio():
     raw_input = st.session_state.input_socio
     socio_limpio = raw_input.split("-")[0].strip()
-
+    
     if not socio_limpio:
         st.warning("Ingrese un número.")
         return
@@ -76,16 +76,16 @@ def validar_socio():
     if db:
         df_u = db['users']
         df_n = db['nadadores']
-
+        
         df_u['nrosocio_str'] = df_u['nrosocio'].apply(limpiar_socio)
         df_n['nrosocio_str'] = df_n['nrosocio'].apply(limpiar_socio)
-
+        
         usuario = df_u[df_u['nrosocio_str'] == socio_limpio]
-
+        
         if not usuario.empty:
             perfil = usuario.iloc[0]['perfil'].upper()
             datos = df_n[df_n['nrosocio_str'] == socio_limpio]
-
+            
             if not datos.empty:
                 st.session_state.role = perfil
                 st.session_state.user_name = f"{datos.iloc[0]['nombre']} {datos.iloc[0]['apellido']}"
@@ -125,15 +125,15 @@ def render_personal_card(user_id, db):
     me_rows = df_nad[df_nad['codnadador'] == user_id]
     if me_rows.empty: return
     me = me_rows.iloc[0]
-
+    
     try: edad = datetime.now().year - pd.to_datetime(me['fechanac']).year
     except: edad = 0
     cat = calcular_cat_exacta(edad, db['categorias'])
-
+    
     df_t = db['tiempos'].copy(); df_r = db['relevos'].copy()
     df_t['posicion'] = pd.to_numeric(df_t['posicion'], errors='coerce').fillna(0)
     df_r['posicion'] = pd.to_numeric(df_r['posicion'], errors='coerce').fillna(0)
-
+    
     mi_oro = len(df_t[(df_t['codnadador']==user_id)&(df_t['posicion']==1)]) + len(df_r[((df_r['nadador_1']==user_id)|(df_r['nadador_2']==user_id)|(df_r['nadador_3']==user_id)|(df_r['nadador_4']==user_id))&(df_r['posicion']==1)])
     mi_plata = len(df_t[(df_t['codnadador']==user_id)&(df_t['posicion']==2)]) + len(df_r[((df_r['nadador_1']==user_id)|(df_r['nadador_2']==user_id)|(df_r['nadador_3']==user_id)|(df_r['nadador_4']==user_id))&(df_r['posicion']==2)])
     mi_bronce = len(df_t[(df_t['codnadador']==user_id)&(df_t['posicion']==3)]) + len(df_r[((df_r['nadador_1']==user_id)|(df_r['nadador_2']==user_id)|(df_r['nadador_3']==user_id)|(df_r['nadador_4']==user_id))&(df_r['posicion']==3)])
@@ -162,11 +162,11 @@ def render_personal_card(user_id, db):
         </div>
     </div>
     """, unsafe_allow_html=True)
-
+    
     if st.button("Ver Mi Ficha Completa ➝", key="btn_ficha_main", type="primary", use_container_width=True):
         st.session_state.nadador_seleccionado = st.session_state.user_name
         st.switch_page("pages/2_visualizar_datos.py")
-
+    
     st.divider()
 
 def render_graficos_comunes(df_n):
@@ -186,7 +186,6 @@ def render_graficos_comunes(df_n):
             chart = alt.Chart(df_n).mark_bar(cornerRadius=3).encode(x=alt.X('Categoria', sort=orden, title=None), y=alt.Y('count()', title=None), color=alt.Color('codgenero', legend=None, scale=colors), tooltip=['Categoria', 'codgenero', 'count()']).properties(height=200)
             st.altair_chart(chart, use_container_width=True)
 
-# --- 7. DASHBOARD COMÚN ---
 # --- 7. DASHBOARD COMÚN (Header y Club Stats) ---
 def dashboard_common_structure():
     st.markdown("""
@@ -209,7 +208,7 @@ def dashboard_common_structure():
         t_plata = len(df_t[df_t['posicion']==2]) + len(df_r[df_r['posicion']==2])
         t_bronce = len(df_t[df_t['posicion']==3]) + len(df_r[df_r['posicion']==3])
         total_med = t_oro + t_plata + t_bronce
-
+        
         st.markdown(f"""
         <div style="display: flex; justify-content: space-between; gap: 10px; margin-bottom: 10px;">
             <div style="background-color: #262730; padding: 15px; border-radius: 10px; width: 48%; text-align: center; border: 1px solid #444; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
@@ -237,7 +236,7 @@ def dashboard_common_structure():
 def dashboard_m():
     dashboard_common_structure()
     st.divider()
-
+    
     c1, c2 = st.columns(2)
     with c1: 
         if st.button("🗃️ Base de Datos", use_container_width=True): st.switch_page("pages/2_visualizar_datos.py")
@@ -253,14 +252,14 @@ def dashboard_m():
         if not st.session_state.admin_unlocked:
             if st.button("🔒", key="lock_m", help="Acceso Profesor", type="tertiary"):
                 st.session_state.show_login_form = not st.session_state.show_login_form
-
+    
     if st.session_state.show_login_form and not st.session_state.admin_unlocked:
         with st.form("admin_login"):
             st.markdown("###### Acceso Profesor")
             st.text_input("Usuario", key="u_in")
             st.text_input("Contraseña", type="password", key="p_in")
             st.form_submit_button("Desbloquear", on_click=intentar_desbloqueo)
-
+    
     if st.session_state.admin_unlocked:
         st.success("🔓 Gestión Habilitada (Ver menú lateral)")
         if st.button("Bloquear"):
@@ -318,15 +317,14 @@ if not st.session_state.role:
         </style>
         
         <div class="login-container">
-            <div style="font-size: 40px; margin-bottom: 10px;">🔴⚫ 🏊 👧👦 🏊 ⚫🔴</div>
             <div style="font-size: 40px; margin-bottom: 10px;">🔴⚫ 🏊 ⚫🔴</div>
             <div class="nob-title">NEWELL'S OLD BOYS</div>
             <div class="nob-quote">"Del deporte sos la gloria"</div>
         </div>
     """, unsafe_allow_html=True)
-
+    
     st.markdown("<div style='text-align:center; color:#aaa; font-size:14px; margin-bottom:5px;'>ACCESO SOCIOS</div>", unsafe_allow_html=True)
-
+    
     st.text_input("Ingrese Nro de Socio", key="input_socio", placeholder="Ej: 123456-01", label_visibility="collapsed")
     if st.button("INGRESAR", type="primary", use_container_width=True): validar_socio()
 
@@ -338,4 +336,4 @@ elif st.session_state.role == "M":
 
 elif st.session_state.role == "N":
     pg = st.navigation([pg_dash_n, pg_datos])
-
+    pg.run()
