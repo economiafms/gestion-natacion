@@ -113,12 +113,17 @@ with st.container(border=True):
     for i, (nom_e, cod_e) in enumerate(legs):
         aptos = df_nad[df_nad['codnadador'].isin(df_tiempos_50[df_tiempos_50['codestilo'] == cod_e]['codnadador'])]
         if s_gen != "X": aptos = aptos[aptos['codgenero'] == s_gen]
-        # Usamos label_visibility para limpiar la interfaz visualmente
         with cols[i % 2]:
             n_sel.append(st.selectbox(f"{i+1}. {nom_e}", sorted(aptos['Nombre Completo'].tolist()), index=None, key=f"man_sel_{i}"))
 
     if st.button("🚀 Calcular Posta", use_container_width=True):
-        if len(set(n_sel)) == 4 and None not in n_sel:
+        # --- VALIDACIONES (Nueva Lógica) ---
+        if None in n_sel:
+            st.warning("⚠️ Debes seleccionar los 4 nadadores para calcular.")
+        elif len(set(n_sel)) < 4:
+            st.error("⛔ **Error:** Has seleccionado al mismo nadador más de una vez. El equipo debe tener 4 integrantes distintos.")
+        else:
+            # Si pasa las validaciones, ejecutamos el cálculo
             m_loc = {n: {r['codestilo']: r['segundos_calc'] for _, r in df_tiempos_50[df_tiempos_50['codnadador'] == df_nad[df_nad['Nombre Completo'] == n]['codnadador'].iloc[0]].iterrows()} for n in n_sel}
             
             tiempos_p = [m_loc[n_sel[i]].get(legs[i][1], 999.0) for i in range(4)]
@@ -133,14 +138,12 @@ with st.container(border=True):
             for i in range(4):
                 t_cols[i].metric(n_sel[i].split(',')[0], seg_a_tiempo(tiempos_p[i]), delta=legs[i][0])
 
-            # --- LÓGICA DE OBSERVACIONES (Solo si existen) ---
+            # --- LÓGICA DE OBSERVACIONES ---
             obs_lista = []
             
-            # 1. Competitividad
             comp = analizar_competitividad(total, se, s_gen)
             if comp: obs_lista.append(comp)
             
-            # 2. Antecedentes
             ids_a = sorted([int(df_nad[df_nad['Nombre Completo'] == n]['codnadador'].iloc[0]) for n in n_sel])
             hist = data['relevos'][data['relevos'].apply(lambda r: sorted([int(r['nadador_1']), int(r['nadador_2']), int(r['nadador_3']), int(r['nadador_4'])]) == ids_a if pd.notnull(r['nadador_1']) else False, axis=1)]
             if not hist.empty:
@@ -148,7 +151,6 @@ with st.container(border=True):
                 ip = dict_piletas.get(ant['codpileta'], {"club": "?", "medida": "-"})
                 obs_lista.append(f"⏱️ **ANTECEDENTE:** {ant['tiempo_final']} en {ip['club']} ({ip['medida']}) el {ant['fecha']}.")
             
-            # 3. Optimización de orden
             mejor_t, mejor_o = total, n_sel
             for p in itertools.permutations(n_sel):
                 tp = sum([m_loc[p[idx]].get(legs[idx][1], 999.0) for idx in range(4)])
@@ -156,7 +158,6 @@ with st.container(border=True):
             if mejor_t < total:
                 obs_lista.append(f"💡 **ORDEN:** Bajan a **{seg_a_tiempo(mejor_t)}** cambiando el orden de salida.")
 
-            # RENDERIZAR OBSERVACIONES SI EXISTEN
             if obs_lista:
                 st.markdown("---")
                 st.markdown("### 📋 Observaciones")
@@ -210,7 +211,6 @@ if st.button("🪄 Generar Estrategia", type="primary", use_container_width=True
                                 cs[j].write(row['eq'][j].split(',')[0]) # Solo apellido
                                 cs[j].code(seg_a_tiempo(m_map[row['eq'][j]].get(legs_o[j][0], 999.0)))
                             
-                            # Observaciones Condicionales
                             comp_g = analizar_competitividad(row['t'], row['se'], o_gen)
                             if comp_g:
                                 st.markdown("**Observaciones:**")
