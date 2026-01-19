@@ -186,7 +186,7 @@ def render_graficos_comunes(df_n):
             chart = alt.Chart(df_n).mark_bar(cornerRadius=3).encode(x=alt.X('Categoria', sort=orden, title=None), y=alt.Y('count()', title=None), color=alt.Color('codgenero', legend=None, scale=colors), tooltip=['Categoria', 'codgenero', 'count()']).properties(height=200)
             st.altair_chart(chart, use_container_width=True)
 
-# --- 7. DASHBOARD COMÚN ---
+# --- 7. DASHBOARD COMÚN (Header y Club Stats) ---
 def dashboard_common_structure():
     st.markdown("""
         <div style='text-align: center; margin-bottom: 20px;'>
@@ -317,7 +317,7 @@ if not st.session_state.role:
         </style>
         
         <div class="login-container">
-            <div style="font-size: 40px; margin-bottom: 10px;">🔴⚫ 🏊 👧👦 🏊 ⚫🔴</div>
+            <div style="font-size: 40px; margin-bottom: 10px;">🔴⚫ 🏊 ⚫🔴</div>
             <div class="nob-title">NEWELL'S OLD BOYS</div>
             <div class="nob-quote">"Del deporte sos la gloria"</div>
         </div>
