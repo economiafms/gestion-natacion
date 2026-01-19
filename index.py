@@ -8,7 +8,7 @@ import time
 # --- 1. CONFIGURACIÓN DEL SITIO ---
 st.set_page_config(page_title="NOB Natación", layout="centered", initial_sidebar_state="collapsed")
 
-# --- 2. GESTIÓN DE ESTADO Y LOGIN (Lógica de Seguridad) ---
+# --- 2. GESTIÓN DE ESTADO Y LOGIN ---
 if "admin_mode" not in st.session_state:
     st.session_state.admin_mode = False
 
@@ -89,13 +89,15 @@ def calcular_categoria(anio_nac):
 
 # --- 6. DASHBOARD PRINCIPAL ---
 def dashboard_main():
-    # --- TÍTULO PERSONALIZADO ---
-    # Usamos HTML centrado con los colores de NOB
+    # --- TÍTULO PERSONALIZADO (ROJO Y NEGRO) ---
     st.markdown("""
-        <div style='text-align: center; margin-bottom: 20px;'>
-            <h2 style='color: white; font-size: 24px; margin: 0; padding: 0;'>
-                🔴⚫ BIENVENIDOS AL COMPLEJO <br> ACUÁTICO DE NEWELL'S OLD BOYS ⚫🔴
-            </h2>
+        <div style='text-align: center; margin-bottom: 25px;'>
+            <h3 style='color: white; font-size: 22px; margin: 0; padding: 0; font-weight: normal; letter-spacing: 1px;'>
+                BIENVENIDOS AL COMPLEJO ACUÁTICO
+            </h3>
+            <h1 style='color: #E30613; font-size: 36px; margin-top: 5px; padding: 0; font-weight: 800; text-transform: uppercase; text-shadow: 2px 2px 4px #000000;'>
+                🔴⚫ NEWELL'S OLD BOYS ⚫🔴
+            </h1>
         </div>
     """, unsafe_allow_html=True)
     
@@ -107,20 +109,20 @@ def dashboard_main():
         df_n = data['nadadores']
         df_t = data['tiempos']
         
-        # --- SECCIÓN 1: KPIs (FORZADOS HORIZONTALES) ---
-        # Usamos HTML Flexbox para que NO se apilen en el celular
+        # --- SECCIÓN 1: KPIs (Lado a Lado en Mobile) ---
         cant_nad = len(df_n)
         cant_reg = len(df_t)
         
+        # Usamos Flexbox para asegurar que queden horizontales en celular
         st.markdown(f"""
         <div style="display: flex; justify-content: space-between; gap: 10px; margin-bottom: 20px;">
-            <div style="background-color: #262730; padding: 15px; border-radius: 10px; width: 48%; text-align: center; border: 1px solid #444;">
+            <div style="background-color: #262730; padding: 15px; border-radius: 10px; width: 48%; text-align: center; border: 1px solid #444; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
                 <div style="font-size: 32px; font-weight: bold; color: white;">{cant_nad}</div>
-                <div style="font-size: 14px; color: #aaa;">🏊‍♂️ Nadadores</div>
+                <div style="font-size: 13px; color: #ccc; text-transform: uppercase;">🏊‍♂️ Nadadores</div>
             </div>
-            <div style="background-color: #262730; padding: 15px; border-radius: 10px; width: 48%; text-align: center; border: 1px solid #444;">
+            <div style="background-color: #262730; padding: 15px; border-radius: 10px; width: 48%; text-align: center; border: 1px solid #444; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
                 <div style="font-size: 32px; font-weight: bold; color: white;">{cant_reg}</div>
-                <div style="font-size: 14px; color: #aaa;">⏱️ Registros</div>
+                <div style="font-size: 13px; color: #ccc; text-transform: uppercase;">⏱️ Registros</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
