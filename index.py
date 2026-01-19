@@ -24,7 +24,7 @@ def cargar_auth():
             "users": conn.read(worksheet="User"),
             "tiempos": conn.read(worksheet="Tiempos"),
             "relevos": conn.read(worksheet="Relevos"),
-            "categorias": conn.read(worksheet="Categorias") # Necesario para la card
+            "categorias": conn.read(worksheet="Categorias") 
         }
     except: return None
 
@@ -38,12 +38,19 @@ def calcular_categoria(edad, df_cat):
         return "-"
     except: return "-"
 
+# Función para limpiar el Nro de Socio (Quitar decimales .0 y espacios)
+def limpiar_socio(valor):
+    if pd.isna(valor): return ""
+    # Convertir a string, quitar decimales si es float (ej: 123.0 -> 123) y espacios
+    return str(valor).split('.')[0].strip()
+
 # --- 5. LÓGICA DE LOGIN ---
 def validar_socio():
     raw_input = st.session_state.input_socio
-    socio_limpio = raw_input.split("-")[0].strip()
+    # Tomamos lo que está antes del guion
+    socio_input_limpio = raw_input.split("-")[0].strip()
     
-    if not socio_limpio:
+    if not socio_input_limpio:
         st.warning("Ingrese un número.")
         return
 
@@ -51,33 +58,40 @@ def validar_socio():
         df_u = db['users']
         df_n = db['nadadores']
         
-        df_u['nrosocio'] = df_u['nrosocio'].astype(str).str.strip()
-        df_n['nrosocio'] = df_n['nrosocio'].astype(str).str.strip()
+        # --- CORRECCIÓN CRÍTICA: Estandarizar columnas a texto plano ---
+        # Aplicamos la limpieza a toda la columna para que coincida con el input
+        df_u['nrosocio_str'] = df_u['nrosocio'].apply(limpiar_socio)
+        df_n['nrosocio_str'] = df_n['nrosocio'].apply(limpiar_socio)
         
-        usuario = df_u[df_u['nrosocio'] == socio_limpio]
+        # Buscar en tabla User usando la nueva columna limpia
+        usuario = df_u[df_u['nrosocio_str'] == socio_input_limpio]
         
         if not usuario.empty:
             perfil = usuario.iloc[0]['perfil'].upper()
-            datos = df_n[df_n['nrosocio'] == socio_limpio]
+            
+            # Buscar en Nadadores también con la columna limpia
+            datos = df_n[df_n['nrosocio_str'] == socio_input_limpio]
             
             if not datos.empty:
                 st.session_state.role = perfil
                 st.session_state.user_name = f"{datos.iloc[0]['nombre']} {datos.iloc[0]['apellido']}"
                 st.session_state.user_id = datos.iloc[0]['codnadador']
-                st.session_state.nro_socio = socio_limpio
+                st.session_state.nro_socio = socio_input_limpio
+                
                 st.success(f"¡Bienvenido {datos.iloc[0]['nombre']}!")
                 time.sleep(0.5)
                 st.rerun()
             else:
-                st.error("Perfil activo pero sin datos de nadador asociados.")
+                st.error("Perfil activo en User, pero no encontramos tus datos en la hoja Nadadores.")
         else:
             st.error("Número de socio no registrado en el sistema.")
 
 def cerrar_sesion():
     st.session_state.role = None
+    st.session_state.user_name = None
     st.rerun()
 
-# --- ESTILOS CSS (Unificados para Index y Card) ---
+# --- ESTILOS CSS ---
 st.markdown("""
 <style>
     /* Tarjeta tipo Padrón */
@@ -117,7 +131,6 @@ st.markdown("""
 
 # --- 6. DASHBOARD "M" (MASTER / GENERAL) ---
 def dashboard_m():
-    # TÍTULO INSTITUCIONAL
     st.markdown("""
         <div style='text-align: center; margin-bottom: 25px;'>
             <h3 style='color: white; font-size: 22px; margin: 0; font-weight: normal; letter-spacing: 1px;'>BIENVENIDOS AL COMPLEJO ACUÁTICO</h3>
@@ -140,7 +153,6 @@ def dashboard_m():
         t_bronce = len(df_t[df_t['posicion']==3]) + len(df_r[df_r['posicion']==3])
         total_med = t_oro + t_plata + t_bronce
         
-        # KPIs Club
         st.markdown(f"""
         <div style="display: flex; justify-content: space-between; gap: 10px; margin-bottom: 10px;">
             <div class="kpi-box"><div style="font-size: 32px; font-weight: bold; color: white;">{len(df_nad)}</div><div style="font-size: 13px; color: #ccc;">🏊‍♂️ Nadadores</div></div>
@@ -157,7 +169,6 @@ def dashboard_m():
         </div>
         """, unsafe_allow_html=True)
         
-        # Botones M
         c1, c2 = st.columns(2)
         with c1: 
             if st.button("🗃️ Base de Datos", use_container_width=True): st.switch_page("pages/2_visualizar_datos.py")
@@ -171,7 +182,6 @@ def dashboard_m():
 
 # --- 7. DASHBOARD "N" (NADADOR - HÍBRIDO) ---
 def dashboard_n():
-    # 1. ENCABEZADO IDÉNTICO AL GENERAL (Requerido)
     st.markdown("""
         <div style='text-align: center; margin-bottom: 25px;'>
             <h3 style='color: white; font-size: 22px; margin: 0; font-weight: normal; letter-spacing: 1px;'>BIENVENIDOS AL COMPLEJO ACUÁTICO</h3>
@@ -182,12 +192,10 @@ def dashboard_n():
     st.divider()
     
     if db:
-        # Calcular KPIs globales para mostrar contexto del club
         df_nad_club = db['nadadores']
         df_t_club = db['tiempos']
         df_r_club = db['relevos']
         
-        # --- CÁLCULOS ESPECÍFICOS DEL NADADOR LOGUEADO ---
         my_id = st.session_state.user_id
         
         # Datos Personales
@@ -197,7 +205,7 @@ def dashboard_n():
         except: edad = 0
         cat = calcular_categoria(edad, db['categorias'])
         
-        # Datos de Medallas PROPIAS
+        # Datos Medallas
         df_t_club['posicion'] = pd.to_numeric(df_t_club['posicion'], errors='coerce').fillna(0)
         df_r_club['posicion'] = pd.to_numeric(df_r_club['posicion'], errors='coerce').fillna(0)
         
@@ -218,7 +226,7 @@ def dashboard_n():
         m_bronce = mis_bronces_i + mis_bronces_r
         m_total = m_oro + m_plata + m_bronce
 
-        # 2. MOSTRAR KPIs DEL CLUB (Contexto)
+        # Contexto Club
         cant_nad = len(df_nad_club)
         cant_reg = len(df_t_club) + len(df_r_club)
         st.markdown(f"""
@@ -230,7 +238,6 @@ def dashboard_n():
         
         st.write("### 👤 Tu Perfil")
         
-        # 3. CARD DEL NADADOR (La que pediste)
         st.markdown(f"""
         <div class="padron-card">
             <div class="p-col-left">
@@ -249,7 +256,6 @@ def dashboard_n():
         </div>
         """, unsafe_allow_html=True)
         
-        # BOTÓN DE REDIRECCIÓN A SU FICHA
         if st.button("Ver Mi Ficha Completa ➝", type="primary", use_container_width=True):
             st.switch_page("pages/2_visualizar_datos.py")
         
