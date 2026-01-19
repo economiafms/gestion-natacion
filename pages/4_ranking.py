@@ -3,7 +3,7 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 
 # --- 1. CONFIGURACIÓN ---
-st.set_page_config(page_title="Ranking NOB", layout="centered") # Centered es mejor para mobile que Wide
+st.set_page_config(page_title="Ranking NOB", layout="centered", initial_sidebar_state="collapsed")
 st.title("🏆 Ranking Histórico")
 
 conn = st.connection("gsheets", type=GSheetsConnection)
@@ -26,7 +26,6 @@ if not data: st.stop()
 
 # --- 3. PROCESAMIENTO ---
 def tiempo_a_seg(t_str):
-    """Convierte tiempo texto a segundos para poder ordenar"""
     try:
         if isinstance(t_str, str):
             partes = t_str.replace('.', ':').split(':')
@@ -35,40 +34,36 @@ def tiempo_a_seg(t_str):
         return 9999.9
     except: return 9999.9
 
-# Unificación de tablas
+# Unificación
 df_full = data['tiempos'].merge(data['nadadores'], on='codnadador')
 df_full = df_full.merge(data['estilos'], on='codestilo')
 df_full = df_full.merge(data['distancias'], on='coddistancia')
 df_full = df_full.merge(data['piletas'], on='codpileta')
 
-# Nombre legible y segundos
-df_full['Nadador'] = df_full['apellido'].str.upper() + ", " + df_full['nombre'].str.title()
+# Campos clave
+df_full['Nadador'] = df_full['apellido'].str.upper() + " " + df_full['nombre'].str.title()
 df_full['Segundos'] = df_full['tiempo'].apply(tiempo_a_seg)
+df_full['Año'] = pd.to_datetime(df_full['fecha']).dt.year
 
-# --- 4. FILTROS (SIDEBAR) ---
-with st.sidebar:
-    st.header("Filtros")
-    f_gen = st.radio("Género", ["Masculino", "Femenino", "Todos"], index=2)
+# --- 4. FILTROS (SIN MEDIDA DE PILETA) ---
+# Usamos columnas arriba para que sea fácil filtrar en móvil
+with st.container(border=True):
+    st.subheader("🔍 Filtros de Prueba")
+    c1, c2 = st.columns(2)
+    f_est = c1.selectbox("Estilo", df_full['descripcion_x'].unique(), index=0)
     
-    # Filtro Pileta (Esencial separar 25m de 50m)
-    piletas_disp = sorted(df_full['medida'].unique())
-    f_pil = st.selectbox("Pileta", piletas_disp, index=0 if piletas_disp else None)
+    # Distancias disponibles para ese estilo
+    dist_disp = sorted(df_full[df_full['descripcion_x'] == f_est]['descripcion_y'].unique())
+    f_dist = c2.selectbox("Distancia", dist_disp, index=0 if dist_disp else None)
     
-    # Filtro Estilo
-    estilos_disp = df_full['descripcion_x'].unique()
-    f_est = st.selectbox("Estilo", estilos_disp)
-    
-    # Filtro Distancia (Reactivo al estilo)
-    dist_disp = sorted(df_full[df_full['descripcion_x'] == f_est]['descripcion_y'].unique()) if f_est else []
-    f_dist = st.selectbox("Distancia", dist_disp)
+    f_gen = st.radio("Género", ["Todos", "Masculino", "Femenino"], horizontal=True)
 
-# --- 5. LÓGICA DE RANKING ---
-if f_est and f_dist and f_pil:
-    # 1. Filtrar
+# --- 5. LÓGICA Y VISUALIZACIÓN ---
+if f_est and f_dist:
+    # Filtrado
     df_r = df_full[
         (df_full['descripcion_x'] == f_est) & 
-        (df_full['descripcion_y'] == f_dist) & 
-        (df_full['medida'] == f_pil)
+        (df_full['descripcion_y'] == f_dist)
     ].copy()
     
     if f_gen != "Todos":
@@ -76,84 +71,102 @@ if f_est and f_dist and f_pil:
         df_r = df_r[df_r['codgenero'] == cod_g]
 
     if not df_r.empty:
-        # 2. Personal Best (Mejor tiempo histórico por nadador)
-        # Ordenamos por tiempo y quitamos duplicados de nadador (nos quedamos con el mejor)
+        # Ranking: Mejor tiempo por nadador (Personal Best)
         df_ranking = df_r.sort_values('Segundos').drop_duplicates(subset=['codnadador'], keep='first')
         df_ranking = df_ranking.reset_index(drop=True)
-        df_ranking['Puesto'] = df_ranking.index + 1
         
-        # Calcular diferencia con el 1ro para la barra visual
-        mejor_tiempo = df_ranking.iloc[0]['Segundos']
-        # Invertimos la lógica para la barra de progreso (1.0 es el mejor, el resto baja)
-        df_ranking['Rendimiento'] = mejor_tiempo / df_ranking['Segundos'] 
-
-        # --- 6. VISUALIZACIÓN MOBILE FIRST ---
-        
-        # EL CAMPEÓN (Tarjeta Gigante)
-        top1 = df_ranking.iloc[0]
-        st.markdown(f"""
-        <div style="background-color: #FFD700; padding: 20px; border-radius: 15px; text-align: center; color: black; box-shadow: 0 4px 8px rgba(0,0,0,0.2); margin-bottom: 20px;">
-            <div style="font-size: 50px;">🥇</div>
-            <div style="font-size: 24px; font-weight: bold;">{top1['tiempo']}</div>
-            <div style="font-size: 18px;">{top1['Nadador']}</div>
-            <div style="font-size: 12px; opacity: 0.8;">{top1['club']} - {top1['fecha']}</div>
-        </div>
+        # --- ESTILOS CSS PERSONALIZADOS ---
+        # Definimos tarjetas con CSS para que se vean lindas en cualquier celu
+        st.markdown("""
+        <style>
+            .rank-card {
+                padding: 15px;
+                border-radius: 12px;
+                margin-bottom: 12px;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            }
+            .rank-pos {
+                font-size: 24px;
+                font-weight: bold;
+                width: 40px;
+                text-align: center;
+            }
+            .rank-info {
+                flex-grow: 1;
+                padding-left: 15px;
+            }
+            .rank-name {
+                font-weight: bold;
+                font-size: 16px;
+                margin-bottom: 2px;
+            }
+            .rank-meta {
+                font-size: 12px;
+                opacity: 0.8;
+            }
+            .rank-time {
+                text-align: right;
+                font-family: monospace;
+                font-weight: bold;
+                font-size: 18px;
+            }
+            .tag-pool {
+                font-size: 10px;
+                padding: 2px 6px;
+                border-radius: 4px;
+                background-color: rgba(255,255,255,0.2);
+                margin-left: 5px;
+            }
+        </style>
         """, unsafe_allow_html=True)
 
-        # SEGUNDO Y TERCERO (Si existen)
-        c2, c3 = st.columns(2)
-        if len(df_ranking) > 1:
-            top2 = df_ranking.iloc[1]
-            c2.markdown(f"""
-            <div style="background-color: #C0C0C0; padding: 15px; border-radius: 10px; text-align: center; color: black; margin-bottom: 10px;">
-                <div style="font-size: 30px;">🥈</div>
-                <div style="font-weight: bold; font-size: 18px;">{top2['tiempo']}</div>
-                <div style="font-size: 14px;">{top2['Nadador'].split(',')[0]}</div>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        if len(df_ranking) > 2:
-            top3 = df_ranking.iloc[2]
-            c3.markdown(f"""
-            <div style="background-color: #CD7F32; padding: 15px; border-radius: 10px; text-align: center; color: black; margin-bottom: 10px;">
-                <div style="font-size: 30px;">🥉</div>
-                <div style="font-weight: bold; font-size: 18px;">{top3['tiempo']}</div>
-                <div style="font-size: 14px;">{top3['Nadador'].split(',')[0]}</div>
-            </div>
-            """, unsafe_allow_html=True)
+        st.write("") # Espaciador
 
-        # TABLA GENERAL (Mejorada para entender visualmente)
-        st.subheader("Clasificación General")
-        
-        # Configuramos la tabla para que sea interactiva y visual
-        st.dataframe(
-            df_ranking[['Puesto', 'Nadador', 'tiempo', 'fecha', 'club', 'Rendimiento']],
-            hide_index=True,
-            use_container_width=True,
-            column_config={
-                "Puesto": st.column_config.NumberColumn(
-                    "#", format="%d", width="small"
-                ),
-                "Nadador": st.column_config.TextColumn(
-                    "Atleta", width="medium"
-                ),
-                "tiempo": st.column_config.TextColumn(
-                    "Marca", width="small"
-                ),
-                "fecha": st.column_config.DateColumn(
-                    "Fecha", format="DD/MM/YY", width="small"
-                ),
-                "club": "Sede",
-                "Rendimiento": st.column_config.ProgressColumn(
-                    "Nivel",
-                    help="Comparación visual con el primer puesto",
-                    format=" ", # Oculta el número, deja solo la barra
-                    min_value=0,
-                    max_value=1,
-                ),
-            }
-        )
+        # --- ITERADOR DE TARJETAS ---
+        for i, row in df_ranking.iterrows():
+            pos = i + 1
+            
+            # Colores según posición
+            if pos == 1:
+                bg_color = "linear-gradient(90deg, #FDB931 0%, #FFD700 100%)" # Oro
+                text_color = "black"
+                icono = "🥇"
+            elif pos == 2:
+                bg_color = "linear-gradient(90deg, #DEE1E6 0%, #C0C0C0 100%)" # Plata
+                text_color = "black"
+                icono = "🥈"
+            elif pos == 3:
+                bg_color = "linear-gradient(90deg, #D68D5E 0%, #CD7F32 100%)" # Bronce
+                text_color = "black"
+                icono = "🥉"
+            else:
+                bg_color = "#262730" # Fondo oscuro estándar de Streamlit (o gris si es light mode)
+                text_color = "white"
+                icono = f"#{pos}"
+
+            # Badge de Pileta (25m o 50m)
+            pileta_short = "25m" if "25" in str(row['medida']) else ("50m" if "50" in str(row['medida']) else row['medida'])
+
+            # Renderizado HTML de la Tarjeta
+            html_card = f"""
+            <div class="rank-card" style="background: {bg_color}; color: {text_color};">
+                <div class="rank-pos">{icono}</div>
+                <div class="rank-info">
+                    <div class="rank-name">{row['Nadador']}</div>
+                    <div class="rank-meta">
+                        {row['club']} • {row['Año']} 
+                        <span class="tag-pool" style="border: 1px solid {text_color};">{pileta_short}</span>
+                    </div>
+                </div>
+                <div class="rank-time">{row['tiempo']}</div>
+            </div>
+            """
+            st.markdown(html_card, unsafe_allow_html=True)
+
     else:
-        st.info("No hay tiempos registrados para esta prueba todavía.")
+        st.info("No se encontraron registros.")
 else:
-    st.write("👈 Selecciona los filtros para ver el ranking.")
+    st.warning("Selecciona Estilo y Distancia.")
