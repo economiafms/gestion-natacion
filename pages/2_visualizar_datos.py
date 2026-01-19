@@ -89,17 +89,9 @@ st.markdown("""
         margin-bottom: 12px;
         box-shadow: 0 2px 4px rgba(0,0,0,0.2);
     }
-    /* Header Relevos: Ajustado para mostrar más info */
-    .relay-header { 
-        display: flex; 
-        justify-content: space-between; 
-        align-items: center; 
-        border-bottom: 1px solid #555; 
-        padding-bottom: 8px; 
-        margin-bottom: 8px; 
-    }
+    .relay-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #555; padding-bottom: 8px; margin-bottom: 8px; }
     .relay-title { font-weight: bold; font-size: 15px; color: white; }
-    .relay-time { font-family: monospace; font-weight: bold; font-size: 18px; color: #4CAF50; text-align: right;}
+    .relay-time { font-family: monospace; font-weight: bold; font-size: 20px; color: #4CAF50; }
     .relay-meta { font-size: 12px; color: #aaa; display: flex; justify-content: space-between; margin-bottom: 10px; }
     
     .swimmer-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px; color: #eee; }
@@ -121,8 +113,7 @@ def cargar_visualizacion():
             "distancias": conn.read(worksheet="Distancias"),
             "piletas": conn.read(worksheet="Piletas"),
             "categorias": conn.read(worksheet="Categorias"),
-            # AGREGAMOS CATEGORIAS DE RELEVOS PARA MOSTRAR EL GRUPO
-            "cat_relevos": conn.read(worksheet="Categorias_Relevos")
+            "cat_relevos": conn.read(worksheet="Categorias_Relevos") # Nueva tabla necesaria
         }
     except Exception as e: return None
 
@@ -132,7 +123,11 @@ if not data: st.stop()
 # --- 3. PROCESAMIENTO GLOBAL ---
 df_nad = data['nadadores'].copy()
 df_nad['Nombre Completo'] = df_nad['apellido'].astype(str).str.upper() + ", " + df_nad['nombre'].astype(str)
+# Diccionarios de búsqueda rápida
 dict_id_nombre = df_nad.set_index('codnadador')['Nombre Completo'].to_dict()
+# Diccionario para buscar el año de nacimiento por ID (para calcular edades en relevos)
+df_nad['anio_nac'] = pd.to_datetime(df_nad['fechanac'], errors='coerce').dt.year.fillna(0).astype(int)
+dict_id_anionac = df_nad.set_index('codnadador')['anio_nac'].to_dict()
 
 def tiempo_a_segundos(t_str):
     try:
@@ -149,13 +144,40 @@ def asignar_cat(edad):
         return "-"
     except: return "-"
 
+# Función para calcular el Grupo del Relevo dinámicamente
+def calcular_grupo_relevo(row_rel, df_cats):
+    try:
+        suma_edades = 0
+        anio_competencia = pd.to_datetime(row_rel['fecha']).year
+        
+        # Sumar edades de los 4 nadadores
+        for k in range(1, 5):
+            nid = row_rel[f'nadador_{k}']
+            anio_nac = dict_id_anionac.get(nid, 0)
+            if anio_nac > 0:
+                suma_edades += (anio_competencia - anio_nac)
+        
+        # Buscar en la tabla de categorías según reglamento y suma
+        reglamento = row_rel.get('tipo_reglamento', 'FED') # Default FED si no existe
+        
+        filtro = df_cats[
+            (df_cats['tipo_reglamento'] == reglamento) & 
+            (df_cats['suma_min'] <= suma_edades) & 
+            (df_cats['suma_max'] >= suma_edades)
+        ]
+        
+        if not filtro.empty:
+            return filtro.iloc[0]['descripcion']
+        return f"Suma {suma_edades}" # Fallback si no encuentra rango
+    except:
+        return "-"
+
 df_full = data['tiempos'].copy()
 df_full = df_full.merge(data['estilos'], on='codestilo').merge(data['distancias'], on='coddistancia').merge(data['piletas'], on='codpileta')
 df_full = df_full.rename(columns={'descripcion_x': 'Estilo', 'descripcion_y': 'Distancia'})
 
 # Preparar Medallero General
 df_t_c = data['tiempos'].copy(); df_r_c = data['relevos'].copy()
-# Convertimos posición a numérico, forzando a entero (quita decimales)
 df_t_c['posicion'] = pd.to_numeric(df_t_c['posicion'], errors='coerce').fillna(0).astype(int)
 df_r_c['posicion'] = pd.to_numeric(df_r_c['posicion'], errors='coerce').fillna(0).astype(int)
 
@@ -253,7 +275,7 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
         
         st.divider()
 
-    # --- HISTORIAL (MODIFICADO: Posición debajo del tiempo) ---
+    # --- HISTORIAL (POSICIÓN ABAJO) ---
     st.subheader("📜 Historial Completo")
     with st.expander("Filtrar Historial"):
         h1, h2 = st.columns(2)
@@ -266,7 +288,6 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
     df_hist = df_hist.sort_values('fecha', ascending=False)
     
     for _, r in df_hist.head(20).iterrows():
-        # Cálculo medalla/posición entero y limpio
         try: 
             pos_val = int(r['posicion'])
             if pos_val == 1: medal_str = "🥇 1º"
@@ -276,10 +297,9 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
             else: medal_str = "-"
         except: medal_str = "-"
 
-        # DISEÑO FLEX PARA PONER POSICIÓN DEBAJO DEL TIEMPO
         st.markdown(f"""
         <div class="mobile-card" style="padding:10px;">
-            <div style="display:flex; justify-content:space-between; align-items: center;">
+            <div style="display:flex; justify-content:space-between; align-items: flex-start;">
                 <div style="flex:1;">
                     <div style="font-weight:bold; color:white; font-size:15px;">{r['Distancia']} {r['Estilo']}</div>
                     <div style="font-size:12px; color:#aaa; margin-top:4px;">📅 {r['fecha']} • {r['club']}</div>
@@ -291,27 +311,21 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
             </div>
         </div>""", unsafe_allow_html=True)
 
-    # 5. MIS RELEVOS (MODIFICADO: Sin decimales + Grupo)
+    # 5. MIS RELEVOS (CON CÁLCULO DE GRUPO)
     st.subheader("🏊‍♂️ Mis Relevos")
     mr_base = data['relevos'].copy()
     cond_rel = (mr_base['nadador_1'] == target_id) | (mr_base['nadador_2'] == target_id) | (mr_base['nadador_3'] == target_id) | (mr_base['nadador_4'] == target_id)
     mis_relevos = mr_base[cond_rel].copy()
     
     if not mis_relevos.empty:
-        # Mezclamos con estilos, distancias, piletas y AHORA CON CATEGORÍAS DE RELEVO
         mis_relevos = mis_relevos.merge(data['estilos'], on='codestilo').merge(data['distancias'], on='coddistancia').merge(data['piletas'], on='codpileta')
-        
-        # Intentamos mezclar con categorías si existe la columna, si no, manejamos el error suavemente
-        try:
-            mis_relevos = mis_relevos.merge(data['cat_relevos'], on='cod_cat_relevo', how='left')
-        except: pass # Si falla, simplemente no mostrará el grupo
-
         mis_relevos = mis_relevos.rename(columns={'descripcion_x': 'Estilo', 'descripcion_y': 'Distancia'})
-        
-        # Ordenamos
         mis_relevos = mis_relevos.sort_values('fecha', ascending=False)
         
         for _, r in mis_relevos.iterrows():
+            # Calcular Grupo en vivo
+            grupo_txt = calcular_grupo_relevo(r, data['cat_relevos'])
+            
             html_grid = ""
             for k in range(1, 5):
                 nid = r[f'nadador_{k}']
@@ -322,7 +336,6 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
                 border_style = "border: 1px solid #E91E63;" if nid == target_id else ""
                 html_grid += f"<div class='swimmer-item' style='{border_style}'>{k}. {nom}</div>"
             
-            # Posición Entera
             try: p_rel = int(r['posicion'])
             except: p_rel = 0
             
@@ -331,10 +344,7 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
             elif p_rel == 3: pos_icon = "🥉 3º"
             elif p_rel > 0: pos_icon = f"Pos: {p_rel}"
             else: pos_icon = ""
-
-            # Grupo (descripción de la categoría)
-            grupo_txt = r['descripcion'] if 'descripcion' in r and pd.notna(r['descripcion']) else r.get('cod_cat_relevo', '-')
-
+            
             st.markdown(f"""
             <div class="mobile-card" style="border-left: 4px solid #E91E63;">
                 <div class="relay-header">
@@ -388,11 +398,6 @@ def render_tab_relevos_general():
     mr_all = data['relevos'].copy()
     if not mr_all.empty:
         mr_all = mr_all.merge(data['estilos'], on='codestilo').merge(data['distancias'], on='coddistancia').merge(data['piletas'], on='codpileta')
-        
-        # Merge con categorías para mostrar grupo
-        try: mr_all = mr_all.merge(data['cat_relevos'], on='cod_cat_relevo', how='left')
-        except: pass
-
         mr_all = mr_all.rename(columns={'descripcion_x': 'Estilo', 'descripcion_y': 'Distancia'})
         
         c1, c2 = st.columns(2)
@@ -403,6 +408,9 @@ def render_tab_relevos_general():
         if fg_gen != "Todos": mr_all = mr_all[mr_all['codgenero'] == fg_gen]
         
         for _, r in mr_all.sort_values('fecha', ascending=False).head(20).iterrows():
+            # Calcular Grupo en vivo
+            grupo_txt = calcular_grupo_relevo(r, data['cat_relevos'])
+
             html_grid = ""
             for k in range(1, 5):
                 nid = r[f'nadador_{k}']
@@ -411,7 +419,6 @@ def render_tab_relevos_general():
                 if t and t not in ["00.00", "0", "None", "nan"]: nom += f" <b>({t})</b>"
                 html_grid += f"<div class='swimmer-item'>{k}. {nom}</div>"
 
-            # Posición entera
             try: p_rel = int(r['posicion'])
             except: p_rel = 0
             
@@ -420,9 +427,6 @@ def render_tab_relevos_general():
             elif p_rel == 3: pos_icon = "🥉 3º"
             elif p_rel > 0: pos_icon = f"Pos: {p_rel}"
             else: pos_icon = ""
-
-            # Grupo texto
-            grupo_txt = r['descripcion'] if 'descripcion' in r and pd.notna(r['descripcion']) else r.get('cod_cat_relevo', '-')
 
             st.markdown(f"""
             <div class="mobile-card" style="border-left: 4px solid #9C27B0;">
@@ -467,7 +471,6 @@ else:
     with tab2:
         lista_nombres = sorted(df_nad['Nombre Completo'].unique().tolist())
         
-        # --- LÓGICA DE PRE-SELECCIÓN (Mantenida intacta) ---
         idx_defecto = 0
         pre_seleccion = st.session_state.get("nadador_seleccionado")
         
