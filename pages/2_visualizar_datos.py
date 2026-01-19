@@ -11,6 +11,43 @@ st.title("📊 Base de Datos del Club")
 # --- CSS PERSONALIZADO ---
 st.markdown("""
 <style>
+    /* TARJETA PADRÓN (Horizontal y Optimizada) */
+    .padron-card {
+        background-color: #262730;
+        border: 1px solid #444;
+        border-radius: 10px;
+        padding: 12px;
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    }
+    .p-col-left { flex: 2; text-align: left; padding-right: 5px; border-right: 1px solid #444; }
+    .p-col-center { flex: 2; text-align: center; padding: 0 5px; }
+    .p-col-right { flex: 1; text-align: right; padding-left: 5px; border-left: 1px solid #444; }
+    
+    .p-name { font-weight: bold; font-size: 15px; color: white; line-height: 1.2; margin-bottom: 4px; }
+    .p-meta { font-size: 11px; color: #aaa; }
+    .p-medals { font-size: 13px; color: #eee; font-weight: 500; display: flex; justify-content: center; gap: 8px; }
+    .p-total { font-size: 22px; color: #FFD700; font-weight: bold; line-height: 1; }
+    .p-cat { font-size: 16px; color: #4CAF50; font-weight: bold; margin-top: 2px; }
+
+    /* TARJETA MEJORES MARCAS (Ordenada) */
+    .pb-container {
+        background-color: #2b2c35;
+        border-radius: 8px;
+        padding: 10px;
+        margin-bottom: 10px;
+        border-left: 4px solid #1E88E5;
+    }
+    .pb-style-title { font-weight: bold; color: #fff; margin-bottom: 5px; border-bottom: 1px solid #444; padding-bottom: 2px;}
+    .pb-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+    .pb-item { display: flex; justify-content: space-between; font-size: 13px; padding: 2px 0; }
+    .pb-dist { color: #ccc; }
+    .pb-time { color: #4CAF50; font-weight: bold; font-family: monospace; }
+
+    /* TARJETAS GENERALES Y RELEVOS */
     .mobile-card {
         background-color: #262730;
         border: 1px solid #444;
@@ -26,11 +63,8 @@ st.markdown("""
     .relay-title { font-weight: bold; font-size: 15px; color: white; }
     .relay-time { font-family: monospace; font-weight: bold; font-size: 20px; color: #4CAF50; }
     .relay-meta { font-size: 12px; color: #aaa; display: flex; justify-content: space-between; margin-bottom: 10px; }
-    .swimmer-grid {
-        display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px; color: #eee;
-    }
+    .swimmer-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px; color: #eee; }
     .swimmer-item { background: rgba(255,255,255,0.05); padding: 4px 8px; border-radius: 4px; }
-    .medal-row { font-size: 14px; margin-top: 5px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -79,19 +113,17 @@ def asignar_cat(edad):
 tab1, tab2, tab3 = st.tabs(["👥 Padrón", "👤 Ficha Técnica", "🏊‍♂️ Relevos"])
 
 # ==========================================
-# TAB 1: PADRÓN Y MEDALLERO (FIXED)
+# TAB 1: PADRÓN Y MEDALLERO (REDISEÑO HORIZONTAL)
 # ==========================================
 with tab1:
     st.markdown("### 🏆 Padrón y Medallero")
     
-    # 1. Limpieza y Conversión a Enteros
+    # Lógica de Medallas (Individual + Relevos)
     df_t_c = data['tiempos'].copy()
     df_t_c['posicion'] = pd.to_numeric(df_t_c['posicion'], errors='coerce').fillna(0).astype(int)
-    
     df_r_c = data['relevos'].copy()
     df_r_c['posicion'] = pd.to_numeric(df_r_c['posicion'], errors='coerce').fillna(0).astype(int)
 
-    # 2. Agrupación (Filtrar solo podios 1, 2, 3)
     med_ind = df_t_c[df_t_c['posicion'].isin([1,2,3])].groupby(['codnadador', 'posicion']).size().unstack(fill_value=0)
     
     dfs_rel_exploded = []
@@ -105,60 +137,46 @@ with tab1:
     else:
         med_rel = pd.DataFrame()
 
-    # 3. Suma Total y Renombrado de Columnas para seguridad
     medallero = med_ind.add(med_rel, fill_value=0)
-    
-    # Asegurar que existen las columnas y renombrarlas a texto
     for p in [1, 2, 3]: 
         if p not in medallero.columns: medallero[p] = 0
-        
     medallero = medallero.rename(columns={1: 'Oro', 2: 'Plata', 3: 'Bronce'})
     
-    # 4. KPIs Totales
-    oros = int(medallero['Oro'].sum())
-    platas = int(medallero['Plata'].sum())
-    bronces = int(medallero['Bronce'].sum())
-    
-    c1, c2, c3 = st.columns(3)
-    c1.metric("🥇 Oro", oros)
-    c2.metric("🥈 Plata", platas)
-    c3.metric("🥉 Bronce", bronces)
+    # KPIs Totales
+    oros, platas, bronces = int(medallero['Oro'].sum()), int(medallero['Plata'].sum()), int(medallero['Bronce'].sum())
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("🥇 Oro", oros); c2.metric("🥈 Plata", platas); c3.metric("🥉 Bronce", bronces); c4.metric("📊 Total", oros+platas+bronces)
     
     st.divider()
     
-    # 5. Visualización Lista
+    # Lista Nadadores
     filtro = st.text_input("Buscar Nadador:", placeholder="Nombre...")
-    
-    # Merge seguro
     df_view = df_nad.merge(medallero, left_on='codnadador', right_index=True, how='left').fillna(0)
     df_view['Total'] = df_view['Oro'] + df_view['Plata'] + df_view['Bronce']
     
     if filtro: df_view = df_view[df_view['Nombre Completo'].str.contains(filtro.upper())]
-    
     df_view = df_view.sort_values('Total', ascending=False)
 
-    for _, row in df_view.head(20).iterrows():
+    for _, row in df_view.head(25).iterrows():
         try: edad = datetime.now().year - pd.to_datetime(row['fechanac']).year
         except: edad = 0
         cat = asignar_cat(edad)
-        
-        # Uso .get para seguridad extrema
-        o = int(row.get('Oro', 0))
-        p = int(row.get('Plata', 0))
-        b = int(row.get('Bronce', 0))
-        tot = int(row.get('Total', 0))
+        o, p, b, t = int(row.get('Oro',0)), int(row.get('Plata',0)), int(row.get('Bronce',0)), int(row.get('Total',0))
         
         st.markdown(f"""
-        <div class="mobile-card">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <span style="font-weight:bold; font-size:16px; color:white;">{row['Nombre Completo']}</span>
-                <span style="font-size:14px; font-weight:bold; color:#FFD700;">★ {tot}</span>
+        <div class="padron-card">
+            <div class="p-col-left">
+                <div class="p-name">{row['Nombre Completo']}</div>
+                <div class="p-meta">{edad} años • {row['codgenero']}</div>
             </div>
-            <div style="font-size:12px; color:#aaa;">{edad} años ({cat}) • {row['codgenero']}</div>
-            <div class="medal-row">
-                🥇 <span style="color:#fff">{o}</span> &nbsp; 
-                🥈 <span style="color:#fff">{p}</span> &nbsp; 
-                🥉 <span style="color:#fff">{b}</span>
+            <div class="p-col-center">
+                <div class="p-medals">
+                    <span>🥇{o}</span> <span>🥈{p}</span> <span>🥉{b}</span>
+                </div>
+            </div>
+            <div class="p-col-right">
+                <div class="p-total">★ {t}</div>
+                <div class="p-cat">{cat}</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -178,48 +196,80 @@ with tab2:
         df_full = df_full.rename(columns={'descripcion_x': 'Estilo', 'descripcion_y': 'Distancia'})
         mis_t = df_full[df_full['codnadador'] == id_n].copy()
 
-        # MEJORES MARCAS
+        # 1. MEJORES MARCAS (Diseño Limpio y Agrupado)
         if not mis_t.empty:
-            st.subheader("✨ Mejores Marcas")
+            st.subheader("✨ Mejores Marcas (PB)")
             mis_t['segundos'] = mis_t['tiempo'].apply(tiempo_a_segundos)
-            pbs = mis_t.loc[mis_t.groupby(['Estilo', 'Distancia'])['segundos'].idxmin()].sort_values(['Estilo', 'Distancia'])
+            # Obtenemos solo el mejor tiempo por estilo/distancia
+            pbs = mis_t.loc[mis_t.groupby(['Estilo', 'Distancia'])['segundos'].idxmin()].sort_values(['Estilo', 'segundos'])
             
-            for _, r in pbs.iterrows():
-                st.markdown(f"""
-                <div style="background:#333; padding:8px; border-radius:5px; margin-bottom:5px; display:flex; justify-content:space-between;">
-                    <span style="color:#ddd;">{r['Distancia']} {r['Estilo']}</span>
-                    <span style="color:#4CAF50; font-weight:bold;">{r['tiempo']}</span>
-                </div>""", unsafe_allow_html=True)
+            # Agrupar por Estilo para mostrar en bloques
+            estilos_presentes = pbs['Estilo'].unique()
+            
+            # Usar columnas para aprovechar ancho
+            col_a, col_b = st.columns(2)
+            
+            for i, estilo in enumerate(estilos_presentes):
+                df_e = pbs[pbs['Estilo'] == estilo]
+                # Alternar columnas
+                with (col_a if i % 2 == 0 else col_b):
+                    html_items = ""
+                    for _, r in df_e.iterrows():
+                        html_items += f"""
+                        <div class="pb-item">
+                            <span class="pb-dist">{r['Distancia']}</span>
+                            <span class="pb-time">{r['tiempo']}</span>
+                        </div>
+                        """
+                    
+                    st.markdown(f"""
+                    <div class="pb-container">
+                        <div class="pb-style-title">{estilo}</div>
+                        <div>{html_items}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
             
             st.divider()
 
-            # GRÁFICO
-            st.subheader("📈 Evolución")
-            c1, c2 = st.columns(2)
-            g_est = c1.selectbox("Estilo", mis_t['Estilo'].unique(), key="g_est")
-            dist_disp = mis_t[mis_t['Estilo'] == g_est]['Distancia'].unique()
-            g_dist = c2.selectbox("Distancia", dist_disp, key="g_dist")
+            # 2. GRÁFICO INTELIGENTE (Solo datos válidos)
+            st.subheader("📈 Evolución de Tiempos")
             
-            df_graph = mis_t[(mis_t['Estilo'] == g_est) & (mis_t['Distancia'] == g_dist)].sort_values('fecha')
+            # Paso 1: Encontrar combinaciones válidas (>= 2 registros)
+            conteo = mis_t.groupby(['Estilo', 'Distancia']).size().reset_index(name='count')
+            validos = conteo[conteo['count'] >= 2]
             
-            if len(df_graph) >= 2:
-                # Eje Y como fecha simulada para formato de tiempo correcto
+            if not validos.empty:
+                col_g1, col_g2 = st.columns(2)
+                
+                # Filtro Estilo: Solo mostrar estilos que están en 'validos'
+                estilos_validos = validos['Estilo'].unique()
+                g_est = col_g1.selectbox("Estilo", sorted(estilos_validos), key="g_est")
+                
+                # Filtro Distancia: Solo mostrar distancias válidas para ese estilo
+                dist_validas = validos[validos['Estilo'] == g_est]['Distancia'].unique()
+                g_dist = col_g2.selectbox("Distancia", sorted(dist_validas), key="g_dist")
+                
+                # Graficar
+                df_graph = mis_t[(mis_t['Estilo'] == g_est) & (mis_t['Distancia'] == g_dist)].sort_values('fecha')
+                
+                # Eje Y simulado
                 df_graph['TimeObj'] = pd.to_datetime('2024-01-01') + pd.to_timedelta(df_graph['segundos'], unit='s')
+                
                 fig = px.line(df_graph, x='fecha', y='TimeObj', markers=True, template="plotly_dark")
-                fig.update_yaxes(tickformat="%M:%S.%f", title="Tiempo")
-                fig.update_layout(height=300, margin=dict(t=20, b=20, l=40, r=20))
+                fig.update_yaxes(tickformat="%M:%S.%f", title="Tiempo") # Formato MM:SS.MS
+                fig.update_layout(height=300, margin=dict(t=10, b=10, l=40, r=20))
                 st.plotly_chart(fig, use_container_width=True)
             else:
-                st.info("Se necesitan 2+ registros para graficar.")
-            
+                st.info("No tienes suficientes datos históricos (mínimo 2 registros en la misma prueba) para generar gráficos.")
+
             st.divider()
 
-        # HISTORIAL
-        st.subheader("📜 Historial de Carreras")
+        # 3. HISTORIAL (Con Filtros)
+        st.subheader("📜 Historial Completo")
         with st.expander("Filtrar Historial"):
             h1, h2 = st.columns(2)
-            hf_est = h1.selectbox("Filtrar Estilo", ["Todos"] + sorted(mis_t['Estilo'].unique().tolist()), key="h_est")
-            hf_dis = h2.selectbox("Filtrar Distancia", ["Todos"] + sorted(mis_t['Distancia'].unique().tolist()), key="h_dis")
+            hf_est = h1.selectbox("Estilo", ["Todos"] + sorted(mis_t['Estilo'].unique().tolist()), key="h_est")
+            hf_dis = h2.selectbox("Distancia", ["Todos"] + sorted(mis_t['Distancia'].unique().tolist()), key="h_dis")
         
         df_hist = mis_t.copy()
         if hf_est != "Todos": df_hist = df_hist[df_hist['Estilo'] == hf_est]
@@ -229,7 +279,7 @@ with tab2:
         for _, r in df_hist.head(20).iterrows():
             medal = "🥇" if r['posicion'] == 1 else ("🥈" if r['posicion'] == 2 else ("🥉" if r['posicion'] == 3 else f"#{r['posicion']}"))
             st.markdown(f"""
-            <div class="mobile-card">
+            <div class="mobile-card" style="padding:10px;">
                 <div style="display:flex; justify-content:space-between;">
                     <span style="font-weight:bold; color:white;">{r['Distancia']} {r['Estilo']}</span>
                     <span style="font-family:monospace; font-weight:bold; color:#4CAF50;">{r['tiempo']}</span>
@@ -239,7 +289,7 @@ with tab2:
                 </div>
             </div>""", unsafe_allow_html=True)
 
-        # MIS RELEVOS
+        # 4. MIS RELEVOS (Con Filtros Solicitados)
         st.subheader("🏊‍♂️ Mis Relevos")
         mr_base = data['relevos'].copy()
         cond_rel = (mr_base['nadador_1'] == id_n) | (mr_base['nadador_2'] == id_n) | (mr_base['nadador_3'] == id_n) | (mr_base['nadador_4'] == id_n)
@@ -248,6 +298,16 @@ with tab2:
         if not mis_relevos.empty:
             mis_relevos = mis_relevos.merge(data['estilos'], on='codestilo').merge(data['distancias'], on='coddistancia').merge(data['piletas'], on='codpileta')
             mis_relevos = mis_relevos.rename(columns={'descripcion_x': 'Estilo', 'descripcion_y': 'Distancia'})
+            
+            # Filtros Mis Relevos
+            with st.expander("Filtrar Mis Relevos"):
+                mr1, mr2 = st.columns(2)
+                f_mr_est = mr1.selectbox("Estilo", ["Todos"] + sorted(mis_relevos['Estilo'].unique().tolist()), key="mr_est")
+                f_mr_gen = mr2.selectbox("Género", ["Todos"] + sorted(mis_relevos['codgenero'].unique().tolist()), key="mr_gen")
+            
+            if f_mr_est != "Todos": mis_relevos = mis_relevos[mis_relevos['Estilo'] == f_mr_est]
+            if f_mr_gen != "Todos": mis_relevos = mis_relevos[mis_relevos['codgenero'] == f_mr_gen]
+            
             mis_relevos = mis_relevos.sort_values('fecha', ascending=False)
             
             for _, r in mis_relevos.iterrows():
@@ -260,10 +320,11 @@ with tab2:
                     html_grid += f"<div class='swimmer-item'>{k}. {nom}</div>"
                 
                 pos_icon = "🥇" if r['posicion'] == 1 else ("🥈" if r['posicion'] == 2 else ("🥉" if r['posicion'] == 3 else ""))
+                
                 st.markdown(f"""
                 <div class="mobile-card" style="border-left: 4px solid #E91E63;">
                     <div class="relay-header">
-                        <div class="relay-title">{r['Distancia']} {r['Estilo']}</div>
+                        <div class="relay-title">{r['Distancia']} {r['Estilo']} ({r['codgenero']})</div>
                         <div class="relay-time">{r['tiempo_final']}</div>
                     </div>
                     <div class="relay-meta">
@@ -275,7 +336,7 @@ with tab2:
         else: st.info("Sin relevos.")
 
 # ==========================================
-# TAB 3: TODOS LOS RELEVOS
+# TAB 3: TODOS LOS RELEVOS (Cerrada - Versión Final)
 # ==========================================
 with tab3:
     st.markdown("### Historial de Postas")
