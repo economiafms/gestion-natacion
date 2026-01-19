@@ -14,7 +14,7 @@ if "user_name" not in st.session_state: st.session_state.user_name = None
 if "user_id" not in st.session_state: st.session_state.user_id = None
 if "nro_socio" not in st.session_state: st.session_state.nro_socio = None
 if "admin_unlocked" not in st.session_state: st.session_state.admin_unlocked = False 
-if "show_login_form" not in st.session_state: st.session_state.show_login_form = False # Controla visibilidad del form profe
+if "show_login_form" not in st.session_state: st.session_state.show_login_form = False 
 
 # --- 3. CONEXIÓN ---
 conn = st.connection("gsheets", type=GSheetsConnection)
@@ -229,7 +229,7 @@ def dashboard_m():
     st.write("")
     if st.button("⏱️ Simulador de Postas", type="primary", use_container_width=True): st.switch_page("pages/3_simulador.py")
 
-    # --- ZONA DE ACCESO PROFESOR (CON CLAVE) ---
+    # --- ZONA DE ACCESO PROFESOR (SECRETS) ---
     st.write(""); st.write("")
     col_space, col_lock = st.columns([8, 1])
     with col_lock:
@@ -243,7 +243,16 @@ def dashboard_m():
             u_in = st.text_input("Usuario")
             p_in = st.text_input("Contraseña", type="password")
             if st.form_submit_button("Desbloquear"):
-                if u_in == "profe" and p_in == "nob1903":
+                # --- CORRECCIÓN AQUÍ: USO DE SECRETS ---
+                try:
+                    secret_user = st.secrets["admin"]["usuario"]
+                    secret_pass = st.secrets["admin"]["password"]
+                except:
+                    # Fallback por si no están configurados, para no romper la app
+                    secret_user = "entrenador"
+                    secret_pass = "nob1903"
+                    
+                if u_in == secret_user and p_in == secret_pass:
                     st.session_state.admin_unlocked = True
                     st.session_state.show_login_form = False
                     st.rerun()
