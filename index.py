@@ -108,13 +108,64 @@ def intentar_desbloqueo():
         st.rerun()
     else: st.error("Incorrecto")
 
-# --- 6. COMPONENTE VISUAL COMPARTIDO (GRÁFICOS) ---
-def render_graficos_comunes(df_n, df_t, df_r):
-    # KPIs Club Generales (Solo números grandes para contexto)
-    cant_nad = len(df_n)
-    cant_reg = len(df_t) + len(df_r)
+# --- 6. COMPONENTES VISUALES COMPARTIDOS ---
+
+def render_personal_card(user_id, db):
+    """Renderiza la tarjeta del nadador logueado con sus estadísticas"""
+    df_nad = db['nadadores']
+    # Buscar datos personales
+    me_rows = df_nad[df_nad['codnadador'] == user_id]
     
-    # Gráficos
+    if me_rows.empty:
+        return # No mostrar si no hay datos
+        
+    me = me_rows.iloc[0]
+    
+    # Calcular Edad y Categoría
+    try: edad = datetime.now().year - pd.to_datetime(me['fechanac']).year
+    except: edad = 0
+    cat = calcular_cat_exacta(edad, db['categorias'])
+    
+    # Calcular Medallas Propias
+    df_t = db['tiempos'].copy(); df_r = db['relevos'].copy()
+    df_t['posicion'] = pd.to_numeric(df_t['posicion'], errors='coerce').fillna(0)
+    df_r['posicion'] = pd.to_numeric(df_r['posicion'], errors='coerce').fillna(0)
+    
+    mi_oro = len(df_t[(df_t['codnadador']==user_id)&(df_t['posicion']==1)]) + len(df_r[((df_r['nadador_1']==user_id)|(df_r['nadador_2']==user_id)|(df_r['nadador_3']==user_id)|(df_r['nadador_4']==user_id))&(df_r['posicion']==1)])
+    mi_plata = len(df_t[(df_t['codnadador']==user_id)&(df_t['posicion']==2)]) + len(df_r[((df_r['nadador_1']==user_id)|(df_r['nadador_2']==user_id)|(df_r['nadador_3']==user_id)|(df_r['nadador_4']==user_id))&(df_r['posicion']==2)])
+    mi_bronce = len(df_t[(df_t['codnadador']==user_id)&(df_t['posicion']==3)]) + len(df_r[((df_r['nadador_1']==user_id)|(df_r['nadador_2']==user_id)|(df_r['nadador_3']==user_id)|(df_r['nadador_4']==user_id))&(df_r['posicion']==3)])
+    mi_total = mi_oro + mi_plata + mi_bronce
+
+    st.write("### 👤 Tu Perfil")
+    st.markdown(f"""
+    <style>
+        .padron-card {{ background-color: #262730; border: 1px solid #444; border-radius: 12px; padding: 15px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 6px rgba(0,0,0,0.3); transition: transform 0.2s; margin-bottom: 20px; }}
+        .padron-card:hover {{ border-color: #E30613; transform: scale(1.02); }}
+        .p-total {{ font-size: 26px; color: #FFD700; font-weight: bold; }}
+    </style>
+    <div class="padron-card">
+        <div style="flex: 2; border-right: 1px solid #555;">
+            <div style="font-weight: bold; font-size: 18px; color: white;">{me['nombre']} {me['apellido']}</div>
+            <div style="font-size: 13px; color: #ccc;">{edad} años • {me['codgenero']}</div>
+        </div>
+        <div style="flex: 2; text-align: center;">
+            <div style="display: flex; justify-content: center; gap: 8px; font-size: 16px;">
+                <span>🥇{mi_oro}</span> <span>🥈{mi_plata}</span> <span>🥉{mi_bronce}</span>
+            </div>
+        </div>
+        <div style="flex: 1; text-align: right; border-left: 1px solid #555; padding-left: 10px;">
+            <div class="p-total">★ {mi_total}</div>
+            <div style="font-size: 16px; color: #4CAF50; font-weight: bold;">{cat}</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    if st.button("Ver Mi Ficha Completa ➝", key="btn_ficha_main", type="primary", use_container_width=True):
+        st.switch_page("pages/2_visualizar_datos.py")
+    
+    st.divider()
+
+def render_graficos_comunes(df_n):
     if not df_n.empty:
         df_n['Anio'] = pd.to_datetime(df_n['fechanac']).dt.year
         df_n['Categoria'] = df_n['Anio'].apply(calcular_categoria)
@@ -150,6 +201,11 @@ def dashboard_m():
     st.divider()
 
     if db:
+        # 1. MOSTRAR TARJETA PERSONAL (SI TIENE DATOS)
+        if st.session_state.user_id:
+            render_personal_card(st.session_state.user_id, db)
+
+        # 2. ESTADÍSTICAS DEL CLUB
         df_t = db['tiempos'].copy(); df_r = db['relevos'].copy()
         df_t['posicion'] = pd.to_numeric(df_t['posicion'], errors='coerce').fillna(0)
         df_r['posicion'] = pd.to_numeric(df_r['posicion'], errors='coerce').fillna(0)
@@ -159,7 +215,6 @@ def dashboard_m():
         t_bronce = len(df_t[df_t['posicion']==3]) + len(df_r[df_r['posicion']==3])
         total_med = t_oro + t_plata + t_bronce
         
-        # KPIs Superiores (M)
         st.markdown(f"""
         <div style="display: flex; justify-content: space-between; gap: 10px; margin-bottom: 10px;">
             <div style="background-color: #262730; padding: 15px; border-radius: 10px; width: 48%; text-align: center; border: 1px solid #444; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
@@ -182,7 +237,7 @@ def dashboard_m():
         </div>
         """, unsafe_allow_html=True)
         
-        render_graficos_comunes(db['nadadores'].copy(), db['tiempos'].copy(), db['relevos'].copy())
+        render_graficos_comunes(db['nadadores'].copy())
         
         st.divider()
         c1, c2 = st.columns(2)
@@ -222,59 +277,16 @@ def dashboard_n():
     st.divider()
 
     if db:
-        # --- 1. CARD PERSONAL ARRIBA (Prioridad) ---
-        st.write("### 👤 Tu Perfil")
+        # 1. TARJETA PERSONAL (Arriba)
+        if st.session_state.user_id:
+            render_personal_card(st.session_state.user_id, db)
         
-        my_id = st.session_state.user_id
-        df_nad = db['nadadores']
-        me = df_nad[df_nad['codnadador'] == my_id].iloc[0]
-        
-        try: edad = datetime.now().year - pd.to_datetime(me['fechanac']).year
-        except: edad = 0
-        cat = calcular_cat_exacta(edad, db['categorias'])
+        # 2. INFO CLUB (Abajo)
+        st.markdown("<h5 style='text-align: center; color: #888;'>ESTADÍSTICAS DEL CLUB</h5>", unsafe_allow_html=True)
         
         df_t = db['tiempos'].copy(); df_r = db['relevos'].copy()
         df_t['posicion'] = pd.to_numeric(df_t['posicion'], errors='coerce').fillna(0)
         df_r['posicion'] = pd.to_numeric(df_r['posicion'], errors='coerce').fillna(0)
-        
-        # Medallas Propias
-        mi_oro = len(df_t[(df_t['codnadador']==my_id)&(df_t['posicion']==1)]) + len(df_r[((df_r['nadador_1']==my_id)|(df_r['nadador_2']==my_id)|(df_r['nadador_3']==my_id)|(df_r['nadador_4']==my_id))&(df_r['posicion']==1)])
-        mi_plata = len(df_t[(df_t['codnadador']==my_id)&(df_t['posicion']==2)]) + len(df_r[((df_r['nadador_1']==my_id)|(df_r['nadador_2']==my_id)|(df_r['nadador_3']==my_id)|(df_r['nadador_4']==my_id))&(df_r['posicion']==2)])
-        mi_bronce = len(df_t[(df_t['codnadador']==my_id)&(df_t['posicion']==3)]) + len(df_r[((df_r['nadador_1']==my_id)|(df_r['nadador_2']==my_id)|(df_r['nadador_3']==my_id)|(df_r['nadador_4']==my_id))&(df_r['posicion']==3)])
-        mi_total = mi_oro + mi_plata + mi_bronce
-        
-        st.markdown(f"""
-        <style>
-            .padron-card {{ background-color: #262730; border: 1px solid #444; border-radius: 12px; padding: 15px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 6px rgba(0,0,0,0.3); transition: transform 0.2s; margin-bottom: 15px; }}
-            .padron-card:hover {{ border-color: #E30613; transform: scale(1.02); }}
-            .p-total {{ font-size: 26px; color: #FFD700; font-weight: bold; }}
-        </style>
-        <div class="padron-card">
-            <div style="flex: 2; border-right: 1px solid #555;">
-                <div style="font-weight: bold; font-size: 18px; color: white;">{me['nombre']} {me['apellido']}</div>
-                <div style="font-size: 13px; color: #ccc;">{edad} años • {me['codgenero']}</div>
-            </div>
-            <div style="flex: 2; text-align: center;">
-                <div style="display: flex; justify-content: center; gap: 8px; font-size: 16px;">
-                    <span>🥇{mi_oro}</span> <span>🥈{mi_plata}</span> <span>🥉{mi_bronce}</span>
-                </div>
-            </div>
-            <div style="flex: 1; text-align: right; border-left: 1px solid #555; padding-left: 10px;">
-                <div class="p-total">★ {mi_total}</div>
-                <div style="font-size: 16px; color: #4CAF50; font-weight: bold;">{cat}</div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        if st.button("Ver Mi Ficha Completa ➝", type="primary", use_container_width=True):
-            st.switch_page("pages/2_visualizar_datos.py")
-        
-        st.divider()
-        
-        # --- 2. INFORMACIÓN DEL CLUB (Abajo) ---
-        st.markdown("<h5 style='text-align: center; color: #888;'>ESTADÍSTICAS DEL CLUB</h5>", unsafe_allow_html=True)
-        
-        # KPIs Club (Recalculados simples para visualización)
         t_oro = len(df_t[df_t['posicion']==1]) + len(df_r[df_r['posicion']==1])
         t_plata = len(df_t[df_t['posicion']==2]) + len(df_r[df_r['posicion']==2])
         t_bronce = len(df_t[df_t['posicion']==3]) + len(df_r[df_r['posicion']==3])
@@ -305,7 +317,7 @@ def dashboard_n():
         render_graficos_comunes(db['nadadores'].copy(), db['tiempos'].copy(), db['relevos'].copy())
         
         st.divider()
-        if st.button("Cerrar Sesión", type="secondary"): cerrar_sesion()
+        if st.button("Cerrar Sesión"): cerrar_sesion()
 
 # --- 9. RUTEO ---
 pg_dash_m = st.Page(dashboard_m, title="Inicio", icon="🏠")
