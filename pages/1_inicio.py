@@ -4,49 +4,17 @@ import pandas as pd
 import altair as alt
 from datetime import datetime
 
-# --- 1. CONFIGURACIÓN ---
-st.set_page_config(page_title="Inicio", layout="centered", initial_sidebar_state="collapsed")
+# --- CONFIGURACIÓN ---
+st.set_page_config(page_title="Inicio", layout="centered")
 
-# --- 2. CSS PARA OCULTAR EL MENÚ LATERAL NATIVO (EL TRUCO) ---
-st.markdown("""
-<style>
-    /* Ocultar la navegación de Streamlit */
-    [data-testid="stSidebarNav"] {display: none;}
-    
-    /* Estilos de las tarjetas del menú */
-    .menu-card {
-        background-color: #262730;
-        border: 1px solid #444;
-        border-radius: 10px;
-        padding: 20px;
-        text-align: center;
-        transition: transform 0.2s;
-        cursor: pointer;
-        height: 100%;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-    }
-    .menu-card:hover {
-        border-color: #E30613;
-        transform: scale(1.02);
-        background-color: #30303A;
-    }
-    .menu-icon { font-size: 40px; margin-bottom: 10px; }
-    .menu-title { font-weight: bold; color: white; font-size: 18px; }
-    .menu-desc { color: #aaa; font-size: 13px; }
-</style>
-""", unsafe_allow_html=True)
-
-# --- 3. SEGURIDAD (Gatekeeper) ---
+# --- SEGURIDAD ---
 if "role" not in st.session_state or not st.session_state.role:
-    st.warning("⚠️ Debes iniciar sesión primero.")
-    if st.button("Ir al Login"):
-        st.switch_page("index.py")
-    st.stop()
+    st.switch_page("index.py") # Si entran directo por URL, los manda al login
 
-# --- 4. CONEXIÓN Y DATOS ---
+# --- ESTADO LOCAL ---
+if "show_login_form" not in st.session_state: st.session_state.show_login_form = False
+
+# --- CONEXIÓN ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 @st.cache_data(ttl="1h")
@@ -62,7 +30,7 @@ def cargar_data_dashboard():
 
 db = cargar_data_dashboard()
 
-# --- 5. FUNCIONES AUXILIARES ---
+# --- FUNCIONES AUXILIARES ---
 def calcular_cat_exacta(edad, df_cat):
     try:
         for _, r in df_cat.iterrows():
@@ -87,11 +55,6 @@ def calcular_categoria_grafico(anio_nac):
     elif 70 <= edad <= 74: return "J"
     else: return "K+"
 
-def cerrar_sesion():
-    for key in st.session_state.keys():
-        del st.session_state[key]
-    st.switch_page("index.py")
-
 def intentar_desbloqueo():
     try:
         sec_user = st.secrets["admin"]["usuario"]
@@ -102,13 +65,13 @@ def intentar_desbloqueo():
     if st.session_state.u_in == sec_user and st.session_state.p_in == sec_pass: 
         st.session_state.admin_unlocked = True
         st.session_state.show_login_form = False
-        st.rerun()
+        st.rerun() # Al recargar, index.py detectará el unlock y agregará "Carga" al menú
     else: 
         st.error("Credenciales incorrectas")
 
-# --- 6. RENDERIZADO VISUAL ---
+# --- VISUALIZACIÓN ---
 
-# 6.1 HEADER
+# Header
 st.markdown("""
     <div style='text-align: center; margin-bottom: 25px;'>
         <h3 style='color: white; font-size: 20px; margin: 0;'>BIENVENIDOS AL COMPLEJO ACUÁTICO</h3>
@@ -116,7 +79,7 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# 6.2 TARJETA PERSONAL (Común a ambos)
+# Tarjeta Personal
 if db and st.session_state.user_id:
     user_id = st.session_state.user_id
     me = db['nadadores'][db['nadadores']['codnadador'] == user_id].iloc[0]
@@ -134,8 +97,14 @@ if db and st.session_state.user_id:
     mis_bronces = len(df_t[(df_t['codnadador']==user_id)&(df_t['posicion']==3)]) + len(df_r[((df_r['nadador_1']==user_id)|(df_r['nadador_2']==user_id)|(df_r['nadador_3']==user_id)|(df_r['nadador_4']==user_id))&(df_r['posicion']==3)])
     mi_total = mis_oros + mis_platas + mis_bronces
 
+    st.write("### 👤 Tu Perfil")
     st.markdown(f"""
-    <div style="background-color: #262730; border: 1px solid #444; border-radius: 12px; padding: 15px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 6px rgba(0,0,0,0.3); margin-bottom: 25px;">
+    <style>
+        .padron-card {{ background-color: #262730; border: 1px solid #444; border-radius: 12px; padding: 15px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 6px rgba(0,0,0,0.3); margin-bottom: 20px; transition: transform 0.2s; }}
+        .padron-card:hover {{ border-color: #E30613; transform: scale(1.01); cursor: pointer; }}
+        .p-total {{ font-size: 26px; color: #FFD700; font-weight: bold; }}
+    </style>
+    <div class="padron-card">
         <div style="flex: 2; border-right: 1px solid #555;">
             <div style="font-weight: bold; font-size: 18px; color: white;">{me['nombre']} {me['apellido']}</div>
             <div style="font-size: 13px; color: #ccc;">{edad} años • {me['codgenero']}</div>
@@ -146,69 +115,18 @@ if db and st.session_state.user_id:
             </div>
         </div>
         <div style="flex: 1; text-align: right; border-left: 1px solid #555; padding-left: 10px;">
-            <div style="font-size: 26px; color: #FFD700; font-weight: bold;">★ {mi_total}</div>
+            <div class="p-total">★ {mi_total}</div>
             <div style="font-size: 16px; color: #4CAF50; font-weight: bold;">{cat}</div>
         </div>
     </div>
     """, unsafe_allow_html=True)
-
-# 6.3 MENÚ DE NAVEGACIÓN (Botones grandes)
-st.write("### 🧭 Menú Principal")
-
-if st.session_state.role == "N":
-    # --- MENÚ NADADOR (SIMPLE) ---
-    if st.button("👤 Ver Mi Ficha Completa", type="primary", use_container_width=True):
+    
+    # Botón Ver Ficha (Redirige)
+    if st.button("Ver Mi Ficha Completa ➝", type="primary", use_container_width=True):
         st.session_state.ver_nadador_especifico = st.session_state.user_name
         st.switch_page("pages/2_visualizar_datos.py")
-        
-    st.info("ℹ️ Para ver tu historial detallado y buscar compañeros, ingresa a tu ficha.")
 
-elif st.session_state.role == "M":
-    # --- MENÚ MASTER (GRID COMPLETO) ---
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        # Usamos botones nativos con un poco de hack CSS visual arriba
-        if st.button("🗃️ Base de Datos", use_container_width=True, help="Fichas, Padrón y Tiempos"):
-            st.session_state.ver_nadador_especifico = None # Entrar limpio
-            st.switch_page("pages/2_visualizar_datos.py")
-            
-        st.write("")
-        if st.button("⏱️ Simulador", use_container_width=True, help="Armado de postas"):
-            st.switch_page("pages/3_simulador.py")
-
-    with col2:
-        if st.button("🏆 Ranking", use_container_width=True, help="Mejores tiempos del club"):
-            st.switch_page("pages/4_ranking.py")
-            
-        st.write("")
-        # BOTÓN CARGA (Solo aparece si está desbloqueado)
-        if st.session_state.get("admin_unlocked", False):
-            if st.button("⚙️ Cargar Datos", type="primary", use_container_width=True):
-                st.switch_page("pages/1_cargar_datos.py")
-        else:
-            st.button("🔒 Cargar Datos (Bloqueado)", disabled=True, use_container_width=True)
-
-    # --- ZONA CANDADO ---
-    st.write(""); st.write("")
-    c_pad, c_form = st.columns([1, 5])
-    with c_pad:
-        if not st.session_state.get("admin_unlocked", False):
-            if st.button("🔒", help="Desbloquear Admin"):
-                st.session_state.show_login_form = not st.session_state.get("show_login_form", False)
-        else:
-            if st.button("🔓", help="Bloquear Admin"):
-                st.session_state.admin_unlocked = False
-                st.rerun()
-
-    if st.session_state.get("show_login_form") and not st.session_state.get("admin_unlocked"):
-        with st.form("admin_login"):
-            st.write("**Acceso Profesor**")
-            st.text_input("Usuario", key="u_in")
-            st.text_input("Contraseña", type="password", key="p_in")
-            st.form_submit_button("Desbloquear", on_click=intentar_desbloqueo)
-
-# 6.4 ESTADÍSTICAS GLOBALES (AL FINAL)
+# Estadísticas Generales
 st.divider()
 with st.expander("📊 Ver Estadísticas Globales del Club", expanded=False):
     if db:
@@ -222,7 +140,6 @@ with st.expander("📊 Ver Estadísticas Globales del Club", expanded=False):
             base = alt.Chart(df_n).encode(theta=alt.Theta("count()", stack=True))
             pie = base.mark_arc(outerRadius=60).encode(color=alt.Color("codgenero", legend=None))
             st.altair_chart(pie, use_container_width=True)
-            st.caption("Distribución por Género")
             
         with c2:
             st.metric("Registros", len(db['tiempos']) + len(db['relevos']))
@@ -231,8 +148,26 @@ with st.expander("📊 Ver Estadísticas Globales del Club", expanded=False):
                 y='count()', color='codgenero'
             ).properties(height=150)
             st.altair_chart(chart, use_container_width=True)
-            st.caption("Distribución por Categoría")
 
-st.write("")
-if st.button("Cerrar Sesión", type="secondary"):
-    cerrar_sesion()
+# Candado del Profesor (Solo si es M o P)
+if st.session_state.role in ["M", "P"]:
+    st.write(""); st.write("")
+    col_space, col_lock = st.columns([8, 1])
+    with col_lock:
+        if not st.session_state.admin_unlocked:
+            if st.button("🔒", help="Desbloquear Funciones Admin", type="tertiary"):
+                st.session_state.show_login_form = not st.session_state.get("show_login_form", False)
+        else:
+            if st.button("🔓", help="Bloquear Funciones Admin"):
+                st.session_state.admin_unlocked = False
+                st.rerun()
+
+    if st.session_state.get("show_login_form") and not st.session_state.get("admin_unlocked"):
+        with st.form("admin_login"):
+            st.write("**Acceso Profesor**")
+            st.text_input("Usuario", key="u_in")
+            st.text_input("Contraseña", type="password", key="p_in")
+            st.form_submit_button("Desbloquear", on_click=intentar_desbloqueo)
+    
+    if st.session_state.admin_unlocked:
+        st.success("✅ Modo Administración Activo: Se agregó 'Carga' al menú lateral.")
