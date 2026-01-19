@@ -48,18 +48,25 @@ def limpiar_cache():
 
 def obtener_nuevo_id(df, col_id):
     if df.empty: return 1
-    # Intentar convertir a numero si es string
     try:
         return int(df[col_id].max()) + 1
     except:
         return len(df) + 1
 
-# Mapeos inversos para guardar códigos, no nombres
+# --- PREPARACIÓN DE MAPEOS (CORRECCIÓN KEYERROR) ---
+
+# 1. Estilos y Distancias (Asumimos que tienen 'descripcion')
 map_estilos = dict(zip(db['estilos']['descripcion'], db['estilos']['codestilo']))
 map_distancias = dict(zip(db['distancias']['descripcion'], db['distancias']['coddistancia']))
+
+# 2. Piletas (FIX: Crear descripción si no existe)
+if 'descripcion' not in db['piletas'].columns:
+    # Creamos una columna temporal combinando Club y Medida para que sea legible
+    db['piletas']['descripcion'] = db['piletas']['club'].astype(str) + " (" + db['piletas']['medida'].astype(str) + ")"
+
 map_piletas = dict(zip(db['piletas']['descripcion'], db['piletas']['codpileta']))
 
-# Crear columna nombre completo para el selector
+# 3. Nadadores (Nombre completo)
 df_nad_view = db['nadadores'].copy()
 df_nad_view['full_name'] = df_nad_view['apellido'].astype(str) + ", " + df_nad_view['nombre'].astype(str)
 map_nadadores = dict(zip(df_nad_view['full_name'], df_nad_view['codnadador']))
@@ -129,10 +136,8 @@ with tab_relevos:
         st.markdown("**Integrantes**")
         col_int = st.columns(4)
         integrantes = []
-        tiempos_parciales = []
         for i in range(4):
             integrantes.append(col_int[i].selectbox(f"Nadador {i+1}", sorted(map_nadadores.keys()), key=f"rn_{i}"))
-            # Opcional: Podríamos pedir parciales, pero simplificamos
         
         c4, c5, c6 = st.columns(3)
         r_tiempo = c4.text_input("Tiempo Final", placeholder="00:00.00")
@@ -216,23 +221,22 @@ with tab_nadadores:
                             'nrosocio': n_socio
                         }])
                         
-                        # También habría que crear el usuario en hoja Users si se maneja separado
-                        # Por ahora actualizamos Nadadores
                         df_n_final = pd.concat([df_nad, fila_nad], ignore_index=True)
                         conn.update(worksheet="Nadadores", data=df_n_final)
                         
                         # Actualizar Users (Login)
                         try:
                             df_u = conn.read(worksheet="User")
+                            nuevo_id_u = obtener_nuevo_id(df_u, 'id_user')
                             fila_u = pd.DataFrame([{
-                                'id_user': obtener_nuevo_id(df_u, 'id_user'),
+                                'id_user': nuevo_id_u,
                                 'nrosocio': n_socio,
-                                'perfil': 'N' # Por defecto Nadador
+                                'perfil': 'N' 
                             }])
                             df_u_final = pd.concat([df_u, fila_u], ignore_index=True)
                             conn.update(worksheet="User", data=df_u_final)
                         except:
-                            st.warning("Se creó el nadador pero hubo error al crear usuario en tabla User.")
+                            st.warning("Se creó el nadador pero hubo error al actualizar la tabla User.")
 
                         limpiar_cache()
                         st.success(f"✅ Nadador {n_nom} {n_ape} creado con éxito.")
