@@ -13,7 +13,7 @@ if "role" not in st.session_state: st.session_state.role = None
 if "user_name" not in st.session_state: st.session_state.user_name = None
 if "user_id" not in st.session_state: st.session_state.user_id = None
 if "nro_socio" not in st.session_state: st.session_state.nro_socio = None
-if "admin_unlocked" not in st.session_state: st.session_state.admin_unlocked = False # Para el candado
+if "admin_unlocked" not in st.session_state: st.session_state.admin_unlocked = False 
 if "show_password" not in st.session_state: st.session_state.show_password = False
 
 # --- 3. CONEXIÓN ---
@@ -41,7 +41,6 @@ def limpiar_socio(valor):
 def calcular_categoria(anio_nac):
     anio_actual = datetime.now().year
     edad = anio_actual - anio_nac
-    # Lógica simple para gráficos (puedes ajustar si tienes la tabla exacta)
     if edad < 20: return "Juvenil"
     elif 20 <= edad <= 24: return "PRE"
     elif 25 <= edad <= 29: return "A"
@@ -103,48 +102,19 @@ def cerrar_sesion():
     st.rerun()
 
 def intentar_desbloqueo():
-    # Contraseña simple para el candado
     if st.session_state.pass_input == "nob1903": 
         st.session_state.admin_unlocked = True
         st.session_state.show_password = False
         st.rerun()
-    else:
-        st.error("Incorrecto")
+    else: st.error("Incorrecto")
 
-# --- 6. COMPONENTE COMPARTIDO: EL INDEX VISUAL (GRÁFICOS + KPIs) ---
-def render_index_visual(df_n, df_t, df_r):
-    # 1. KPIs Numéricos
-    df_t['posicion'] = pd.to_numeric(df_t['posicion'], errors='coerce').fillna(0)
-    df_r['posicion'] = pd.to_numeric(df_r['posicion'], errors='coerce').fillna(0)
+# --- 6. COMPONENTE VISUAL COMPARTIDO (GRÁFICOS) ---
+def render_graficos_comunes(df_n, df_t, df_r):
+    # KPIs Club Generales (Solo números grandes para contexto)
+    cant_nad = len(df_n)
+    cant_reg = len(df_t) + len(df_r)
     
-    t_oro = len(df_t[df_t['posicion']==1]) + len(df_r[df_r['posicion']==1])
-    t_plata = len(df_t[df_t['posicion']==2]) + len(df_r[df_r['posicion']==2])
-    t_bronce = len(df_t[df_t['posicion']==3]) + len(df_r[df_r['posicion']==3])
-    total_med = t_oro + t_plata + t_bronce
-    
-    st.markdown(f"""
-    <div style="display: flex; justify-content: space-between; gap: 10px; margin-bottom: 10px;">
-        <div style="background-color: #262730; padding: 15px; border-radius: 10px; width: 48%; text-align: center; border: 1px solid #444; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
-            <div style="font-size: 32px; font-weight: bold; color: white;">{len(df_n)}</div>
-            <div style="font-size: 13px; color: #ccc; text-transform: uppercase;">🏊‍♂️ Nadadores</div>
-        </div>
-        <div style="background-color: #262730; padding: 15px; border-radius: 10px; width: 48%; text-align: center; border: 1px solid #444; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
-            <div style="font-size: 32px; font-weight: bold; color: white;">{len(df_t)+len(df_r)}</div>
-            <div style="font-size: 13px; color: #ccc; text-transform: uppercase;">⏱️ Registros</div>
-        </div>
-    </div>
-    <div style="background-color: #1E1E1E; border: 1px solid #333; border-radius: 10px; padding: 12px; margin-bottom: 25px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
-        <div style="text-align:center; font-size:11px; color:#aaa; margin-bottom:8px; letter-spacing:2px; font-weight:bold;">MEDALLERO HISTÓRICO (IND + RELEVOS)</div>
-        <div style="display: flex; justify-content: space-between; gap: 2px;">
-            <div style="flex:1; text-align:center;"><div style="font-size:22px; font-weight:bold; color:#FFD700;">🥇 {t_oro}</div><div style="font-size:10px; color:#888;">ORO</div></div>
-            <div style="flex:1; text-align:center; border-left:1px solid #333;"><div style="font-size:22px; font-weight:bold; color:#C0C0C0;">🥈 {t_plata}</div><div style="font-size:10px; color:#888;">PLATA</div></div>
-            <div style="flex:1; text-align:center; border-left:1px solid #333;"><div style="font-size:22px; font-weight:bold; color:#CD7F32;">🥉 {t_bronce}</div><div style="font-size:10px; color:#888;">BRONCE</div></div>
-            <div style="flex:1; text-align:center; border-left:1px solid #333; background:rgba(255,255,255,0.05); border-radius:4px;"><div style="font-size:22px; font-weight:bold; color:#fff;">★ {total_med}</div><div style="font-size:10px; color:#888;">TOTAL</div></div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # 2. Gráficos (Recuperados)
+    # Gráficos
     if not df_n.empty:
         df_n['Anio'] = pd.to_datetime(df_n['fechanac']).dt.year
         df_n['Categoria'] = df_n['Anio'].apply(calcular_categoria)
@@ -155,8 +125,7 @@ def render_index_visual(df_n, df_t, df_r):
         with t_g:
             base = alt.Chart(df_n).encode(theta=alt.Theta("count()", stack=True))
             pie = base.mark_arc(outerRadius=80, innerRadius=50).encode(
-                color=alt.Color("codgenero", scale=colors, legend=None),
-                tooltip=["codgenero", "count()"]
+                color=alt.Color("codgenero", scale=colors, legend=None), tooltip=["codgenero", "count()"]
             )
             text = base.mark_text(radius=100).encode(text="count()", order=alt.Order("codgenero"), color=alt.value("white"))
             st.altair_chart(pie + text, use_container_width=True)
@@ -165,14 +134,12 @@ def render_index_visual(df_n, df_t, df_r):
         with t_c:
             orden = ["Juvenil", "PRE", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L+"]
             chart = alt.Chart(df_n).mark_bar(cornerRadius=3).encode(
-                x=alt.X('Categoria', sort=orden, title=None),
-                y=alt.Y('count()', title=None),
-                color=alt.Color('codgenero', legend=None, scale=colors),
-                tooltip=['Categoria', 'codgenero', 'count()']
+                x=alt.X('Categoria', sort=orden, title=None), y=alt.Y('count()', title=None),
+                color=alt.Color('codgenero', legend=None, scale=colors), tooltip=['Categoria', 'codgenero', 'count()']
             ).properties(height=200)
             st.altair_chart(chart, use_container_width=True)
 
-# --- 7. DASHBOARD M (MASTER - CON TODO + CANDADO) ---
+# --- 7. DASHBOARD M (MASTER) ---
 def dashboard_m():
     st.markdown("""
         <div style='text-align: center; margin-bottom: 20px;'>
@@ -183,7 +150,39 @@ def dashboard_m():
     st.divider()
 
     if db:
-        render_index_visual(db['nadadores'].copy(), db['tiempos'].copy(), db['relevos'].copy())
+        df_t = db['tiempos'].copy(); df_r = db['relevos'].copy()
+        df_t['posicion'] = pd.to_numeric(df_t['posicion'], errors='coerce').fillna(0)
+        df_r['posicion'] = pd.to_numeric(df_r['posicion'], errors='coerce').fillna(0)
+        
+        t_oro = len(df_t[df_t['posicion']==1]) + len(df_r[df_r['posicion']==1])
+        t_plata = len(df_t[df_t['posicion']==2]) + len(df_r[df_r['posicion']==2])
+        t_bronce = len(df_t[df_t['posicion']==3]) + len(df_r[df_r['posicion']==3])
+        total_med = t_oro + t_plata + t_bronce
+        
+        # KPIs Superiores (M)
+        st.markdown(f"""
+        <div style="display: flex; justify-content: space-between; gap: 10px; margin-bottom: 10px;">
+            <div style="background-color: #262730; padding: 15px; border-radius: 10px; width: 48%; text-align: center; border: 1px solid #444; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+                <div style="font-size: 32px; font-weight: bold; color: white;">{len(db['nadadores'])}</div>
+                <div style="font-size: 13px; color: #ccc; text-transform: uppercase;">🏊‍♂️ Nadadores</div>
+            </div>
+            <div style="background-color: #262730; padding: 15px; border-radius: 10px; width: 48%; text-align: center; border: 1px solid #444; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+                <div style="font-size: 32px; font-weight: bold; color: white;">{len(df_t)+len(df_r)}</div>
+                <div style="font-size: 13px; color: #ccc; text-transform: uppercase;">⏱️ Registros</div>
+            </div>
+        </div>
+        <div style="background-color: #1E1E1E; border: 1px solid #333; border-radius: 10px; padding: 12px; margin-bottom: 25px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+            <div style="text-align:center; font-size:11px; color:#aaa; margin-bottom:8px; letter-spacing:2px; font-weight:bold;">MEDALLERO HISTÓRICO</div>
+            <div style="display: flex; justify-content: space-between; gap: 2px;">
+                <div style="flex:1; text-align:center;"><div style="font-size:22px; font-weight:bold; color:#FFD700;">🥇 {t_oro}</div><div style="font-size:10px; color:#888;">ORO</div></div>
+                <div style="flex:1; text-align:center; border-left:1px solid #333;"><div style="font-size:22px; font-weight:bold; color:#C0C0C0;">🥈 {t_plata}</div><div style="font-size:10px; color:#888;">PLATA</div></div>
+                <div style="flex:1; text-align:center; border-left:1px solid #333;"><div style="font-size:22px; font-weight:bold; color:#CD7F32;">🥉 {t_bronce}</div><div style="font-size:10px; color:#888;">BRONCE</div></div>
+                <div style="flex:1; text-align:center; border-left:1px solid #333; background:rgba(255,255,255,0.05); border-radius:4px;"><div style="font-size:22px; font-weight:bold; color:#fff;">★ {total_med}</div><div style="font-size:10px; color:#888;">TOTAL</div></div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        render_graficos_comunes(db['nadadores'].copy(), db['tiempos'].copy(), db['relevos'].copy())
         
         st.divider()
         c1, c2 = st.columns(2)
@@ -191,31 +190,28 @@ def dashboard_m():
             if st.button("🗃️ Base de Datos", use_container_width=True): st.switch_page("pages/2_visualizar_datos.py")
         with c2: 
             if st.button("🏆 Ver Ranking", use_container_width=True): st.switch_page("pages/4_ranking.py")
-        
         st.write("")
         if st.button("⏱️ Simulador de Postas", type="primary", use_container_width=True): st.switch_page("pages/3_simulador.py")
 
-        # --- CANDADO PARA CARGA ---
+        # --- CANDADO M ---
         st.write(""); st.write("")
         col_space, col_lock = st.columns([8, 1])
         with col_lock:
-            # Si ya es admin, mostramos candado abierto o nada
             if not st.session_state.admin_unlocked:
                 if st.button("🔒", key="lock_m", help="Acceso Admin", type="tertiary"):
                     st.session_state.show_password = not st.session_state.show_password
         
         if st.session_state.show_password and not st.session_state.admin_unlocked:
             c_pass, c_ok = st.columns([3, 1])
-            st.session_state.pass_input = c_pass.text_input("Clave Admin", type="password", label_visibility="collapsed")
+            st.session_state.pass_input = c_pass.text_input("Clave", type="password", label_visibility="collapsed")
             if c_ok.button("OK"): intentar_desbloqueo()
         
-        if st.session_state.admin_unlocked:
-            st.success("🔓 Modo Admin Activo: Pestaña 'Carga' habilitada.")
+        if st.session_state.admin_unlocked: st.success("🔓 Admin Activo.")
         
         st.divider()
         if st.button("Cerrar Sesión"): cerrar_sesion()
 
-# --- 8. DASHBOARD N (NADADOR - INDEX COMPLETO + CARD) ---
+# --- 8. DASHBOARD N (NADADOR) ---
 def dashboard_n():
     st.markdown("""
         <div style='text-align: center; margin-bottom: 20px;'>
@@ -226,13 +222,9 @@ def dashboard_n():
     st.divider()
 
     if db:
-        # 1. MOSTRAR TODO EL INDEX (Como pidió el usuario)
-        render_index_visual(db['nadadores'].copy(), db['tiempos'].copy(), db['relevos'].copy())
-        
-        st.divider()
+        # --- 1. CARD PERSONAL ARRIBA (Prioridad) ---
         st.write("### 👤 Tu Perfil")
         
-        # 2. CALCULAR DATOS DE LA CARD PERSONAL
         my_id = st.session_state.user_id
         df_nad = db['nadadores']
         me = df_nad[df_nad['codnadador'] == my_id].iloc[0]
@@ -241,21 +233,20 @@ def dashboard_n():
         except: edad = 0
         cat = calcular_cat_exacta(edad, db['categorias'])
         
-        # Medallas propias
         df_t = db['tiempos'].copy(); df_r = db['relevos'].copy()
         df_t['posicion'] = pd.to_numeric(df_t['posicion'], errors='coerce').fillna(0)
         df_r['posicion'] = pd.to_numeric(df_r['posicion'], errors='coerce').fillna(0)
         
+        # Medallas Propias
         mi_oro = len(df_t[(df_t['codnadador']==my_id)&(df_t['posicion']==1)]) + len(df_r[((df_r['nadador_1']==my_id)|(df_r['nadador_2']==my_id)|(df_r['nadador_3']==my_id)|(df_r['nadador_4']==my_id))&(df_r['posicion']==1)])
         mi_plata = len(df_t[(df_t['codnadador']==my_id)&(df_t['posicion']==2)]) + len(df_r[((df_r['nadador_1']==my_id)|(df_r['nadador_2']==my_id)|(df_r['nadador_3']==my_id)|(df_r['nadador_4']==my_id))&(df_r['posicion']==2)])
         mi_bronce = len(df_t[(df_t['codnadador']==my_id)&(df_t['posicion']==3)]) + len(df_r[((df_r['nadador_1']==my_id)|(df_r['nadador_2']==my_id)|(df_r['nadador_3']==my_id)|(df_r['nadador_4']==my_id))&(df_r['posicion']==3)])
         mi_total = mi_oro + mi_plata + mi_bronce
         
-        # 3. CARD PERSONAL (Estilo CSS en st.markdown abajo)
         st.markdown(f"""
         <style>
-            .padron-card {{ background-color: #262730; border: 1px solid #444; border-radius: 12px; padding: 15px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 6px rgba(0,0,0,0.3); transition: transform 0.2s; }}
-            .padron-card:hover {{ border-color: #E30613; transform: scale(1.02); cursor: pointer; }}
+            .padron-card {{ background-color: #262730; border: 1px solid #444; border-radius: 12px; padding: 15px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 6px rgba(0,0,0,0.3); transition: transform 0.2s; margin-bottom: 15px; }}
+            .padron-card:hover {{ border-color: #E30613; transform: scale(1.02); }}
             .p-total {{ font-size: 26px; color: #FFD700; font-weight: bold; }}
         </style>
         <div class="padron-card">
@@ -275,14 +266,48 @@ def dashboard_n():
         </div>
         """, unsafe_allow_html=True)
         
-        # Botón de acción
         if st.button("Ver Mi Ficha Completa ➝", type="primary", use_container_width=True):
             st.switch_page("pages/2_visualizar_datos.py")
-            
+        
+        st.divider()
+        
+        # --- 2. INFORMACIÓN DEL CLUB (Abajo) ---
+        st.markdown("<h5 style='text-align: center; color: #888;'>ESTADÍSTICAS DEL CLUB</h5>", unsafe_allow_html=True)
+        
+        # KPIs Club (Recalculados simples para visualización)
+        t_oro = len(df_t[df_t['posicion']==1]) + len(df_r[df_r['posicion']==1])
+        t_plata = len(df_t[df_t['posicion']==2]) + len(df_r[df_r['posicion']==2])
+        t_bronce = len(df_t[df_t['posicion']==3]) + len(df_r[df_r['posicion']==3])
+        total_med = t_oro + t_plata + t_bronce
+        
+        st.markdown(f"""
+        <div style="display: flex; justify-content: space-between; gap: 10px; margin-bottom: 10px;">
+            <div style="background-color: #262730; padding: 15px; border-radius: 10px; width: 48%; text-align: center; border: 1px solid #444; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+                <div style="font-size: 32px; font-weight: bold; color: white;">{len(db['nadadores'])}</div>
+                <div style="font-size: 13px; color: #ccc;">NADADORES</div>
+            </div>
+            <div style="background-color: #262730; padding: 15px; border-radius: 10px; width: 48%; text-align: center; border: 1px solid #444; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+                <div style="font-size: 32px; font-weight: bold; color: white;">{len(df_t)+len(df_r)}</div>
+                <div style="font-size: 13px; color: #ccc;">REGISTROS</div>
+            </div>
+        </div>
+        <div style="background-color: #1E1E1E; border: 1px solid #333; border-radius: 10px; padding: 12px; margin-bottom: 25px;">
+            <div style="text-align:center; font-size:11px; color:#aaa; margin-bottom:8px; font-weight:bold;">MEDALLERO HISTÓRICO</div>
+            <div style="display: flex; justify-content: space-between; gap: 2px;">
+                <div style="flex:1; text-align:center;"><div style="font-size:22px; color:#FFD700;">🥇 {t_oro}</div></div>
+                <div style="flex:1; text-align:center; border-left:1px solid #333;"><div style="font-size:22px; color:#C0C0C0;">🥈 {t_plata}</div></div>
+                <div style="flex:1; text-align:center; border-left:1px solid #333;"><div style="font-size:22px; color:#CD7F32;">🥉 {t_bronce}</div></div>
+                <div style="flex:1; text-align:center; border-left:1px solid #333; background:rgba(255,255,255,0.05);"><div style="font-size:22px; color:#fff;">★ {total_med}</div></div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        render_graficos_comunes(db['nadadores'].copy(), db['tiempos'].copy(), db['relevos'].copy())
+        
         st.divider()
         if st.button("Cerrar Sesión", type="secondary"): cerrar_sesion()
 
-# --- 9. RUTEO FINAL ---
+# --- 9. RUTEO ---
 pg_dash_m = st.Page(dashboard_m, title="Inicio", icon="🏠")
 pg_dash_n = st.Page(dashboard_n, title="Mi Perfil", icon="🏊")
 pg_datos = st.Page("pages/2_visualizar_datos.py", title="Base de Datos", icon="🗃️")
@@ -298,14 +323,11 @@ if not st.session_state.role:
     if st.button("Ingresar", type="primary", use_container_width=True): validar_socio()
 
 elif st.session_state.role == "M":
-    # M ve Inicio, Datos, Ranking, Simulador... y si desbloqueó, Carga
     pages_m = [pg_dash_m, pg_datos, pg_ranking, pg_simulador]
     if st.session_state.admin_unlocked: pages_m.append(pg_carga)
-    
     pg = st.navigation(pages_m)
     pg.run()
 
 elif st.session_state.role == "N":
-    # N solo ve Inicio (con su card) y Datos (restringido)
     pg = st.navigation([pg_dash_n, pg_datos])
     pg.run()
