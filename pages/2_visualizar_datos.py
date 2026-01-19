@@ -32,14 +32,13 @@ st.markdown("""
     .p-col-right { flex: 1; text-align: right; padding-left: 10px; border-left: 1px solid #555; }
     
     .p-name { font-weight: bold; font-size: 18px; color: white; margin-bottom: 5px; }
-    .p-meta { font-size: 14px; color: #ccc; }
+    .p-meta { font-size: 13px; color: #ccc; } /* Letra un poco más chica para que entre el texto */
     .p-medals { font-size: 16px; display: flex; justify-content: center; gap: 10px; margin-top: 5px;}
     .p-total { font-size: 28px; color: #FFD700; font-weight: bold; line-height: 1; }
     .p-cat { font-size: 18px; color: #4CAF50; font-weight: bold; margin-top: 5px; }
 
-    /* FICHA TÉCNICA - CAMBIO DE COLOR (Rojo NOB elegante) */
+    /* FICHA TÉCNICA - ROJO NOB */
     .ficha-header {
-        /* Degradado Rojo Oscuro a Negro (Estilo NOB Premium) */
         background: linear-gradient(135deg, #8B0000 0%, #3E0000 100%);
         padding: 20px;
         border-radius: 10px;
@@ -49,12 +48,12 @@ st.markdown("""
         box-shadow: 0 4px 6px rgba(0,0,0,0.4);
     }
     .ficha-name { font-size: 24px; font-weight: bold; border-bottom: 1px solid rgba(255,255,255,0.3); padding-bottom: 10px; margin-bottom: 10px; }
-    .ficha-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 15px; }
+    .ficha-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 14px; }
     .ficha-medals { background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; text-align: center; margin-top: 15px; font-size: 18px; }
 
     /* MEJORES MARCAS */
     .pb-style-header {
-        color: #e53935; /* Un rojo suave para los títulos */
+        color: #e53935;
         font-weight: bold;
         font-size: 16px;
         margin-top: 15px;
@@ -70,7 +69,7 @@ st.markdown("""
         display: flex;
         justify-content: space-between;
         align-items: center;
-        border-left: 4px solid #B71C1C; /* Borde rojo oscuro */
+        border-left: 4px solid #B71C1C;
     }
     .pb-dist { font-size: 15px; color: #eee; }
     .pb-time { font-size: 18px; font-weight: bold; font-family: monospace; color: #fff; }
@@ -179,12 +178,12 @@ with tab1:
         cat = asignar_cat(edad)
         o, p, b, t = int(row.get('Oro',0)), int(row.get('Plata',0)), int(row.get('Bronce',0)), int(row.get('Total',0))
         
-        # Tarjeta Visual
+        # Tarjeta Visual (ACTUALIZADA: Edad explícita)
         st.markdown(f"""
         <div class="padron-card">
             <div class="p-col-left">
                 <div class="p-name">{row['Nombre Completo']}</div>
-                <div class="p-meta">{edad} años • {row['codgenero']}</div>
+                <div class="p-meta">{edad} años (al 31/12) • {row['codgenero']}</div>
             </div>
             <div class="p-col-center">
                 <div class="p-medals">
@@ -198,9 +197,8 @@ with tab1:
         </div>
         """, unsafe_allow_html=True)
         
-        # BOTÓN FUNCIONAL
-        # Usamos key única por nadador. Al hacer click, guardamos en session_state
-        if st.button(f"Seleccionar a {row['nombre']}", key=f"btn_{row['codnadador']}", use_container_width=True):
+        # Botón para ir a la ficha
+        if st.button(f"Ver Ficha de {row['nombre']} ➝", key=f"btn_{row['codnadador']}", use_container_width=True):
             st.session_state.nadador_seleccionado = row['Nombre Completo']
             st.toast(f"✅ {row['nombre']} seleccionado. Ve a la pestaña '👤 Ficha Técnica'", icon="👤")
 
@@ -208,10 +206,9 @@ with tab1:
 # TAB 2: FICHA TÉCNICA
 # ==========================================
 with tab2:
-    # Recuperar índice si hay selección previa
+    # Selector sincronizado con el botón del Padrón
     lista_nombres = sorted(df_nad['Nombre Completo'].unique().tolist())
     idx_sel = 0
-    
     if st.session_state.nadador_seleccionado in lista_nombres:
         idx_sel = lista_nombres.index(st.session_state.nadador_seleccionado)
 
@@ -229,19 +226,19 @@ with tab2:
         except: edad = 0; nac_str = "-"
         cat = asignar_cat(edad)
         
-        # Medallas específicas
+        # Medallas específicas de este nadador (calculadas previamente en df_view logic)
         row_m = df_view[df_view['codnadador'] == id_n]
         if not row_m.empty:
             o, pl, br = int(row_m.iloc[0]['Oro']), int(row_m.iloc[0]['Plata']), int(row_m.iloc[0]['Bronce'])
         else: o, pl, br = 0, 0, 0
 
-        # --- 1. CABECERA (ROJO NOB) ---
+        # --- 1. CABECERA DE DATOS PERSONALES (ACTUALIZADO: EDAD 31/12) ---
         st.markdown(f"""
         <div class="ficha-header">
             <div class="ficha-name">{info['nombre']} {info['apellido']}</div>
             <div class="ficha-grid">
                 <div>📅 Nacimiento: <b>{nac_str}</b></div>
-                <div>🎂 Edad: <b>{edad} años</b></div>
+                <div>🎂 Edad (al 31/12): <b>{edad} años</b></div>
                 <div>🏷️ Categoría: <b>{cat}</b></div>
                 <div>⚧️ Género: <b>{info['codgenero']}</b></div>
             </div>
@@ -277,7 +274,7 @@ with tab2:
 
             st.divider()
 
-            # --- 3. GRÁFICO ---
+            # --- 3. GRÁFICO (CON FILTROS INTELIGENTES) ---
             st.subheader("📈 Evolución de Tiempos")
             conteo = mis_t.groupby(['Estilo', 'Distancia']).size().reset_index(name='count')
             validos = conteo[conteo['count'] >= 2]
@@ -295,7 +292,7 @@ with tab2:
                 df_graph['TimeObj'] = pd.to_datetime('2024-01-01') + pd.to_timedelta(df_graph['segundos'], unit='s')
                 fig = px.line(df_graph, x='fecha', y='TimeObj', markers=True, template="plotly_dark")
                 fig.update_yaxes(tickformat="%M:%S.%f", title="Tiempo")
-                fig.update_traces(line_color='#E53935') # Línea roja para combinar
+                fig.update_traces(line_color='#E53935') 
                 fig.update_layout(height=300, margin=dict(t=10, b=10, l=40, r=20))
                 st.plotly_chart(fig, use_container_width=True)
             else:
