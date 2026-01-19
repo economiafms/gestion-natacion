@@ -108,14 +108,35 @@ def dashboard_main():
     if data:
         df_n = data['nadadores']
         df_t = data['tiempos']
+        df_r = data['relevos']
         
+        # --- CÁLCULO DE MEDALLAS (INDIVIDUAL + RELEVOS) ---
+        # Convertimos a numérico para evitar errores
+        df_t['posicion'] = pd.to_numeric(df_t['posicion'], errors='coerce').fillna(0)
+        df_r['posicion'] = pd.to_numeric(df_r['posicion'], errors='coerce').fillna(0)
+        
+        # Conteo Individual
+        oro_ind = len(df_t[df_t['posicion'] == 1])
+        plata_ind = len(df_t[df_t['posicion'] == 2])
+        bronce_ind = len(df_t[df_t['posicion'] == 3])
+        
+        # Conteo Relevos (Cada relevo cuenta como 1 medalla para el club)
+        oro_rel = len(df_r[df_r['posicion'] == 1])
+        plata_rel = len(df_r[df_r['posicion'] == 2])
+        bronce_rel = len(df_r[df_r['posicion'] == 3])
+        
+        # Totales
+        tot_oro = oro_ind + oro_rel
+        tot_plata = plata_ind + plata_rel
+        tot_bronce = bronce_ind + bronce_rel
+        tot_gral = tot_oro + tot_plata + tot_bronce
+
         # --- SECCIÓN 1: KPIs (Lado a Lado en Mobile) ---
         cant_nad = len(df_n)
         cant_reg = len(df_t)
         
-        # Usamos Flexbox para asegurar que queden horizontales en celular
         st.markdown(f"""
-        <div style="display: flex; justify-content: space-between; gap: 10px; margin-bottom: 20px;">
+        <div style="display: flex; justify-content: space-between; gap: 10px; margin-bottom: 10px;">
             <div style="background-color: #262730; padding: 15px; border-radius: 10px; width: 48%; text-align: center; border: 1px solid #444; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
                 <div style="font-size: 32px; font-weight: bold; color: white;">{cant_nad}</div>
                 <div style="font-size: 13px; color: #ccc; text-transform: uppercase;">🏊‍♂️ Nadadores</div>
@@ -123,6 +144,31 @@ def dashboard_main():
             <div style="background-color: #262730; padding: 15px; border-radius: 10px; width: 48%; text-align: center; border: 1px solid #444; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
                 <div style="font-size: 32px; font-weight: bold; color: white;">{cant_reg}</div>
                 <div style="font-size: 13px; color: #ccc; text-transform: uppercase;">⏱️ Registros</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # --- NUEVA SECCIÓN: MEDALLERO HISTÓRICO (Horizontal Compacto) ---
+        st.markdown(f"""
+        <div style="background-color: #1E1E1E; border: 1px solid #333; border-radius: 10px; padding: 10px; margin-bottom: 20px;">
+            <div style="text-align:center; font-size:12px; color:#aaa; margin-bottom:5px; letter-spacing:1px;">MEDALLERO HISTÓRICO</div>
+            <div style="display: flex; justify-content: space-between; gap: 5px;">
+                <div style="flex:1; text-align:center;">
+                    <div style="font-size:20px; font-weight:bold; color:#FFD700;">🥇 {tot_oro}</div>
+                    <div style="font-size:10px; color:#888;">ORO</div>
+                </div>
+                <div style="flex:1; text-align:center; border-left:1px solid #333;">
+                    <div style="font-size:20px; font-weight:bold; color:#C0C0C0;">🥈 {tot_plata}</div>
+                    <div style="font-size:10px; color:#888;">PLATA</div>
+                </div>
+                <div style="flex:1; text-align:center; border-left:1px solid #333;">
+                    <div style="font-size:20px; font-weight:bold; color:#CD7F32;">🥉 {tot_bronce}</div>
+                    <div style="font-size:10px; color:#888;">BRONCE</div>
+                </div>
+                <div style="flex:1; text-align:center; border-left:1px solid #333; background:rgba(255,255,255,0.05); border-radius:4px;">
+                    <div style="font-size:20px; font-weight:bold; color:#fff;">★ {tot_gral}</div>
+                    <div style="font-size:10px; color:#888;">TOTAL</div>
+                </div>
             </div>
         </div>
         """, unsafe_allow_html=True)
