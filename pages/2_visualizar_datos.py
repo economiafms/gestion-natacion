@@ -14,6 +14,7 @@ if "role" not in st.session_state or not st.session_state.role:
 
 rol = st.session_state.role
 mi_id = st.session_state.user_id
+mi_nombre = st.session_state.user_name
 
 st.title("📊 Base de Datos del Club")
 
@@ -93,7 +94,6 @@ st.markdown("""
     .relay-time { font-family: monospace; font-weight: bold; font-size: 20px; color: #4CAF50; }
     .relay-meta { font-size: 12px; color: #aaa; display: flex; justify-content: space-between; margin-bottom: 10px; }
     
-    /* GRILLA DE NADADORES EN RELEVOS (RECUPERADA) */
     .swimmer-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px; color: #eee; }
     .swimmer-item { background: rgba(255,255,255,0.05); padding: 4px 8px; border-radius: 4px; }
 </style>
@@ -122,8 +122,6 @@ if not data: st.stop()
 # --- 3. PROCESAMIENTO GLOBAL ---
 df_nad = data['nadadores'].copy()
 df_nad['Nombre Completo'] = df_nad['apellido'].astype(str).str.upper() + ", " + df_nad['nombre'].astype(str)
-
-# DICCIONARIO CLAVE PARA NOMBRES (RECUPERADO)
 dict_id_nombre = df_nad.set_index('codnadador')['Nombre Completo'].to_dict()
 
 def tiempo_a_segundos(t_str):
@@ -184,6 +182,7 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
         o, pl, br = int(row_m.iloc[0]['Oro']), int(row_m.iloc[0]['Plata']), int(row_m.iloc[0]['Bronce'])
     else: o, pl, br = 0, 0, 0
 
+    # CABECERA
     st.markdown(f"""
     <div class="ficha-header">
         <div class="ficha-name">{info['nombre']} {info['apellido']}</div>
@@ -269,7 +268,7 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
             </div>
         </div>""", unsafe_allow_html=True)
 
-    # 5. MIS RELEVOS (RESTAURADO COMPLETO)
+    # MIS RELEVOS
     st.subheader("🏊‍♂️ Mis Relevos")
     mr_base = data['relevos'].copy()
     cond_rel = (mr_base['nadador_1'] == target_id) | (mr_base['nadador_2'] == target_id) | (mr_base['nadador_3'] == target_id) | (mr_base['nadador_4'] == target_id)
@@ -281,25 +280,18 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
         mis_relevos = mis_relevos.sort_values('fecha', ascending=False)
         
         for _, r in mis_relevos.iterrows():
-            # --- LÓGICA RESTAURADA: Armar la grilla de compañeros ---
             html_grid = ""
             for k in range(1, 5):
-                nid_companero = r[f'nadador_{k}']
-                # Buscamos el nombre en el diccionario global recuperado
-                nom = dict_id_nombre.get(nid_companero, "??").split(',')[0]
-                
-                t_parcial = str(r[f'tiempo_{k}']).strip()
-                if t_parcial and t_parcial not in ["00.00", "0", "None", "nan"]: 
-                    nom += f" ({t_parcial})"
+                nid = r[f'nadador_{k}']
+                nom = dict_id_nombre.get(nid, "??").split(',')[0]
+                t = str(r[f'tiempo_{k}']).strip()
+                if t and t not in ["00.00", "0", "None", "nan"]: nom += f" ({t})"
                 
                 # Resaltar si soy yo
-                if nid_companero == target_id:
-                    html_grid += f"<div class='swimmer-item' style='border:1px solid #E91E63;'>{k}. {nom}</div>"
-                else:
-                    html_grid += f"<div class='swimmer-item'>{k}. {nom}</div>"
+                border_style = "border: 1px solid #E91E63;" if nid == target_id else ""
+                html_grid += f"<div class='swimmer-item' style='{border_style}'>{k}. {nom}</div>"
             
             pos_icon = "🥇" if r['posicion'] == 1 else ("🥈" if r['posicion'] == 2 else ("🥉" if r['posicion'] == 3 else ""))
-            
             st.markdown(f"""
             <div class="mobile-card" style="border-left: 4px solid #E91E63;">
                 <div class="relay-header">
@@ -339,6 +331,7 @@ def render_tab_padron():
         </div>
         """, unsafe_allow_html=True)
         
+        # Botón VER
         if st.button(f"Ver Ficha {row['nombre']} ➝", key=f"btn_p_{row['codnadador']}", use_container_width=True):
             st.session_state.nadador_seleccionado = row['Nombre Completo']
             st.rerun()
@@ -358,7 +351,6 @@ def render_tab_relevos_general():
         if fg_gen != "Todos": mr_all = mr_all[mr_all['codgenero'] == fg_gen]
         
         for _, r in mr_all.sort_values('fecha', ascending=False).head(20).iterrows():
-            # Grilla interna también para el historial general
             html_grid = ""
             for k in range(1, 5):
                 nid = r[f'nadador_{k}']
@@ -398,17 +390,32 @@ if rol == "N":
             else: st.error("No encontrado.")
 
 else:
+    # ROL MASTER (M)
     tab1, tab2, tab3 = st.tabs(["👥 Padrón", "👤 Ficha Técnica", "🏊‍♂️ Relevos"])
+    
     with tab1: render_tab_padron()
+    
     with tab2:
         lista_nombres = sorted(df_nad['Nombre Completo'].unique().tolist())
-        idx_sel = 0
-        target = st.session_state.get("nadador_seleccionado")
-        if not target: target = st.session_state.user_name
-        if target in lista_nombres: idx_sel = lista_nombres.index(target)
+        
+        # --- LÓGICA INTELIGENTE DE PRESELECCIÓN ---
+        idx_defecto = 0
+        pre_seleccion = st.session_state.get("nadador_seleccionado")
+        
+        # Si NO hay selección previa, por defecto pongo al usuario actual (si está en la lista)
+        if not pre_seleccion and mi_nombre in lista_nombres:
+            pre_seleccion = mi_nombre
+            
+        # Si HAY selección (o la acabo de poner), busco su índice
+        if pre_seleccion in lista_nombres:
+            idx_defecto = lista_nombres.index(pre_seleccion)
 
-        f_nad = st.selectbox("Seleccionar Atleta:", lista_nombres, index=idx_sel)
+        f_nad = st.selectbox("Seleccionar Atleta:", lista_nombres, index=idx_defecto)
+        
         if f_nad:
+            # Actualizo el estado para que se mantenga si recarga
+            st.session_state.nadador_seleccionado = f_nad
             id_actual = df_nad[df_nad['Nombre Completo'] == f_nad].iloc[0]['codnadador']
             render_tab_ficha(id_actual, unique_key_suffix="_master")
+            
     with tab3: render_tab_relevos_general()
