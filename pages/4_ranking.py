@@ -43,21 +43,39 @@ def tiempo_a_seg(t_str):
 
 # Merge masivo para tener todo en una tabla
 df = data['tiempos'].copy()
-df = df.merge(data['nadadores'], on='codnadador')
-df = df.merge(data['estilos'], on='codestilo')
-df = df.merge(data['distancias'], on='coddistancia')
-df = df.merge(data['piletas'], on='codpileta')
+df = df.merge(data['nadadores'], on='codnadador', how='left')
+df = df.merge(data['estilos'], on='codestilo', how='left')
+df = df.merge(data['distancias'], on='coddistancia', how='left')
+df = df.merge(data['piletas'], on='codpileta', how='left')
 
-# Renombrar para claridad
-df = df.rename(columns={
-    'descripcion_x': 'Estilo', 
-    'descripcion_y': 'Distancia',
+# --- CORRECCIÓN DE COLUMNAS (FIX KEYERROR) ---
+# Si 'club' aparece en Tiempos y Piletas, Pandas crea club_x y club_y. Unificamos.
+if 'club' not in df.columns:
+    if 'club_x' in df.columns:
+        df['club'] = df['club_x'].fillna(df['club_y'] if 'club_y' in df.columns else 'NOB')
+    elif 'club_y' in df.columns:
+        df['club'] = df['club_y']
+    else:
+        df['club'] = 'NOB' # Valor por defecto si no existe
+
+# Renombrar columnas conflictivas de descripciones
+# Dependiendo del orden, pueden ser _x, _y o sin sufijo. Buscamos y renombramos.
+cols_map = {
     'nombre': 'Nombre', 
     'apellido': 'Apellido',
-    'descripcion': 'Pileta'
-})
+    'descripcion': 'Pileta' # A veces Pileta queda como 'descripcion'
+}
+# Mapeo dinámico para Estilo y Distancia
+if 'descripcion_x' in df.columns: cols_map['descripcion_x'] = 'Estilo'
+if 'descripcion_y' in df.columns: cols_map['descripcion_y'] = 'Distancia'
 
-df['Nadador'] = df['Apellido'].str.upper() + ", " + df['Nombre']
+df = df.rename(columns=cols_map)
+
+# Asegurar que existan Estilo y Distancia (si el merge fue distinto)
+if 'Estilo' not in df.columns and 'descripcion' in df.columns: df = df.rename(columns={'descripcion': 'Estilo'})
+# ---------------------------------------------
+
+df['Nadador'] = df['Apellido'].astype(str).str.upper() + ", " + df['Nombre'].astype(str)
 df['Segundos'] = df['tiempo'].apply(tiempo_a_seg)
 df['Año'] = pd.to_datetime(df['fecha']).dt.year
 
@@ -66,21 +84,19 @@ st.markdown("### 🔍 Filtrar Ranking")
 
 c1, c2, c3 = st.columns(3)
 
-# Obtener listas únicas ordenadas
-lista_estilos = sorted(df['Estilo'].unique())
-lista_distancias = sorted(df['Distancia'].unique())
-lista_generos = ["Todos"] + sorted(df['codgenero'].unique().tolist())
+# Obtener listas únicas ordenadas (validando que existan columnas)
+lista_estilos = sorted(df['Estilo'].unique()) if 'Estilo' in df.columns else []
+lista_distancias = sorted(df['Distancia'].unique()) if 'Distancia' in df.columns else []
+lista_generos = ["Todos"] + sorted(df['codgenero'].unique().tolist()) if 'codgenero' in df.columns else ["Todos"]
 
 # --- LÓGICA DE PRESELECCIÓN (CROL 50MTS) ---
 idx_estilo = 0
 idx_distancia = 0
 
-# Buscar "Libre" o "Crol" en la lista (ajustar según nombre real en tu Excel)
 for i, e in enumerate(lista_estilos):
-    if "Libre" in e or "Crol" in e: 
+    if "Libre" in str(e) or "Crol" in str(e): 
         idx_estilo = i; break
 
-# Buscar "50" en la lista de distancias
 for i, d in enumerate(lista_distancias):
     if "50" in str(d): 
         idx_distancia = i; break
@@ -89,11 +105,14 @@ with c1: f_estilo = st.selectbox("Estilo", lista_estilos, index=idx_estilo)
 with c2: f_distancia = st.selectbox("Distancia", lista_distancias, index=idx_distancia)
 with c3: f_genero = st.selectbox("Género", lista_generos)
 
-# Aplicar filtros
-df_filtrado = df[
-    (df['Estilo'] == f_estilo) & 
-    (df['Distancia'] == f_distancia)
-]
+# Aplicar filtros (Validando columnas)
+if 'Estilo' in df.columns and 'Distancia' in df.columns:
+    df_filtrado = df[
+        (df['Estilo'] == f_estilo) & 
+        (df['Distancia'] == f_distancia)
+    ]
+else:
+    df_filtrado = df.copy()
 
 if f_genero != "Todos":
     df_filtrado = df_filtrado[df_filtrado['codgenero'] == f_genero]
@@ -132,6 +151,7 @@ else:
         # Badge de Pileta (25m o 50m)
         medida_str = str(row['medida']) if 'medida' in row else ""
         pileta_short = "25m" if "25" in medida_str else ("50m" if "50" in medida_str else medida_str)
+        club_str = row['club'] if 'club' in row else "NOB"
 
         st.markdown(f"""
         <style>
@@ -160,7 +180,7 @@ else:
             <div class="rank-info">
                 <div class="rank-name">{row['Nadador']}</div>
                 <div class="rank-meta">
-                    {row['club']} • {row['Año']} 
+                    {club_str} • {row['Año']} 
                     <span class="tag-pool" style="border: 1px solid {text_color};">{pileta_short}</span>
                 </div>
             </div>
