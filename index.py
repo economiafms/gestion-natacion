@@ -8,32 +8,34 @@ import time
 # --- 1. CONFIGURACIÓN DEL SITIO ---
 st.set_page_config(page_title="NOB Natación", layout="centered", initial_sidebar_state="collapsed")
 
-# --- 2. GESTIÓN DE ESTADO Y LOGIN ---
+# --- 2. GESTIÓN DE ESTADO Y LOGIN (Lógica de Seguridad) ---
 if "admin_mode" not in st.session_state:
     st.session_state.admin_mode = False
 
 if "show_login" not in st.session_state:
     st.session_state.show_login = False
 
-# Función de verificación de contraseña
+# Función de verificación
 def verificar_login():
-    # Buscamos las credenciales en st.secrets
-    sec_user = st.secrets["admin"]["usuario"]
-    sec_pass = st.secrets["admin"]["password"]
+    try:
+        sec_user = st.secrets["admin"]["usuario"]
+        sec_pass = st.secrets["admin"]["password"]
+    except:
+        st.error("Falta configurar secrets.toml")
+        return
 
-    input_user = st.session_state["input_user"]
-    input_pass = st.session_state["input_pass"]
+    input_user = st.session_state.get("input_user", "")
+    input_pass = st.session_state.get("input_pass", "")
 
     if input_user == sec_user and input_pass == sec_pass:
         st.session_state.admin_mode = True
         st.session_state.show_login = False
-        st.success("¡Bienvenido Entrenador!")
+        st.success("¡Bienvenido Leproso!")
         time.sleep(1)
         st.rerun()
     else:
         st.error("Usuario o contraseña incorrectos")
 
-# Logout
 def logout():
     st.session_state.admin_mode = False
     st.rerun()
@@ -66,7 +68,7 @@ def cargar_kpis():
         }
     except: return None
 
-# --- 5. FUNCIONES AUXILIARES ---
+# --- 5. FUNCIÓN AUXILIAR ---
 def calcular_categoria(anio_nac):
     anio_actual = datetime.now().year
     edad = anio_actual - anio_nac
@@ -87,14 +89,16 @@ def calcular_categoria(anio_nac):
 
 # --- 6. DASHBOARD PRINCIPAL ---
 def dashboard_main():
-    # Encabezado
-    c_img, c_txt = st.columns([1, 4])
-    with c_img:
-        st.image("https://upload.wikimedia.org/wikipedia/commons/4/4e/Newell%27s_Old_Boys_shield.svg", width=55)
-    with c_txt:
-        st.markdown("<h3 style='margin-bottom: 0px; padding-top: 10px;'>Natación NOB</h3>", unsafe_allow_html=True)
-        st.caption("Panel de Gestión Deportiva")
-
+    # --- TÍTULO PERSONALIZADO ---
+    # Usamos HTML centrado con los colores de NOB
+    st.markdown("""
+        <div style='text-align: center; margin-bottom: 20px;'>
+            <h2 style='color: white; font-size: 24px; margin: 0; padding: 0;'>
+                🔴⚫ BIENVENIDOS AL COMPLEJO <br> ACUÁTICO DE NEWELL'S OLD BOYS ⚫🔴
+            </h2>
+        </div>
+    """, unsafe_allow_html=True)
+    
     st.divider()
 
     data = cargar_kpis()
@@ -103,14 +107,25 @@ def dashboard_main():
         df_n = data['nadadores']
         df_t = data['tiempos']
         
-        # KPIs
-        k1, k2 = st.columns(2)
-        k1.metric("🏊‍♂️ Plantel", f"{len(df_n)}", "Nadadores")
-        k2.metric("⏱️ Registros", f"{len(df_t)}", "Total marcas")
+        # --- SECCIÓN 1: KPIs (FORZADOS HORIZONTALES) ---
+        # Usamos HTML Flexbox para que NO se apilen en el celular
+        cant_nad = len(df_n)
+        cant_reg = len(df_t)
+        
+        st.markdown(f"""
+        <div style="display: flex; justify-content: space-between; gap: 10px; margin-bottom: 20px;">
+            <div style="background-color: #262730; padding: 15px; border-radius: 10px; width: 48%; text-align: center; border: 1px solid #444;">
+                <div style="font-size: 32px; font-weight: bold; color: white;">{cant_nad}</div>
+                <div style="font-size: 14px; color: #aaa;">🏊‍♂️ Nadadores</div>
+            </div>
+            <div style="background-color: #262730; padding: 15px; border-radius: 10px; width: 48%; text-align: center; border: 1px solid #444;">
+                <div style="font-size: 32px; font-weight: bold; color: white;">{cant_reg}</div>
+                <div style="font-size: 14px; color: #aaa;">⏱️ Registros</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
-        st.write("") 
-
-        # ACCESOS RÁPIDOS
+        # --- SECCIÓN 2: ACCESOS RÁPIDOS ---
         c_btn1, c_btn2 = st.columns(2)
         with c_btn1:
             if st.button("🗃️ Base de Datos", type="secondary", use_container_width=True):
@@ -125,13 +140,13 @@ def dashboard_main():
 
         st.divider()
 
-        # GRÁFICOS
+        # --- SECCIÓN 3: GRÁFICOS ---
         if not df_n.empty:
             df_n['Anio'] = pd.to_datetime(df_n['fechanac']).dt.year
             df_n['Categoria'] = df_n['Anio'].apply(calcular_categoria)
             
             tab_gen, tab_cat = st.tabs(["Género", "Categorías Master"])
-            escala_colores = alt.Scale(domain=['M', 'F'], range=['#1f77b4', '#FF69B4'])
+            escala_colores = alt.Scale(domain=['M', 'F'], range=['#1f77b4', '#FF69B4']) # Azul y Rosa
 
             with tab_gen:
                 base = alt.Chart(df_n).encode(theta=alt.Theta("count()", stack=True))
@@ -160,21 +175,18 @@ def dashboard_main():
     else: st.info("Conectando con Google Sheets...")
 
     # --- ZONA DE LOGIN OCULTA ---
-    st.write("")
-    st.write("")
+    st.write(""); st.write("")
     
-    # Si ya es admin, mostrar botón de salir
     if st.session_state.admin_mode:
         if st.button("🔒 Cerrar Sesión Admin", type="primary"):
             logout()
     else:
-        # Si NO es admin, mostrar el candadito discreto
+        # Candado oculto
         _, c_oculto = st.columns([10, 1]) 
         with c_oculto:
             if st.button("🔒", key="btn_unlock", type="tertiary"):
                 st.session_state.show_login = not st.session_state.show_login
 
-        # Si tocó el candado, desplegar el formulario de login
         if st.session_state.show_login:
             st.markdown("### Acceso Entrenadores")
             with st.form("login_form"):
