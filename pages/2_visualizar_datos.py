@@ -5,60 +5,40 @@ from datetime import datetime
 import plotly.express as px
 
 # --- 1. CONFIGURACIÓN ---
-st.set_page_config(page_title="Resultados", layout="centered")
-st.title("📊 Base de Datos y Estadísticas")
+st.set_page_config(page_title="Base de Datos", layout="centered")
+st.title("📊 Base de Datos del Club")
 
-# --- CSS PERSONALIZADO (Grande y Horizontal) ---
+# --- CSS PERSONALIZADO (Mobile & Clean) ---
 st.markdown("""
 <style>
-    /* Estilo para filas de resultados horizontales */
-    .result-row {
+    /* Tarjeta General */
+    .mobile-card {
         background-color: #262730;
-        border-radius: 8px;
-        padding: 12px 15px;
-        margin-bottom: 8px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        border-left: 5px solid #1E88E5;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-    }
-    .result-info {
-        font-size: 15px;
-        font-weight: 500;
-        color: #fff;
-    }
-    .result-meta {
-        font-size: 12px;
-        color: #aaa;
-    }
-    .result-time {
-        font-family: 'Courier New', monospace;
-        font-size: 18px;
-        font-weight: bold;
-        color: #4CAF50;
-        text-align: right;
-    }
-    /* Estilo para tarjetas de padrón grandes */
-    .swimmer-card {
-        padding: 15px;
         border: 1px solid #444;
-        border-radius: 10px;
+        border-radius: 8px;
+        padding: 15px;
         margin-bottom: 12px;
-        background-color: #1e1e1e;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
     }
-    .big-name {
-        font-size: 18px;
-        font-weight: bold;
-        color: #ffffff;
+    /* Estilos para Relevos */
+    .relay-header {
+        display: flex; justify-content: space-between; align-items: center;
+        border-bottom: 1px solid #555; padding-bottom: 8px; margin-bottom: 8px;
     }
-    .medal-box {
-        background-color: #333;
-        padding: 4px 8px;
-        border-radius: 5px;
-        font-size: 14px;
-        margin-left: 5px;
+    .relay-title { font-weight: bold; font-size: 15px; color: white; }
+    .relay-time { font-family: monospace; font-weight: bold; font-size: 20px; color: #4CAF50; }
+    .relay-meta { font-size: 12px; color: #aaa; display: flex; justify-content: space-between; margin-bottom: 10px; }
+    .swimmer-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        font-size: 13px;
+        color: #eee;
     }
+    .swimmer-item { background: rgba(255,255,255,0.05); padding: 4px 8px; border-radius: 4px; }
+    
+    /* Medallas */
+    .medal-row { font-size: 14px; margin-top: 5px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -77,20 +57,27 @@ def cargar_visualizacion():
             "piletas": conn.read(worksheet="Piletas"),
             "categorias": conn.read(worksheet="Categorias"),
         }
-    except Exception as e:
-        return None
+    except Exception as e: return None
 
 data = cargar_visualizacion()
-if not data: 
-    st.error("Conectando con base de datos...")
-    st.stop()
+if not data: st.stop()
 
-# --- 3. PROCESAMIENTO ---
+# --- 3. PROCESAMIENTO GLOBAL ---
 df_nad = data['nadadores'].copy()
 df_nad['Nombre Completo'] = df_nad['apellido'].astype(str).str.upper() + ", " + df_nad['nombre'].astype(str)
 dict_id_nombre = df_nad.set_index('codnadador')['Nombre Completo'].to_dict()
 dict_id_nac = pd.to_datetime(df_nad.set_index('codnadador')['fechanac']).to_dict()
 
+# Función auxiliar de tiempo
+def tiempo_a_segundos(t_str):
+    try:
+        if not isinstance(t_str, str) or ":" not in t_str: return None
+        p = t_str.replace('.', ':').split(':')
+        val = float(p[0])*60 + float(p[1]) + (float(p[2])/100 if len(p)>2 else 0)
+        return val
+    except: return None
+
+# Función categoría
 def asignar_cat(edad):
     try:
         for _, r in data['categorias'].iterrows():
@@ -98,214 +85,259 @@ def asignar_cat(edad):
         return "-"
     except: return "-"
 
-def tiempo_a_segundos(t_str):
-    try:
-        if not isinstance(t_str, str) or ":" not in t_str: return 999.0
-        p = t_str.replace('.', ':').split(':')
-        return float(p[0])*60 + float(p[1]) + (float(p[2])/100 if len(p)>2 else 0)
-    except: return 999.0
-
 # --- 4. PESTAÑAS ---
 tab1, tab2, tab3 = st.tabs(["👥 Padrón", "👤 Ficha Técnica", "🏊‍♂️ Relevos"])
 
 # ==========================================
-# TAB 1: PADRÓN GENERAL (Grande y con Totales)
+# TAB 1: PADRÓN (Medallas Recuperadas)
 # ==========================================
 with tab1:
-    # 1. CÁLCULO DE MEDALLERO TOTAL (Recuperado)
+    st.markdown("### 🏆 Padrón y Medallero")
+    
+    # 1. LÓGICA DE MEDALLAS (INDIVIDUAL + RELEVOS)
     df_t_c = data['tiempos'].copy()
     df_t_c['posicion'] = pd.to_numeric(df_t_c['posicion'], errors='coerce').fillna(0)
     
     df_r_c = data['relevos'].copy()
     df_r_c['posicion'] = pd.to_numeric(df_r_c['posicion'], errors='coerce').fillna(0)
-    
+
     # Medallas individuales
-    m_ind = df_t_c[df_t_c['posicion'].isin([1,2,3])].groupby('posicion').size()
-    # Medallas relevos (cuentan x1 para el club)
-    m_rel = df_r_c[df_r_c['posicion'].isin([1,2,3])].groupby('posicion').size()
+    med_ind = df_t_c[df_t_c['posicion'].isin([1,2,3])].groupby(['codnadador', 'posicion']).size().unstack(fill_value=0)
     
-    t_oro = m_ind.get(1,0) + m_rel.get(1,0)
-    t_plata = m_ind.get(2,0) + m_rel.get(2,0)
-    t_bronce = m_ind.get(3,0) + m_rel.get(3,0)
+    # Medallas Relevos (Hay que contar para CADA nadador del equipo)
+    dfs_rel_exploded = []
+    for i in range(1, 5):
+        tmp = df_r_c[['nadador_' + str(i), 'posicion']].rename(columns={'nadador_' + str(i): 'codnadador'})
+        dfs_rel_exploded.append(tmp)
+    df_rel_all = pd.concat(dfs_rel_exploded)
+    med_rel = df_rel_all[df_rel_all['posicion'].isin([1,2,3])].groupby(['codnadador', 'posicion']).size().unstack(fill_value=0)
     
-    # KPIs Grandes
-    st.markdown("### 🏆 Medallero Histórico del Club")
-    k1, k2, k3, k4 = st.columns(4)
-    k1.metric("🥇 Oros", int(t_oro))
-    k2.metric("🥈 Platas", int(t_plata))
-    k3.metric("🥉 Bronces", int(t_bronce))
-    k4.metric("📊 Total", int(t_oro + t_plata + t_bronce))
+    # Suma Total
+    medallero = med_ind.add(med_rel, fill_value=0)
+    for p in [1, 2, 3]: 
+        if p not in medallero.columns: medallero[p] = 0
     
-    st.divider()
+    # Unir al padrón para visualizar
+    df_view = df_nad.merge(medallero, left_on='codnadador', right_index=True, how='left').fillna(0)
+    df_view['Total'] = df_view[1] + df_view[2] + df_view[3]
     
-    # 2. LISTA DE NADADORES (Diseño Grande)
-    filtro = st.text_input("🔍 Buscar en Padrón:", placeholder="Apellido...")
+    # Buscador
+    filtro = st.text_input("Buscar Nadador:", placeholder="Nombre...")
+    if filtro: df_view = df_view[df_view['Nombre Completo'].str.contains(filtro.upper())]
     
-    # Preparar datos por nadador
-    df_p = df_nad.copy()
-    
-    # Calcular medallas por nadador para mostrar en la tarjeta
-    # (Lógica simplificada para velocidad de visualización)
-    med_ind_nad = df_t_c[df_t_c['posicion'].isin([1,2,3])].groupby('codnadador').size()
-    df_p['Podios'] = df_p['codnadador'].map(med_ind_nad).fillna(0).astype(int)
-    
-    if filtro:
-        df_p = df_p[df_p['Nombre Completo'].str.contains(filtro.upper())]
-    
-    df_p = df_p.sort_values('Podios', ascending=False)
-    
-    for _, row in df_p.head(15).iterrows():
-        # Cálculo edad
+    df_view = df_view.sort_values('Total', ascending=False)
+
+    # Renderizado Tarjetas
+    for _, row in df_view.head(20).iterrows():
         try: edad = datetime.now().year - pd.to_datetime(row['fechanac']).year
         except: edad = 0
         cat = asignar_cat(edad)
         
-        # Tarjeta Grande
         st.markdown(f"""
-        <div class="swimmer-card">
+        <div class="mobile-card">
             <div style="display:flex; justify-content:space-between; align-items:center;">
-                <div>
-                    <div class="big-name">{row['Nombre Completo']}</div>
-                    <div style="color:#bbb; font-size:14px;">{edad} años ({cat}) • {row['codgenero']}</div>
-                </div>
-                <div style="text-align:right;">
-                    <span style="font-size:24px; color:#FFD700;">★ {row['Podios']}</span><br>
-                    <span style="font-size:10px; color:#888;">PODIOS INDIV.</span>
-                </div>
+                <span style="font-weight:bold; font-size:16px; color:white;">{row['Nombre Completo']}</span>
+                <span style="font-size:14px; font-weight:bold; color:#FFD700;">★ {int(row['Total'])}</span>
+            </div>
+            <div style="font-size:12px; color:#aaa;">{edad} años ({cat}) • {row['codgenero']}</div>
+            <div class="medal-row">
+                🥇 <span style="color:#fff">{int(row[1])}</span> &nbsp; 
+                🥈 <span style="color:#fff">{int(row[2])}</span> &nbsp; 
+                🥉 <span style="color:#fff">{int(row[3])}</span>
             </div>
         </div>
         """, unsafe_allow_html=True)
 
 # ==========================================
-# TAB 2: FICHA TÉCNICA (Funcionalidad Recuperada)
+# TAB 2: FICHA TÉCNICA
 # ==========================================
 with tab2:
     f_nad = st.selectbox("Seleccionar Atleta:", sorted(df_nad['Nombre Completo'].unique().tolist()), index=None)
     
     if f_nad:
+        # Info Básica
         info = df_nad[df_nad['Nombre Completo'] == f_nad].iloc[0]
         id_n = info['codnadador']
         
-        # Unir tablas para tener info completa
+        # DataFrame Completo
         df_full = data['tiempos'].copy()
         df_full = df_full.merge(data['estilos'], on='codestilo').merge(data['distancias'], on='coddistancia').merge(data['piletas'], on='codpileta')
         df_full = df_full.rename(columns={'descripcion_x': 'Estilo', 'descripcion_y': 'Distancia'})
-        
         mis_t = df_full[df_full['codnadador'] == id_n].copy()
-        
-        # 1. MEJORES MARCAS (PB) - Recuperado
+
+        # 1. MEJORES MARCAS (PB)
         if not mis_t.empty:
-            st.subheader("✨ Mejores Marcas (PB)")
+            st.subheader("✨ Mejores Marcas")
             mis_t['segundos'] = mis_t['tiempo'].apply(tiempo_a_segundos)
-            # Agrupar por estilo y distancia, tomar el menor tiempo
-            pbs = mis_t.loc[mis_t.groupby(['Estilo', 'Distancia'])['segundos'].idxmin()].sort_values('Distancia')
+            # PB Logic
+            pbs = mis_t.loc[mis_t.groupby(['Estilo', 'Distancia'])['segundos'].idxmin()].sort_values(['Estilo', 'Distancia'])
             
-            # Mostrar como tarjetas horizontales compactas
-            estilos_unicos = pbs['Estilo'].unique()
-            # Usamos pestañas internas para ordenar los PBs si son muchos, o columnas
-            cols = st.columns(len(estilos_unicos)) if len(estilos_unicos) <= 4 else [st.container()]
+            # Mostrar PBs compactos
+            for _, r in pbs.iterrows():
+                st.markdown(f"""
+                <div style="background:#333; padding:8px; border-radius:5px; margin-bottom:5px; display:flex; justify-content:space-between;">
+                    <span style="color:#ddd;">{r['Distancia']} {r['Estilo']}</span>
+                    <span style="color:#4CAF50; font-weight:bold;">{r['tiempo']}</span>
+                </div>""", unsafe_allow_html=True)
             
-            idx_col = 0
-            for est in estilos_unicos:
-                df_e = pbs[pbs['Estilo'] == est]
-                with (cols[idx_col] if len(estilos_unicos) <= 4 else st.container()):
-                    st.markdown(f"**{est}**")
-                    for _, r in df_e.iterrows():
-                         st.markdown(f"""
-                         <div style="background:#333; padding:5px 10px; border-radius:5px; margin-bottom:5px; display:flex; justify-content:space-between;">
-                            <span>{r['Distancia']}</span>
-                            <span style="color:#4CAF50; font-weight:bold;">{r['tiempo']}</span>
-                         </div>
-                         """, unsafe_allow_html=True)
-                idx_col += 1
-
             st.divider()
 
-            # 2. GRÁFICO DE EVOLUCIÓN - Recuperado
-            st.subheader("📈 Progresión")
-            g_est = st.selectbox("Estilo para Graficar:", mis_t['Estilo'].unique())
-            g_df = mis_t[mis_t['Estilo'] == g_est].sort_values('fecha')
+            # 2. GRÁFICO DE PROGRESIÓN (Con Filtros y Formato MM:SS)
+            st.subheader("📈 Evolución")
+            c1, c2 = st.columns(2)
+            g_est = c1.selectbox("Estilo", mis_t['Estilo'].unique(), key="g_est")
+            # Filtrar distancias disponibles para ese estilo
+            dist_disp = mis_t[mis_t['Estilo'] == g_est]['Distancia'].unique()
+            g_dist = c2.selectbox("Distancia", dist_disp, key="g_dist")
             
-            if not g_df.empty:
-                fig = px.line(g_df, x='fecha', y='segundos', color='Distancia', markers=True, 
-                              title=f"Evolución en {g_est}", template="plotly_dark")
-                # Truco para que el eje Y muestre tiempo aprox (es difícil formatear exacto en Plotly sin helpers complejos, pero esto visualiza la tendencia)
-                fig.update_layout(height=300, margin=dict(l=20, r=20, t=40, b=20))
+            # Datos para el gráfico
+            df_graph = mis_t[(mis_t['Estilo'] == g_est) & (mis_t['Distancia'] == g_dist)].sort_values('fecha')
+            
+            if len(df_graph) >= 2:
+                # Truco para formato de tiempo en eje Y: Usar datetime arbitrario
+                # Sumamos los segundos a una fecha base (ej: 2024-01-01 00:00:00)
+                df_graph['TimeObj'] = pd.to_datetime('2024-01-01') + pd.to_timedelta(df_graph['segundos'], unit='s')
+                
+                fig = px.line(df_graph, x='fecha', y='TimeObj', markers=True, 
+                              template="plotly_dark")
+                
+                # Formatear eje Y para mostrar solo Minutos:Segundos.Centésimas
+                fig.update_yaxes(tickformat="%M:%S.%f", title="Tiempo")
+                fig.update_xaxes(title="Fecha")
+                fig.update_layout(height=300, margin=dict(t=20, b=20, l=40, r=20))
                 st.plotly_chart(fig, use_container_width=True)
-
+            else:
+                st.info("Se necesitan al menos 2 registros en esta prueba para graficar.")
+            
             st.divider()
 
-        # 3. LISTA DE CARRERAS (Diseño Horizontal)
-        st.subheader("📜 Historial Completo")
+        # 3. HISTORIAL COMPLETO (Con Filtros)
+        st.subheader("📜 Historial de Carreras")
+        with st.expander("Filtrar Historial"):
+            h1, h2 = st.columns(2)
+            hf_est = h1.selectbox("Filtrar Estilo", ["Todos"] + sorted(mis_t['Estilo'].unique().tolist()), key="h_est")
+            hf_dis = h2.selectbox("Filtrar Distancia", ["Todos"] + sorted(mis_t['Distancia'].unique().tolist()), key="h_dis")
         
-        mis_t = mis_t.sort_values('fecha', ascending=False)
+        df_hist = mis_t.copy()
+        if hf_est != "Todos": df_hist = df_hist[df_hist['Estilo'] == hf_est]
+        if hf_dis != "Todos": df_hist = df_hist[df_hist['Distancia'] == hf_dis]
         
-        for _, r in mis_t.head(30).iterrows(): # Top 30
-            medalla = ""
-            if r['posicion'] == 1: medalla = "🥇"
-            elif r['posicion'] == 2: medalla = "🥈"
-            elif r['posicion'] == 3: medalla = "🥉"
-            
-            # Diseño Horizontal con CSS
+        df_hist = df_hist.sort_values('fecha', ascending=False)
+        
+        for _, r in df_hist.head(20).iterrows():
+            pos_icon = f"Pos: {r['posicion']}"
+            if r['posicion'] == 1: pos_icon = "🥇 1er Puesto"
+            elif r['posicion'] == 2: pos_icon = "🥈 2do Puesto"
+            elif r['posicion'] == 3: pos_icon = "🥉 3er Puesto"
+
             st.markdown(f"""
-            <div class="result-row">
-                <div class="result-info">
-                    {r['Distancia']} {r['Estilo']}
-                    <div class="result-meta">📅 {r['fecha']} • {r['club']}</div>
+            <div class="mobile-card">
+                <div style="display:flex; justify-content:space-between;">
+                    <span style="font-weight:bold; color:white;">{r['Distancia']} {r['Estilo']}</span>
+                    <span style="font-family:monospace; font-weight:bold; color:#4CAF50;">{r['tiempo']}</span>
                 </div>
-                <div style="text-align:right;">
-                    <div class="result-time">{r['tiempo']}</div>
-                    <div style="font-size:12px;">{medalla} Pos: {r['posicion']}</div>
+                <div style="font-size:12px; color:#aaa; margin-top:5px;">
+                    📅 {r['fecha']} • {r['club']} • {pos_icon}
                 </div>
-            </div>
-            """, unsafe_allow_html=True)
+            </div>""", unsafe_allow_html=True)
+
+        # 4. MIS RELEVOS (Recuperado y Filtrado)
+        st.subheader("🏊‍♂️ Mis Relevos")
+        mr_base = data['relevos'].copy()
+        # Filtrar donde aparece el nadador
+        cond_rel = (mr_base['nadador_1'] == id_n) | (mr_base['nadador_2'] == id_n) | \
+                   (mr_base['nadador_3'] == id_n) | (mr_base['nadador_4'] == id_n)
+        mis_relevos = mr_base[cond_rel].copy()
+        
+        if not mis_relevos.empty:
+            mis_relevos = mis_relevos.merge(data['estilos'], on='codestilo').merge(data['distancias'], on='coddistancia').merge(data['piletas'], on='codpileta')
+            mis_relevos = mis_relevos.rename(columns={'descripcion_x': 'Estilo', 'descripcion_y': 'Distancia'})
+            mis_relevos = mis_relevos.sort_values('fecha', ascending=False)
+            
+            for _, r in mis_relevos.iterrows():
+                # Renderizar tarjeta de relevo
+                # Construir Grid de Nadadores
+                html_grid = ""
+                for k in range(1, 5):
+                    nid = r[f'nadador_{k}']
+                    nom = dict_id_nombre.get(nid, "??").split(',')[0] # Solo apellido
+                    t = str(r[f'tiempo_{k}']).strip()
+                    # Mostrar parcial solo si existe y no es 0
+                    if t and t not in ["00.00", "0", "None", "nan"]:
+                        nom += f" ({t})"
+                    html_grid += f"<div class='swimmer-item'>{k}. {nom}</div>"
+                
+                pos_icon = f"Pos: {r['posicion']}"
+                if r['posicion'] == 1: pos_icon = "🥇 1ro"
+                elif r['posicion'] == 2: pos_icon = "🥈 2do"
+                elif r['posicion'] == 3: pos_icon = "🥉 3ro"
+
+                st.markdown(f"""
+                <div class="mobile-card" style="border-left: 4px solid #E91E63;">
+                    <div class="relay-header">
+                        <div class="relay-title">{r['Distancia']} {r['Estilo']}</div>
+                        <div class="relay-time">{r['tiempo_final']}</div>
+                    </div>
+                    <div class="relay-meta">
+                        <span>📅 {r['fecha']} • {r['club']}</span>
+                        <span style="color:#FFD700;">{pos_icon}</span>
+                    </div>
+                    <div class="swimmer-grid">
+                        {html_grid}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.info("No ha participado en relevos aún.")
 
 # ==========================================
-# TAB 3: RELEVOS (Horizontal y Eficiente)
+# TAB 3: TODOS LOS RELEVOS (General)
 # ==========================================
 with tab3:
-    st.subheader("🏊‍♂️ Historial de Postas")
+    st.markdown("### Historial de Postas")
     
-    mr = data['relevos'].copy()
-    if not mr.empty:
-        mr = mr.merge(data['estilos'], on='codestilo').merge(data['distancias'], on='coddistancia').merge(data['piletas'], on='codpileta')
-        mr = mr.rename(columns={'descripcion_x': 'Estilo', 'descripcion_y': 'Distancia'})
-        
-        # Filtros
+    mr_all = data['relevos'].copy()
+    if not mr_all.empty:
+        mr_all = mr_all.merge(data['estilos'], on='codestilo').merge(data['distancias'], on='coddistancia').merge(data['piletas'], on='codpileta')
+        mr_all = mr_all.rename(columns={'descripcion_x': 'Estilo', 'descripcion_y': 'Distancia'})
+
+        # Filtros Globales
         c1, c2 = st.columns(2)
-        f_est_r = c1.selectbox("Estilo Posta", ["Todos"] + sorted(mr['Estilo'].unique().tolist()))
-        f_gen_r = c2.selectbox("Género", ["Todos", "M", "F", "X"])
+        fg_est = c1.selectbox("Estilo", ["Todos"] + sorted(mr_all['Estilo'].unique().tolist()), key="fg_est")
+        fg_gen = c2.selectbox("Género", ["Todos", "M", "F", "X"], key="fg_gen")
         
-        if f_est_r != "Todos": mr = mr[mr['Estilo'] == f_est_r]
-        if f_gen_r != "Todos": mr = mr[mr['codgenero'] == f_gen_r]
+        if fg_est != "Todos": mr_all = mr_all[mr_all['Estilo'] == fg_est]
+        if fg_gen != "Todos": mr_all = mr_all[mr_all['codgenero'] == fg_gen]
         
-        mr = mr.sort_values('fecha', ascending=False)
+        mr_all = mr_all.sort_values('fecha', ascending=False)
         
-        for _, r in mr.head(20).iterrows():
-            # Crear string de integrantes
-            integrantes = []
+        for _, r in mr_all.head(20).iterrows():
+            html_grid = ""
             for k in range(1, 5):
                 nid = r[f'nadador_{k}']
-                nom = dict_id_nombre.get(nid, "??").split(',')[0] # Solo apellido
-                t = r[f'tiempo_{k}'] if r[f'tiempo_{k}'] else ""
-                integrantes.append(f"{nom} ({t})")
+                nom = dict_id_nombre.get(nid, "??").split(',')[0]
+                t = str(r[f'tiempo_{k}']).strip()
+                if t and t not in ["00.00", "0", "None", "nan"]:
+                    nom += f" <b>({t})</b>"
+                html_grid += f"<div class='swimmer-item'>{k}. {nom}</div>"
             
-            str_integrantes = " | ".join(integrantes)
-            
-            # Tarjeta Horizontal Relevo
+            medal_icon = ""
+            if r['posicion'] == 1: medal_icon = "🥇"
+            elif r['posicion'] == 2: medal_icon = "🥈"
+            elif r['posicion'] == 3: medal_icon = "🥉"
+
             st.markdown(f"""
-            <div class="result-row" style="border-left: 5px solid #E91E63; display:block;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
-                    <div class="result-info">
-                        {r['Distancia']} {r['Estilo']} ({r['codgenero']})
-                    </div>
-                    <div class="result-time">{r['tiempo_final']}</div>
+            <div class="mobile-card" style="border-left: 4px solid #9C27B0;">
+                <div class="relay-header">
+                    <div class="relay-title">{r['Distancia']} {r['Estilo']} ({r['codgenero']})</div>
+                    <div class="relay-time">{r['tiempo_final']}</div>
                 </div>
-                <div class="result-meta" style="margin-bottom:5px;">
-                   📅 {r['fecha']} • {r['club']} • Pos: {r['posicion']}
+                <div class="relay-meta">
+                    <span>📅 {r['fecha']} • {r['club']}</span>
+                    <span style="font-weight:bold; color:#FFD700;">{medal_icon} Pos: {r['posicion']}</span>
                 </div>
-                <div style="font-size:11px; color:#ccc; border-top:1px solid #444; padding-top:4px;">
-                    🏊‍♂️ {str_integrantes}
+                <div class="swimmer-grid">
+                    {html_grid}
                 </div>
             </div>
             """, unsafe_allow_html=True)
