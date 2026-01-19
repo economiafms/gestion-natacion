@@ -30,7 +30,7 @@ def cargar_datos_ranking():
 data = cargar_datos_ranking()
 if not data: st.stop()
 
-# --- 4. PROCESAMIENTO INTELIGENTE ---
+# --- 4. PROCESAMIENTO ---
 def tiempo_a_seg(t_str):
     try:
         if isinstance(t_str, str):
@@ -41,27 +41,28 @@ def tiempo_a_seg(t_str):
         return float(t_str)
     except: return 999999
 
-# --- LÓGICA PARA TOMAR LA TABLA PILETAS SIN CONFLICTOS ---
-# 1. Preparamos la tabla de Piletas renombrando 'club' a 'sede'
-# Esto evita que choque con la columna 'club' de la tabla de Tiempos (que es el equipo del nadador)
-piletas_clean = data['piletas'].copy()
-if 'club' in piletas_clean.columns:
-    piletas_clean = piletas_clean.rename(columns={'club': 'sede'})
-
-# 2. Hacemos los cruces (Merges) usando la tabla limpia
+# --- UNIFICACIÓN LIMPIA (IGNORANDO 'CLUB' DE TIEMPOS) ---
 df = data['tiempos'].copy()
+
+# 1. Eliminar 'club' de Tiempos si existe (para evitar conflictos y 'nan')
+if 'club' in df.columns:
+    df = df.drop(columns=['club'])
+
+# 2. Merges (Cruces de tablas)
 df = df.merge(data['nadadores'], on='codnadador', how='left')
 df = df.merge(data['estilos'], on='codestilo', how='left')
 df = df.merge(data['distancias'], on='coddistancia', how='left')
-df = df.merge(piletas_clean, on='codpileta', how='left') # Ahora cruzamos con la versión segura
+# Al hacer merge con piletas, nos trae 'club' (SEDE REAL) y 'medida'
+df = df.merge(data['piletas'], on='codpileta', how='left')
 
-# 3. Normalización de Nombres (Estilo / Distancia)
+# 3. Renombrado y Limpieza
 cols_map = {
     'nombre': 'Nombre', 
     'apellido': 'Apellido',
-    'descripcion_x': 'Estilo', # Si pandas renombró por conflicto con otra descripción
+    'descripcion_x': 'Estilo', 
     'descripcion_y': 'Distancia',
-    'descripcion': 'Estilo' # Si no hubo conflicto
+    'descripcion': 'Estilo',
+    'club': 'sede' # Renombramos explícitamente la columna que vino de Piletas
 }
 df = df.rename(columns=cols_map)
 
@@ -70,8 +71,8 @@ df['Nadador'] = df['Apellido'].astype(str).str.upper() + ", " + df['Nombre'].ast
 df['Segundos'] = df['tiempo'].apply(tiempo_a_seg)
 df['Año'] = pd.to_datetime(df['fecha']).dt.year
 
-# Asegurar valores por defecto si faltan datos
-if 'club' not in df.columns: df['club'] = 'NOB'
+# Asegurar valores por defecto para que no falle la tarjeta
+if 'sede' not in df.columns: df['sede'] = 'Sede desconocida'
 if 'medida' not in df.columns: df['medida'] = '-'
 
 # --- 5. FILTROS ---
@@ -127,10 +128,11 @@ else:
         else:
             bg_color, text_color, icono = "#262730", "white", f"#{pos}"
 
-        medida = str(row.get('medida', '-'))
-        club_nadador = str(row.get('club', 'NOB'))
+        # Usamos .get() para mayor seguridad, aunque la limpieza previa lo garantiza
+        medida_val = str(row.get('medida', '-'))
+        sede_val = str(row.get('sede', 'Sede desconocida'))
         
-        pileta_badge = "25m" if "25" in medida else ("50m" if "50" in medida else medida)
+        pileta_badge = "25m" if "25" in medida_val else ("50m" if "50" in medida_val else medida_val)
 
         st.markdown(f"""
         <style>
@@ -147,7 +149,11 @@ else:
             .rank-name {{ font-weight: bold; font-size: 16px; margin-bottom: 2px; }}
             .rank-meta {{ font-size: 12px; opacity: 0.8; }}
             .rank-time {{ font-family: monospace; font-weight: bold; font-size: 20px; text-align: right; }}
-            .tag-pool {{ font-size: 10px; padding: 2px 6px; border-radius: 4px; margin-left: 8px; vertical-align: middle; }}
+            .tag-pool {{ 
+                font-size: 10px; padding: 2px 6px; border-radius: 4px; 
+                margin-left: 8px; font-weight: normal; 
+                vertical-align: middle;
+            }}
         </style>
         
         <div class="rank-card" style="background: {bg_color}; color: {text_color};">
@@ -155,7 +161,7 @@ else:
             <div class="rank-info">
                 <div class="rank-name">{row['Nadador']}</div>
                 <div class="rank-meta">
-                    {club_nadador} • {row['Año']} 
+                    {sede_val} • {row['Año']} 
                     <span class="tag-pool" style="border: 1px solid {text_color};">{pileta_badge}</span>
                 </div>
             </div>
