@@ -33,7 +33,132 @@ st.markdown("""
         align-items: center;
         justify-content: space-between;
         box-shadow: 0 3px 6px rgba(0,0,0,0.3);
-@@ -161,49 +161,48 @@
+    }
+    .p-col-left { flex: 2; text-align: left; border-right: 1px solid #555; padding-right: 10px; }
+    .p-col-center { flex: 2; text-align: center; padding: 0 10px; }
+    .p-col-right { flex: 1; text-align: right; padding-left: 10px; border-left: 1px solid #555; }
+    
+    .p-name { font-weight: bold; font-size: 18px; color: white; margin-bottom: 5px; }
+    .p-meta { font-size: 13px; color: #ccc; }
+    .p-medals { font-size: 16px; display: flex; justify-content: center; gap: 10px; margin-top: 5px;}
+    .p-total { font-size: 28px; color: #FFD700; font-weight: bold; line-height: 1; }
+    .p-cat { font-size: 18px; color: #4CAF50; font-weight: bold; margin-top: 5px; }
+
+    /* FICHA TÉCNICA */
+    .ficha-header {
+        background: linear-gradient(135deg, #8B0000 0%, #3E0000 100%);
+        padding: 20px;
+        border-radius: 10px;
+        color: white;
+        margin-bottom: 20px;
+        border: 1px solid #550000;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.4);
+    }
+    .ficha-name { font-size: 24px; font-weight: bold; border-bottom: 1px solid rgba(255,255,255,0.3); padding-bottom: 10px; margin-bottom: 10px; }
+    .ficha-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 14px; }
+    .ficha-medals { background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; text-align: center; margin-top: 15px; font-size: 18px; }
+
+    /* MEJORES MARCAS */
+    .pb-style-header {
+        color: #e53935;
+        font-weight: bold;
+        font-size: 16px;
+        margin-top: 15px;
+        margin-bottom: 5px;
+        text-transform: uppercase;
+        border-bottom: 1px solid #444;
+    }
+    .pb-row {
+        background-color: #2b2c35;
+        padding: 10px 15px;
+        margin-bottom: 5px;
+        border-radius: 6px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-left: 4px solid #B71C1C;
+    }
+    .pb-dist { font-size: 15px; color: #eee; }
+    .pb-time { font-size: 18px; font-weight: bold; font-family: monospace; color: #fff; }
+
+    /* TARJETAS GENERALES MOBILE */
+    .mobile-card {
+        background-color: #262730;
+        border: 1px solid #444;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 12px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    .relay-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #555; padding-bottom: 8px; margin-bottom: 8px; }
+    .relay-title { font-weight: bold; font-size: 15px; color: white; }
+    .relay-time { font-family: monospace; font-weight: bold; font-size: 20px; color: #4CAF50; }
+    .relay-meta { font-size: 12px; color: #aaa; display: flex; justify-content: space-between; margin-bottom: 10px; }
+    
+    .swimmer-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px; color: #eee; }
+    .swimmer-item { background: rgba(255,255,255,0.05); padding: 4px 8px; border-radius: 4px; }
+</style>
+""", unsafe_allow_html=True)
+
+conn = st.connection("gsheets", type=GSheetsConnection)
+
+# --- 2. CARGA DE DATOS ---
+@st.cache_data(ttl="15m")
+def cargar_visualizacion():
+    try:
+        return {
+            "nadadores": conn.read(worksheet="Nadadores"),
+            "tiempos": conn.read(worksheet="Tiempos"),
+            "relevos": conn.read(worksheet="Relevos"),
+            "estilos": conn.read(worksheet="Estilos"),
+            "distancias": conn.read(worksheet="Distancias"),
+            "piletas": conn.read(worksheet="Piletas"),
+            "categorias": conn.read(worksheet="Categorias"),
+        }
+    except Exception as e: return None
+
+data = cargar_visualizacion()
+if not data: st.stop()
+
+# --- 3. PROCESAMIENTO GLOBAL ---
+df_nad = data['nadadores'].copy()
+df_nad['Nombre Completo'] = df_nad['apellido'].astype(str).str.upper() + ", " + df_nad['nombre'].astype(str)
+dict_id_nombre = df_nad.set_index('codnadador')['Nombre Completo'].to_dict()
+
+def tiempo_a_segundos(t_str):
+    try:
+        if not isinstance(t_str, str) or ":" not in t_str: return None
+        p = t_str.replace('.', ':').split(':')
+        val = float(p[0])*60 + float(p[1]) + (float(p[2])/100 if len(p)>2 else 0)
+        return val
+    except: return None
+
+def asignar_cat(edad):
+    try:
+        for _, r in data['categorias'].iterrows():
+            if r['edad_min'] <= edad <= r['edad_max']: return r['nombre_cat']
+        return "-"
+    except: return "-"
+
+df_full = data['tiempos'].copy()
+df_full = df_full.merge(data['estilos'], on='codestilo').merge(data['distancias'], on='coddistancia').merge(data['piletas'], on='codpileta')
+df_full = df_full.rename(columns={'descripcion_x': 'Estilo', 'descripcion_y': 'Distancia'})
+
+# Preparar Medallero General
+df_t_c = data['tiempos'].copy(); df_r_c = data['relevos'].copy()
+df_t_c['posicion'] = pd.to_numeric(df_t_c['posicion'], errors='coerce').fillna(0).astype(int)
+df_r_c['posicion'] = pd.to_numeric(df_r_c['posicion'], errors='coerce').fillna(0).astype(int)
+
+med_ind = df_t_c[df_t_c['posicion'].isin([1,2,3])].groupby(['codnadador', 'posicion']).size().unstack(fill_value=0)
+dfs_rel = [df_r_c[['nadador_'+str(i), 'posicion']].rename(columns={'nadador_'+str(i):'codnadador'}) for i in range(1,5)]
+med_rel = pd.concat(dfs_rel)
+med_rel = med_rel[med_rel['posicion'].isin([1,2,3])].groupby(['codnadador', 'posicion']).size().unstack(fill_value=0)
+medallero = med_ind.add(med_rel, fill_value=0)
+for p in [1,2,3]: 
+    if p not in medallero.columns: medallero[p] = 0
+medallero = medallero.rename(columns={1: 'Oro', 2: 'Plata', 3: 'Bronce'})
+
+df_view = df_nad.merge(medallero, left_on='codnadador', right_index=True, how='left').fillna(0)
 df_view['Total'] = df_view['Oro'] + df_view['Plata'] + df_view['Bronce']
 
 
@@ -83,7 +208,64 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
         pbs = mis_t.loc[mis_t.groupby(['Estilo', 'Distancia'])['segundos'].idxmin()].sort_values(['Estilo', 'segundos'])
 
         for estilo in pbs['Estilo'].unique():
-@@ -268,154 +267,153 @@
+            st.markdown(f"<div class='pb-style-header'>{estilo}</div>", unsafe_allow_html=True)
+            for _, r in pbs[pbs['Estilo'] == estilo].iterrows():
+                st.markdown(f"""
+                <div class="pb-row">
+                    <span class="pb-dist">{r['Distancia']}</span>
+                    <span class="pb-time">{r['tiempo']}</span>
+                </div>""", unsafe_allow_html=True)
+
+        st.divider()
+
+        # GRÁFICO
+        st.subheader("📈 Evolución de Tiempos")
+        conteo = mis_t.groupby(['Estilo', 'Distancia']).size().reset_index(name='count')
+        validos = conteo[conteo['count'] >= 2]
+
+        if not validos.empty:
+            c1, c2 = st.columns(2)
+            estilos_ok = sorted(validos['Estilo'].unique())
+            g_est = c1.selectbox("Estilo Gráfico", estilos_ok, key=f"g_est{unique_key_suffix}")
+
+            dist_ok = sorted(validos[validos['Estilo'] == g_est]['Distancia'].unique())
+            g_dist = c2.selectbox("Distancia Gráfico", dist_ok, key=f"g_dist{unique_key_suffix}")
+
+            df_graph = mis_t[(mis_t['Estilo'] == g_est) & (mis_t['Distancia'] == g_dist)].sort_values('fecha')
+            df_graph['TimeObj'] = pd.to_datetime('2024-01-01') + pd.to_timedelta(df_graph['segundos'], unit='s')
+
+            fig = px.line(df_graph, x='fecha', y='TimeObj', markers=True, template="plotly_dark")
+            fig.update_yaxes(tickformat="%M:%S.%f", title="Tiempo")
+            fig.update_traces(line_color='#E53935')
+            fig.update_layout(height=300, margin=dict(t=10, b=10, l=40, r=20))
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("Necesitas al menos 2 carreras en la misma prueba para ver la evolución.")
+
+        st.divider()
+
+    # HISTORIAL
+    st.subheader("📜 Historial Completo")
+    with st.expander("Filtrar Historial"):
+        h1, h2 = st.columns(2)
+        hf_est = h1.selectbox("Estilo", ["Todos"] + sorted(mis_t['Estilo'].unique().tolist()), key=f"h_est{unique_key_suffix}")
+        hf_dis = h2.selectbox("Distancia", ["Todos"] + sorted(mis_t['Distancia'].unique().tolist()), key=f"h_dis{unique_key_suffix}")
+
+    df_hist = mis_t.copy()
+    if hf_est != "Todos": df_hist = df_hist[df_hist['Estilo'] == hf_est]
+    if hf_dis != "Todos": df_hist = df_hist[df_hist['Distancia'] == hf_dis]
+    df_hist = df_hist.sort_values('fecha', ascending=False)
+
+    for _, r in df_hist.head(20).iterrows():
+        medal = "🥇" if r['posicion'] == 1 else ("🥈" if r['posicion'] == 2 else ("🥉" if r['posicion'] == 3 else f"#{r['posicion']}"))
+        st.markdown(f"""
+        <div class="mobile-card" style="padding:10px;">
+            <div style="display:flex; justify-content:space-between;">
+                <span style="font-weight:bold; color:white;">{r['Distancia']} {r['Estilo']}</span>
+                <span style="font-family:monospace; font-weight:bold; color:#4CAF50;">{r['tiempo']}</span>
+            </div>
+            <div style="font-size:12px; color:#aaa; margin-top:5px;">
+                📅 {r['fecha']} • {r['club']} • {medal}
             </div>
         </div>""", unsafe_allow_html=True)
 
