@@ -67,17 +67,17 @@ def validar_socio():
             st.error("Número de socio no registrado.")
 
 def cerrar_sesion():
-    st.session_state.role = None
-    st.session_state.user_name = None
-    st.session_state.user_id = None
-    st.session_state.admin_unlocked = False
+    for key in st.session_state.keys():
+        del st.session_state[key]
     st.rerun()
 
-# --- 5. PANTALLA DE LOGIN (Función Interna) ---
+# --- 5. PANTALLA DE LOGIN ---
 def login_screen():
+    # CSS para ocultar sidebar en login
+    st.markdown("""<style>[data-testid="stSidebar"] {display: none;}</style>""", unsafe_allow_html=True)
+    
     st.markdown("""
         <style>
-            [data-testid="stSidebar"] {display: none;} /* Ocultar sidebar solo en login */
             .login-container {
                 text-align: center;
                 padding: 30px;
@@ -106,7 +106,6 @@ def login_screen():
                 opacity: 0.9;
             }
         </style>
-        
         <div class="login-container">
             <div style="font-size: 40px; margin-bottom: 10px;">🔴⚫ 🏊 ⚫🔴</div>
             <div class="nob-title">NEWELL'S OLD BOYS</div>
@@ -116,54 +115,73 @@ def login_screen():
     
     st.markdown("<div style='text-align:center; color:#aaa; font-size:14px; margin-bottom:5px;'>ACCESO SOCIOS</div>", unsafe_allow_html=True)
     st.text_input("Ingrese Nro de Socio", key="input_socio", placeholder="Ej: 123456-01", label_visibility="collapsed")
-    if st.button("INGRESAR", type="primary", use_container_width=True):
+    if st.button("INGRESAR", type="primary", use_container_width=True, key="btn_ingresar_login"):
         validar_socio()
 
 # --- 6. DEFINICIÓN DE PÁGINAS ---
-# Referenciamos los archivos físicos en la carpeta pages/
 pg_inicio = st.Page("pages/1_inicio.py", title="Inicio", icon="🏠")
 pg_datos = st.Page("pages/2_visualizar_datos.py", title="Base de Datos", icon="🗃️")
 pg_ranking = st.Page("pages/4_ranking.py", title="Ranking", icon="🏆")
 pg_simulador = st.Page("pages/3_simulador.py", title="Simulador", icon="⏱️")
 pg_carga = st.Page("pages/1_cargar_datos.py", title="Carga de Datos", icon="⚙️")
-
-# Pagina "ficticia" para el login
 pg_login_obj = st.Page(login_screen, title="Acceso", icon="🔒")
 
-# --- 7. RUTEO Y NAVEGACIÓN (EL CEREBRO) ---
+# --- 7. RUTEO Y NAVEGACIÓN ---
 
 if not st.session_state.role:
-    # CASO 1: NO LOGUEADO -> Solo ve Login
     pg = st.navigation([pg_login_obj])
     pg.run()
 
 else:
-    # CASO 2: LOGUEADO -> Configuramos el menú según el ROL
-    
-    # Menú Común (Para todos)
+    # --- CSS PARA ORDENAR SIDEBAR (HEADER ARRIBA, MENU ABAJO) ---
+    st.markdown("""
+        <style>
+            /* Mueve el menú nativo hacia abajo */
+            [data-testid="stSidebarNav"] { order: 2; margin-top: 10px; }
+            /* Mueve nuestro contenido personalizado hacia arriba */
+            [data-testid="stSidebarUserContent"] { order: 1; }
+            
+            .user-header {
+                padding: 15px 10px;
+                text-align: center;
+                background: linear-gradient(180deg, #1e1e1e 0%, #121212 100%);
+                border-radius: 8px;
+                border: 1px solid #333;
+                margin-bottom: 10px;
+            }
+        </style>
+    """, unsafe_allow_html=True)
+
+    # DEFINICIÓN DEL MENÚ
     menu_pages = {"Principal": [pg_inicio, pg_datos]}
     
-    # Si es Master (M) o Profe (P), agregamos herramientas avanzadas
     if st.session_state.role in ["M", "P"]:
         menu_pages["Herramientas"] = [pg_ranking, pg_simulador]
-        
-        # Si desbloqueó el candado (admin), agregamos Carga
         if st.session_state.admin_unlocked:
             menu_pages["Administración"] = [pg_carga]
             
-    # Creamos la navegación con las páginas seleccionadas
     pg = st.navigation(menu_pages)
     
-    # --- BARRA LATERAL (SIDEBAR) ---
+    # --- CONTENIDO SIDEBAR ---
     with st.sidebar:
-        # Info del usuario
-        st.markdown(f"Hola, **{st.session_state.user_name.split()[0]}**")
-        st.caption(f"Perfil: {st.session_state.role}")
-        st.divider()
+        # 1. CABECERA (Nombre) - Eliminado el rol/perfil visualmente
+        nombre_mostrar = st.session_state.user_name.split()[0] if st.session_state.user_name else "Socio"
+        st.markdown(f"""
+        <div class="user-header">
+            <div style="font-size: 24px; margin-bottom: 5px;">🔴⚫</div>
+            <div style="font-weight: bold; font-size: 17px; color: white;">
+                Hola, {nombre_mostrar}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
         
-        # Botón de Cerrar Sesión (Siempre visible en el menú)
-        if st.button("Cerrar Sesión", type="secondary", use_container_width=True):
-            cerrar_sesion()
-            
-    # Ejecutamos la página seleccionada
+        # 2. El menú se renderiza automáticamente aquí por st.navigation (orden 2 por CSS)
+    
+    # Ejecutamos la página
     pg.run()
+
+    # Botón Cerrar Sesión al final de la barra
+    with st.sidebar:
+        st.divider()
+        if st.button("Cerrar Sesión", type="secondary", use_container_width=True, key="btn_logout_sidebar"):
+            cerrar_sesion()
