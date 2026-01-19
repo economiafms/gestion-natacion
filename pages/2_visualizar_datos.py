@@ -21,79 +21,43 @@ st.title("📊 Base de Datos del Club")
 # --- CSS PERSONALIZADO ---
 st.markdown("""
 <style>
-    /* TARJETA PADRÓN */
     .padron-card {
         background-color: #262730;
         border: 1px solid #444;
         border-radius: 12px;
         padding: 15px;
         margin-bottom: 5px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
+        display: flex; align-items: center; justify-content: space-between;
         box-shadow: 0 3px 6px rgba(0,0,0,0.3);
     }
     .p-col-left { flex: 2; text-align: left; border-right: 1px solid #555; padding-right: 10px; }
     .p-col-center { flex: 2; text-align: center; padding: 0 10px; }
     .p-col-right { flex: 1; text-align: right; padding-left: 10px; border-left: 1px solid #555; }
-    
     .p-name { font-weight: bold; font-size: 18px; color: white; margin-bottom: 5px; }
     .p-meta { font-size: 13px; color: #ccc; }
     .p-medals { font-size: 16px; display: flex; justify-content: center; gap: 10px; margin-top: 5px;}
     .p-total { font-size: 28px; color: #FFD700; font-weight: bold; line-height: 1; }
     .p-cat { font-size: 18px; color: #4CAF50; font-weight: bold; margin-top: 5px; }
 
-    /* FICHA TÉCNICA */
     .ficha-header {
         background: linear-gradient(135deg, #8B0000 0%, #3E0000 100%);
-        padding: 20px;
-        border-radius: 10px;
-        color: white;
-        margin-bottom: 20px;
-        border: 1px solid #550000;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.4);
+        padding: 20px; border-radius: 10px; color: white; margin-bottom: 20px;
+        border: 1px solid #550000; box-shadow: 0 4px 6px rgba(0,0,0,0.4);
     }
     .ficha-name { font-size: 24px; font-weight: bold; border-bottom: 1px solid rgba(255,255,255,0.3); padding-bottom: 10px; margin-bottom: 10px; }
     .ficha-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 14px; }
     .ficha-medals { background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; text-align: center; margin-top: 15px; font-size: 18px; }
 
-    /* MEJORES MARCAS */
-    .pb-style-header {
-        color: #e53935;
-        font-weight: bold;
-        font-size: 16px;
-        margin-top: 15px;
-        margin-bottom: 5px;
-        text-transform: uppercase;
-        border-bottom: 1px solid #444;
-    }
-    .pb-row {
-        background-color: #2b2c35;
-        padding: 10px 15px;
-        margin-bottom: 5px;
-        border-radius: 6px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        border-left: 4px solid #B71C1C;
-    }
+    .pb-style-header { color: #e53935; font-weight: bold; font-size: 16px; margin-top: 15px; margin-bottom: 5px; text-transform: uppercase; border-bottom: 1px solid #444; }
+    .pb-row { background-color: #2b2c35; padding: 10px 15px; margin-bottom: 5px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid #B71C1C; }
     .pb-dist { font-size: 15px; color: #eee; }
     .pb-time { font-size: 18px; font-weight: bold; font-family: monospace; color: #fff; }
 
-    /* TARJETAS GENERALES MOBILE */
-    .mobile-card {
-        background-color: #262730;
-        border: 1px solid #444;
-        border-radius: 8px;
-        padding: 15px;
-        margin-bottom: 12px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-    }
+    .mobile-card { background-color: #262730; border: 1px solid #444; border-radius: 8px; padding: 15px; margin-bottom: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
     .relay-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #555; padding-bottom: 8px; margin-bottom: 8px; }
     .relay-title { font-weight: bold; font-size: 15px; color: white; }
     .relay-time { font-family: monospace; font-weight: bold; font-size: 20px; color: #4CAF50; }
     .relay-meta { font-size: 12px; color: #aaa; display: flex; justify-content: space-between; margin-bottom: 10px; }
-    
     .swimmer-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px; color: #eee; }
     .swimmer-item { background: rgba(255,255,255,0.05); padding: 4px 8px; border-radius: 4px; }
 </style>
@@ -162,34 +126,33 @@ def calcular_grupo_relevo(row_rel, df_cats):
         return f"Suma {suma_edades}"
     except: return "-"
 
-# --- UNIFICACIÓN DE DATOS (FIX Piletas y Columnas) ---
+# --- UNIFICACIÓN DE DATOS LIMPIA (SÓLO PILETAS) ---
 df_full = data['tiempos'].copy()
 
-# 1. Merge Estilos y Distancias
+# 1. Eliminamos 'club' de Tiempos si existe, porque NO LO QUEREMOS (causa conflicto)
+if 'club' in df_full.columns:
+    df_full = df_full.drop(columns=['club'])
+
+# 2. Merges normales
 df_full = df_full.merge(data['estilos'], on='codestilo', how='left')
 df_full = df_full.merge(data['distancias'], on='coddistancia', how='left')
+# Al hacer merge con piletas, nos traerá el 'club' (Sede) y 'medida' correctos
+df_full = df_full.merge(data['piletas'], on='codpileta', how='left')
 
-# 2. Merge Piletas (Aquí suele fallar si hay columnas repetidas como 'club')
-# Usamos suffixes para diferenciar: _t (tabla tiempos) vs _p (tabla piletas)
-df_full = df_full.merge(data['piletas'], on='codpileta', how='left', suffixes=('_t', '_p'))
-
-# 3. Limpieza y Renombrado de Columnas
+# 3. Renombrado y limpieza final
+# Renombrar descripciones si pandas les puso sufijos
 if 'descripcion_x' in df_full.columns: df_full = df_full.rename(columns={'descripcion_x': 'Estilo'})
 elif 'descripcion' in df_full.columns: df_full = df_full.rename(columns={'descripcion': 'Estilo'})
 
 if 'descripcion_y' in df_full.columns: df_full = df_full.rename(columns={'descripcion_y': 'Distancia'})
 
-# 4. Consolidar CLUB y MEDIDA
-# Si existe club_p (del archivo piletas), lo usamos. Si no, usamos club_t (del archivo tiempos).
-if 'club_p' in df_full.columns:
-    df_full['club'] = df_full['club_p'].fillna(df_full['club_t'] if 'club_t' in df_full.columns else 'NOB')
-elif 'club_t' in df_full.columns:
-    df_full['club'] = df_full['club_t']
-# Si 'club' ya existía y no se duplicó, se mantiene.
+# Renombrar 'club' (que viene de Piletas) a 'sede' para que sea claro en el código
+if 'club' in df_full.columns:
+    df_full = df_full.rename(columns={'club': 'sede'})
+else:
+    df_full['sede'] = '-' # Si falló el cruce
 
-# Asegurar que 'medida' exista (viene de Piletas)
-if 'medida' not in df_full.columns:
-    df_full['medida'] = '-' # Valor por defecto si falla el cruce
+if 'medida' not in df_full.columns: df_full['medida'] = '-'
 
 # --- FIN UNIFICACIÓN ---
 
@@ -218,7 +181,6 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
     if not target_id: return
 
     info = df_nad[df_nad['codnadador'] == target_id].iloc[0]
-    
     try: 
         nac = pd.to_datetime(info['fechanac'])
         edad = datetime.now().year - nac.year
@@ -262,7 +224,6 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
                     <span class="pb-dist">{r['Distancia']}</span>
                     <span class="pb-time">{r['tiempo']}</span>
                 </div>""", unsafe_allow_html=True)
-
         st.divider()
 
         # GRÁFICO
@@ -288,7 +249,6 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("Necesitas al menos 2 carreras en la misma prueba para ver la evolución.")
-        
         st.divider()
 
     # --- HISTORIAL COMPLETO ---
@@ -313,8 +273,7 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
             else: medal_str = "-"
         except: medal_str = "-"
 
-        # USO DE GET PARA EVITAR KEYERROR
-        club_txt = r.get('club', 'NOB')
+        sede_txt = r.get('sede', '-')
         medida_txt = r.get('medida', '-')
 
         st.markdown(f"""
@@ -322,7 +281,7 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
             <div style="display:flex; justify-content:space-between; align-items: flex-start;">
                 <div style="flex:1;">
                     <div style="font-weight:bold; color:white; font-size:15px;">{r['Distancia']} {r['Estilo']}</div>
-                    <div style="font-size:12px; color:#aaa; margin-top:4px;">📅 {r['fecha']} • {club_txt} ({medida_txt})</div>
+                    <div style="font-size:12px; color:#aaa; margin-top:4px;">📅 {r['fecha']} • {sede_txt} ({medida_txt})</div>
                 </div>
                 <div style="text-align: right; min-width: 80px;">
                     <div style="font-family:monospace; font-weight:bold; color:#4CAF50; font-size:18px;">{r['tiempo']}</div>
@@ -338,22 +297,20 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
     mis_relevos = mr_base[cond_rel].copy()
     
     if not mis_relevos.empty:
-        # Merge seguro para relevos
         mis_relevos = mis_relevos.merge(data['estilos'], on='codestilo', how='left')
         mis_relevos = mis_relevos.merge(data['distancias'], on='coddistancia', how='left')
-        mis_relevos = mis_relevos.merge(data['piletas'], on='codpileta', how='left', suffixes=('_t', '_p'))
+        mis_relevos = mis_relevos.merge(data['piletas'], on='codpileta', how='left')
         
-        # Limpieza Nombres y Club
+        # Limpieza
         if 'descripcion_x' in mis_relevos.columns: mis_relevos = mis_relevos.rename(columns={'descripcion_x': 'Estilo'})
         elif 'descripcion' in mis_relevos.columns: mis_relevos = mis_relevos.rename(columns={'descripcion': 'Estilo'})
         
         if 'descripcion_y' in mis_relevos.columns: mis_relevos = mis_relevos.rename(columns={'descripcion_y': 'Distancia'})
         
-        if 'club_p' in mis_relevos.columns:
-            mis_relevos['club'] = mis_relevos['club_p'].fillna('NOB')
-        elif 'club' in mis_relevos.columns: pass
-        else: mis_relevos['club'] = 'NOB'
-            
+        # Renombrar club -> sede si existe
+        if 'club' in mis_relevos.columns: mis_relevos = mis_relevos.rename(columns={'club': 'sede'})
+        else: mis_relevos['sede'] = '-'
+        
         if 'medida' not in mis_relevos.columns: mis_relevos['medida'] = '-'
 
         mis_relevos = mis_relevos.sort_values('fecha', ascending=False)
@@ -367,21 +324,18 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
                 nom = dict_id_nombre.get(nid, "??").split(',')[0]
                 t = str(r[f'tiempo_{k}']).strip()
                 if t and t not in ["00.00", "0", "None", "nan"]: nom += f" ({t})"
-                
                 border_style = "border: 1px solid #E91E63;" if nid == target_id else ""
                 html_grid += f"<div class='swimmer-item' style='{border_style}'>{k}. {nom}</div>"
             
             try: p_rel = int(r['posicion'])
             except: p_rel = 0
-            
             if p_rel == 1: pos_icon = "🥇 1º"
             elif p_rel == 2: pos_icon = "🥈 2º"
             elif p_rel == 3: pos_icon = "🥉 3º"
             elif p_rel > 0: pos_icon = f"Pos: {p_rel}"
             else: pos_icon = ""
             
-            club_r = r.get('club', 'NOB')
-            medida_r = r.get('medida', '-')
+            sede_r = r.get('sede', '-')
 
             st.markdown(f"""
             <div class="mobile-card" style="border-left: 4px solid #E91E63;">
@@ -396,7 +350,7 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
                     </div>
                 </div>
                 <div class="relay-meta">
-                    <span>📅 {r['fecha']} • {club_r} ({medida_r})</span>
+                    <span>📅 {r['fecha']} • {sede_r} ({r['medida']})</span>
                 </div>
                 <div class="swimmer-grid">{html_grid}</div>
             </div>""", unsafe_allow_html=True)
@@ -435,20 +389,18 @@ def render_tab_relevos_general():
     st.markdown("### Historial de Postas")
     mr_all = data['relevos'].copy()
     if not mr_all.empty:
-        # Merge seguro para relevos general
         mr_all = mr_all.merge(data['estilos'], on='codestilo', how='left')
         mr_all = mr_all.merge(data['distancias'], on='coddistancia', how='left')
-        mr_all = mr_all.merge(data['piletas'], on='codpileta', how='left', suffixes=('_t', '_p'))
+        mr_all = mr_all.merge(data['piletas'], on='codpileta', how='left')
         
         if 'descripcion_x' in mr_all.columns: mr_all = mr_all.rename(columns={'descripcion_x': 'Estilo'})
         elif 'descripcion' in mr_all.columns: mr_all = mr_all.rename(columns={'descripcion': 'Estilo'})
         
         if 'descripcion_y' in mr_all.columns: mr_all = mr_all.rename(columns={'descripcion_y': 'Distancia'})
         
-        if 'club_p' in mr_all.columns: mr_all['club'] = mr_all['club_p'].fillna('NOB')
-        elif 'club' in mr_all.columns: pass
-        else: mr_all['club'] = 'NOB'
-            
+        # Rename club -> sede
+        if 'club' in mr_all.columns: mr_all = mr_all.rename(columns={'club': 'sede'})
+        else: mr_all['sede'] = '-'
         if 'medida' not in mr_all.columns: mr_all['medida'] = '-'
 
         c1, c2 = st.columns(2)
@@ -460,7 +412,6 @@ def render_tab_relevos_general():
         
         for _, r in mr_all.sort_values('fecha', ascending=False).head(20).iterrows():
             grupo_txt = calcular_grupo_relevo(r, data['cat_relevos'])
-
             html_grid = ""
             for k in range(1, 5):
                 nid = r[f'nadador_{k}']
@@ -471,15 +422,13 @@ def render_tab_relevos_general():
 
             try: p_rel = int(r['posicion'])
             except: p_rel = 0
-            
             if p_rel == 1: pos_icon = "🥇 1º"
             elif p_rel == 2: pos_icon = "🥈 2º"
             elif p_rel == 3: pos_icon = "🥉 3º"
             elif p_rel > 0: pos_icon = f"Pos: {p_rel}"
             else: pos_icon = ""
 
-            club_r = r.get('club', 'NOB')
-            medida_r = r.get('medida', '-')
+            sede_r = r.get('sede', '-')
 
             st.markdown(f"""
             <div class="mobile-card" style="border-left: 4px solid #9C27B0;">
@@ -494,11 +443,10 @@ def render_tab_relevos_general():
                     </div>
                 </div>
                 <div class="relay-meta">
-                    <span>📅 {r['fecha']} • {club_r} ({medida_r})</span>
+                    <span>📅 {r['fecha']} • {sede_r} ({r['medida']})</span>
                 </div>
                 <div class="swimmer-grid">{html_grid}</div>
             </div>""", unsafe_allow_html=True)
-
 
 # ==============================================================================
 #  LÓGICA PRINCIPAL
@@ -523,18 +471,12 @@ else:
     
     with tab2:
         lista_nombres = sorted(df_nad['Nombre Completo'].unique().tolist())
-        
         idx_defecto = 0
         pre_seleccion = st.session_state.get("nadador_seleccionado")
-        
-        if not pre_seleccion and mi_nombre in lista_nombres:
-            pre_seleccion = mi_nombre
-            
-        if pre_seleccion in lista_nombres:
-            idx_defecto = lista_nombres.index(pre_seleccion)
+        if not pre_seleccion and mi_nombre in lista_nombres: pre_seleccion = mi_nombre
+        if pre_seleccion in lista_nombres: idx_defecto = lista_nombres.index(pre_seleccion)
 
         f_nad = st.selectbox("Seleccionar Atleta:", lista_nombres, index=idx_defecto)
-        
         if f_nad:
             st.session_state.nadador_seleccionado = f_nad
             id_actual = df_nad[df_nad['Nombre Completo'] == f_nad].iloc[0]['codnadador']
