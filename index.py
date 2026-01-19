@@ -2,28 +2,31 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 import altair as alt
+from datetime import datetime
 
 # --- 1. CONFIGURACIÓN DEL SITIO ---
-st.set_page_config(page_title="NOB Natación", layout="centered") # 'Centered' se ve mejor en celulares
+st.set_page_config(page_title="NOB Natación", layout="centered", initial_sidebar_state="collapsed")
 
 # --- 2. SISTEMA DE NAVEGACIÓN (Router) ---
-# Definimos las páginas disponibles en el sistema
+# Definimos las páginas apuntando a tus archivos existentes
 pg_dashboard = st.Page(lambda: dashboard_main(), title="Inicio", icon="🏠")
-pg_ranking = st.Page("pages/4_ranking.py", title="Ranking Histórico", icon="🏆")
-pg_simulador = st.Page("pages/3_simulador.py", title="Simulador de Postas", icon="⏱️")
-pg_carga = st.Page("pages/1_cargar_datos.py", title="Panel de Carga", icon="⚙️")
+pg_datos = st.Page("pages/2_visualizar_datos.py", title="Base de Datos", icon="🗃️") # <--- CORREGIDO AQUÍ
+pg_ranking = st.Page("pages/4_ranking.py", title="Ranking", icon="🏆")
+pg_simulador = st.Page("pages/3_simulador.py", title="Simulador", icon="⏱️")
+pg_carga = st.Page("pages/1_cargar_datos.py", title="Carga", icon="⚙️")
 
-# Lógica de Seguridad: La carga solo aparece si la URL es ?access=admin
+# Lógica de Seguridad (Solo admin ve Carga)
 params = st.query_params
 es_admin = params.get("access") == "admin"
 
 if es_admin:
     pg = st.navigation({
-        "Club": [pg_dashboard, pg_ranking, pg_simulador],
+        "Club": [pg_dashboard, pg_datos, pg_ranking, pg_simulador],
         "Admin": [pg_carga]
     })
 else:
-    pg = st.navigation([pg_dashboard, pg_ranking, pg_simulador])
+    # Usuario normal ve todo menos Carga
+    pg = st.navigation([pg_dashboard, pg_datos, pg_ranking, pg_simulador])
 
 # --- 3. CONEXIÓN DE DATOS ---
 conn = st.connection("gsheets", type=GSheetsConnection)
@@ -38,89 +41,108 @@ def cargar_kpis():
         }
     except: return None
 
-# --- 4. CONTENIDO DEL DASHBOARD (La vista principal) ---
+# --- 4. FUNCIÓN AUXILIAR: CATEGORÍAS ---
+def calcular_categoria(anio_nac):
+    anio_actual = datetime.now().year
+    edad = anio_actual - anio_nac
+    
+    if edad < 20: return "Juvenil"
+    elif 20 <= edad <= 24: return "PRE"
+    elif 25 <= edad <= 29: return "A"
+    elif 30 <= edad <= 34: return "B"
+    elif 35 <= edad <= 39: return "C"
+    elif 40 <= edad <= 44: return "D"
+    elif 45 <= edad <= 49: return "E"
+    elif 50 <= edad <= 54: return "F"
+    elif 55 <= edad <= 59: return "G"
+    elif 60 <= edad <= 64: return "H"
+    elif 65 <= edad <= 69: return "I"
+    elif 70 <= edad <= 74: return "J"
+    elif 75 <= edad <= 79: return "K"
+    else: return "L+"
+
+# --- 5. DASHBOARD PRINCIPAL (Mobile Friendly) ---
 def dashboard_main():
-    # Encabezado Mobile
-    c_logo, c_tit = st.columns([1, 4])
-    with c_logo:
-        # Logo de NOB (URL pública estable)
-        st.image("https://upload.wikimedia.org/wikipedia/commons/4/4e/Newell%27s_Old_Boys_shield.svg", width=60)
-    with c_tit:
-        st.markdown("<h1 style='font-size: 28px; margin-bottom: 0px;'>Natación NOB</h1>", unsafe_allow_html=True)
-        st.caption("Panel de Rendimiento Deportivo")
+    # Encabezado Compacto
+    c_img, c_txt = st.columns([1, 4])
+    with c_img:
+        st.image("https://upload.wikimedia.org/wikipedia/commons/4/4e/Newell%27s_Old_Boys_shield.svg", width=55)
+    with c_txt:
+        st.markdown("<h3 style='margin-bottom: 0px; padding-top: 10px;'>Natación NOB</h3>", unsafe_allow_html=True)
+        st.caption("Panel de Gestión Deportiva")
 
     st.divider()
 
-    # Carga de datos para KPIs
     data = cargar_kpis()
     
     if data:
         df_n = data['nadadores']
         df_t = data['tiempos']
         
-        # --- SECCIÓN 1: KPIs (Tarjetas Grandes) ---
-        # En mobile, st.metric se ve muy bien
+        # --- SECCIÓN 1: KPIs ---
         k1, k2 = st.columns(2)
-        k1.metric("🏊‍♂️ Plantel Activo", f"{len(df_n)}", "Nadadores")
-        k2.metric("⏱️ Marcas Históricas", f"{len(df_t)}", "Registros")
+        k1.metric("🏊‍♂️ Plantel", f"{len(df_n)}", "Nadadores")
+        k2.metric("⏱️ Registros", f"{len(df_t)}", "Total marcas")
 
-        # --- SECCIÓN 2: ACCESOS RÁPIDOS (Botones Gigantes) ---
-        st.subheader("Accesos Directos")
-        
-        # Usamos contenedores para simular tarjetas de app
-        with st.container(border=True):
-            col_icon, col_text = st.columns([1, 4])
-            with col_icon: st.markdown("# 🏆")
-            with col_text:
-                st.markdown("**Ranking y Mejores Tiempos**")
-                st.caption("Consultá récords y comparativas.")
-            if st.button("Ver Ranking", use_container_width=True):
+        st.write("") 
+
+        # --- SECCIÓN 2: ACCESOS RÁPIDOS (2 Columnas grandes) ---
+        c_btn1, c_btn2 = st.columns(2)
+        with c_btn1:
+            if st.button("🗃️ Base de Datos", type="secondary", use_container_width=True):
+                st.switch_page("pages/2_visualizar_datos.py") # <--- CONECTADO
+        with c_btn2:
+            if st.button("🏆 Ver Ranking", type="secondary", use_container_width=True):
                 st.switch_page("pages/4_ranking.py")
 
-        with st.container(border=True):
-            col_icon2, col_text2 = st.columns([1, 4])
-            with col_icon2: st.markdown("# 🤖")
-            with col_text2:
-                st.markdown("**Simulador de Postas IA**")
-                st.caption("Armado inteligente de equipos.")
-            if st.button("Abrir Simulador", use_container_width=True):
-                st.switch_page("pages/3_simulador.py")
-        
+        # Botón extra ancho completo para Simulador
+        st.write("")
+        if st.button("⏱️ Ir al Simulador de Postas", type="primary", use_container_width=True):
+            st.switch_page("pages/3_simulador.py")
+
         st.divider()
 
-        # --- SECCIÓN 3: GRÁFICO VISUAL (Simple y Bonito) ---
-        st.subheader("📊 Distribución del Equipo")
-        
+        # --- SECCIÓN 3: GRÁFICOS VISUALES ---
         if not df_n.empty:
-            # Gráfico de Donut: Género
-            base = alt.Chart(df_n).encode(theta=alt.Theta("count()", stack=True))
-            pie = base.mark_arc(outerRadius=100, innerRadius=60).encode(
-                color=alt.Color("codgenero", scale=alt.Scale(domain=['M', 'F'], range=['#1f77b4', '#ff7f0e']), legend=None),
-                tooltip=["codgenero", "count()"]
-            )
-            text = base.mark_text(radius=120).encode(
-                text="count()",
-                order=alt.Order("codgenero"),
-                color=alt.value("white")  # Color del texto
-            )
+            df_n['Anio'] = pd.to_datetime(df_n['fechanac']).dt.year
+            df_n['Categoria'] = df_n['Anio'].apply(calcular_categoria)
             
-            # Gráfico de Barras: Edades
-            df_n['Edad'] = 2026 - pd.to_datetime(df_n['fechanac']).dt.year
-            bar = alt.Chart(df_n).mark_bar(color='#FF4B4B').encode(
-                x=alt.X('Edad', bin=alt.Bin(maxbins=10), title='Rango de Edad'),
-                y=alt.Y('count()', title='Cant.')
-            ).properties(height=200)
+            # Pestañas limpias
+            tab_gen, tab_cat = st.tabs(["Género", "Categorías Master"])
 
-            t1, t2 = st.tabs(["Por Género", "Por Edad"])
-            with t1:
+            with tab_gen:
+                base = alt.Chart(df_n).encode(theta=alt.Theta("count()", stack=True))
+                pie = base.mark_arc(outerRadius=100, innerRadius=60).encode(
+                    color=alt.Color("codgenero", scale=alt.Scale(domain=['M', 'F'], range=['#1f77b4', '#ff7f0e']), legend=None),
+                    tooltip=["codgenero", "count()"]
+                )
+                text = base.mark_text(radius=130).encode(
+                    text=alt.Text("count()"), order=alt.Order("codgenero"), color=alt.value("white") 
+                )
                 st.altair_chart(pie + text, use_container_width=True)
-                # Leyenda manual simple
-                st.caption("🔵 Masculino | 🟠 Femenino")
-            with t2:
-                st.altair_chart(bar, use_container_width=True)
+                
+                # Leyenda simple centrada
+                st.markdown("""
+                <div style="text-align: center; font-size: 14px; margin-bottom: 10px;">
+                    <span style="color: #1f77b4;">● Masculino</span> &nbsp;&nbsp; 
+                    <span style="color: #ff7f0e;">● Femenino</span>
+                </div>
+                """, unsafe_allow_html=True)
 
-    else:
-        st.info("Conectando con la base de datos...")
+            with tab_cat:
+                # Orden lógico de categorías (no alfabético)
+                orden_cat = ["Juvenil", "PRE", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L+"]
+                
+                chart_cat = alt.Chart(df_n).mark_bar(cornerRadius=3).encode(
+                    x=alt.X('Categoria', sort=orden_cat, title=None),
+                    y=alt.Y('count()', title='Nadadores'),
+                    color=alt.Color('codgenero', legend=None, scale=alt.Scale(range=['#1f77b4', '#ff7f0e'])),
+                    tooltip=['Categoria', 'codgenero', 'count()']
+                ).properties(height=250)
+                
+                st.altair_chart(chart_cat, use_container_width=True)
 
-# --- 5. EJECUCIÓN ---
+    else: st.info("Conectando con Google Sheets...")
+
+# --- EJECUCIÓN ---
 pg.run()
