@@ -15,6 +15,8 @@ if "user_id" not in st.session_state: st.session_state.user_id = None
 if "nro_socio" not in st.session_state: st.session_state.nro_socio = None
 if "admin_unlocked" not in st.session_state: st.session_state.admin_unlocked = False 
 if "show_password" not in st.session_state: st.session_state.show_password = False
+# Variable clave para controlar a quién se muestra en la ficha
+if "nadador_seleccionado" not in st.session_state: st.session_state.nadador_seleccionado = None
 
 # --- 3. CONEXIÓN ---
 conn = st.connection("gsheets", type=GSheetsConnection)
@@ -99,6 +101,7 @@ def validar_socio():
 def cerrar_sesion():
     st.session_state.role = None
     st.session_state.admin_unlocked = False
+    st.session_state.nadador_seleccionado = None
     st.rerun()
 
 def intentar_desbloqueo():
@@ -108,25 +111,17 @@ def intentar_desbloqueo():
         st.rerun()
     else: st.error("Incorrecto")
 
-# --- 6. COMPONENTES VISUALES COMPARTIDOS ---
-
+# --- 6. COMPONENTES VISUALES ---
 def render_personal_card(user_id, db):
-    """Renderiza la tarjeta del nadador logueado con sus estadísticas"""
     df_nad = db['nadadores']
-    # Buscar datos personales
     me_rows = df_nad[df_nad['codnadador'] == user_id]
-    
-    if me_rows.empty:
-        return # No mostrar si no hay datos
-        
+    if me_rows.empty: return
     me = me_rows.iloc[0]
     
-    # Calcular Edad y Categoría
     try: edad = datetime.now().year - pd.to_datetime(me['fechanac']).year
     except: edad = 0
     cat = calcular_cat_exacta(edad, db['categorias'])
     
-    # Calcular Medallas Propias
     df_t = db['tiempos'].copy(); df_r = db['relevos'].copy()
     df_t['posicion'] = pd.to_numeric(df_t['posicion'], errors='coerce').fillna(0)
     df_r['posicion'] = pd.to_numeric(df_r['posicion'], errors='coerce').fillna(0)
@@ -160,7 +155,11 @@ def render_personal_card(user_id, db):
     </div>
     """, unsafe_allow_html=True)
     
-    if st.button("Ver Mi Ficha Completa ➝", key="btn_ficha_main", type="primary", use_container_width=True):
+    # --- LOGICA DEL BOTÓN ---
+    # Al hacer click, guardamos el nombre del usuario como 'nadador_seleccionado'
+    # Esto servirá para que la pagina de visualización sepa a quién cargar por defecto.
+    if st.button("Ver Mi Ficha Completa ➝", key=f"btn_ficha_{user_id}", type="primary", use_container_width=True):
+        st.session_state.nadador_seleccionado = st.session_state.user_name # Forzamos la selección
         st.switch_page("pages/2_visualizar_datos.py")
     
     st.divider()
@@ -169,29 +168,21 @@ def render_graficos_comunes(df_n):
     if not df_n.empty:
         df_n['Anio'] = pd.to_datetime(df_n['fechanac']).dt.year
         df_n['Categoria'] = df_n['Anio'].apply(calcular_categoria)
-        
         t_g, t_c = st.tabs(["Género", "Categorías Master"])
         colors = alt.Scale(domain=['M', 'F'], range=['#1f77b4', '#FF69B4'])
-        
         with t_g:
             base = alt.Chart(df_n).encode(theta=alt.Theta("count()", stack=True))
-            pie = base.mark_arc(outerRadius=80, innerRadius=50).encode(
-                color=alt.Color("codgenero", scale=colors, legend=None), tooltip=["codgenero", "count()"]
-            )
+            pie = base.mark_arc(outerRadius=80, innerRadius=50).encode(color=alt.Color("codgenero", scale=colors, legend=None), tooltip=["codgenero", "count()"])
             text = base.mark_text(radius=100).encode(text="count()", order=alt.Order("codgenero"), color=alt.value("white"))
             st.altair_chart(pie + text, use_container_width=True)
             st.markdown("""<div style="text-align: center; font-size: 12px; margin-bottom: 5px;"><span style="color: #1f77b4;">● Masc</span> &nbsp; <span style="color: #FF69B4;">● Fem</span></div>""", unsafe_allow_html=True)
-
         with t_c:
             orden = ["Juvenil", "PRE", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L+"]
-            chart = alt.Chart(df_n).mark_bar(cornerRadius=3).encode(
-                x=alt.X('Categoria', sort=orden, title=None), y=alt.Y('count()', title=None),
-                color=alt.Color('codgenero', legend=None, scale=colors), tooltip=['Categoria', 'codgenero', 'count()']
-            ).properties(height=200)
+            chart = alt.Chart(df_n).mark_bar(cornerRadius=3).encode(x=alt.X('Categoria', sort=orden, title=None), y=alt.Y('count()', title=None), color=alt.Color('codgenero', legend=None, scale=colors), tooltip=['Categoria', 'codgenero', 'count()']).properties(height=200)
             st.altair_chart(chart, use_container_width=True)
 
-# --- 7. DASHBOARD M (MASTER) ---
-def dashboard_m():
+# --- 7. DASHBOARDS ---
+def dashboard_common_structure():
     st.markdown("""
         <div style='text-align: center; margin-bottom: 20px;'>
             <h3 style='color: white; font-size: 20px; margin: 0;'>BIENVENIDOS AL COMPLEJO ACUÁTICO</h3>
@@ -201,15 +192,13 @@ def dashboard_m():
     st.divider()
 
     if db:
-        # 1. MOSTRAR TARJETA PERSONAL (SI TIENE DATOS)
         if st.session_state.user_id:
             render_personal_card(st.session_state.user_id, db)
 
-        # 2. ESTADÍSTICAS DEL CLUB
+        st.markdown("<h5 style='text-align: center; color: #888;'>ESTADÍSTICAS DEL CLUB</h5>", unsafe_allow_html=True)
         df_t = db['tiempos'].copy(); df_r = db['relevos'].copy()
         df_t['posicion'] = pd.to_numeric(df_t['posicion'], errors='coerce').fillna(0)
         df_r['posicion'] = pd.to_numeric(df_r['posicion'], errors='coerce').fillna(0)
-        
         t_oro = len(df_t[df_t['posicion']==1]) + len(df_r[df_r['posicion']==1])
         t_plata = len(df_t[df_t['posicion']==2]) + len(df_r[df_r['posicion']==2])
         t_bronce = len(df_t[df_t['posicion']==3]) + len(df_r[df_r['posicion']==3])
@@ -236,90 +225,39 @@ def dashboard_m():
             </div>
         </div>
         """, unsafe_allow_html=True)
-        
         render_graficos_comunes(db['nadadores'].copy())
-        
-        st.divider()
-        c1, c2 = st.columns(2)
-        with c1: 
-            if st.button("🗃️ Base de Datos", use_container_width=True): st.switch_page("pages/2_visualizar_datos.py")
-        with c2: 
-            if st.button("🏆 Ver Ranking", use_container_width=True): st.switch_page("pages/4_ranking.py")
-        st.write("")
-        if st.button("⏱️ Simulador de Postas", type="primary", use_container_width=True): st.switch_page("pages/3_simulador.py")
 
-        # --- CANDADO M ---
-        st.write(""); st.write("")
-        col_space, col_lock = st.columns([8, 1])
-        with col_lock:
-            if not st.session_state.admin_unlocked:
-                if st.button("🔒", key="lock_m", help="Acceso Admin", type="tertiary"):
-                    st.session_state.show_password = not st.session_state.show_password
-        
-        if st.session_state.show_password and not st.session_state.admin_unlocked:
-            c_pass, c_ok = st.columns([3, 1])
-            st.session_state.pass_input = c_pass.text_input("Clave", type="password", label_visibility="collapsed")
-            if c_ok.button("OK"): intentar_desbloqueo()
-        
-        if st.session_state.admin_unlocked: st.success("🔓 Admin Activo.")
-        
-        st.divider()
-        if st.button("Cerrar Sesión"): cerrar_sesion()
-
-# --- 8. DASHBOARD N (NADADOR) ---
-def dashboard_n():
-    st.markdown("""
-        <div style='text-align: center; margin-bottom: 20px;'>
-            <h3 style='color: white; font-size: 20px; margin: 0;'>BIENVENIDOS AL COMPLEJO ACUÁTICO</h3>
-            <h1 style='color: #E30613; font-size: 32px; margin: 0; font-weight: 800;'>🔴⚫ NEWELL'S OLD BOYS ⚫🔴</h1>
-        </div>
-    """, unsafe_allow_html=True)
+def dashboard_m():
+    dashboard_common_structure()
     st.divider()
+    c1, c2 = st.columns(2)
+    with c1: 
+        if st.button("🗃️ Base de Datos", use_container_width=True): st.switch_page("pages/2_visualizar_datos.py")
+    with c2: 
+        if st.button("🏆 Ver Ranking", use_container_width=True): st.switch_page("pages/4_ranking.py")
+    st.write("")
+    if st.button("⏱️ Simulador de Postas", type="primary", use_container_width=True): st.switch_page("pages/3_simulador.py")
 
-    if db:
-        # 1. TARJETA PERSONAL (Arriba)
-        if st.session_state.user_id:
-            render_personal_card(st.session_state.user_id, db)
-        
-        # 2. INFO CLUB (Abajo)
-        st.markdown("<h5 style='text-align: center; color: #888;'>ESTADÍSTICAS DEL CLUB</h5>", unsafe_allow_html=True)
-        
-        df_t = db['tiempos'].copy(); df_r = db['relevos'].copy()
-        df_t['posicion'] = pd.to_numeric(df_t['posicion'], errors='coerce').fillna(0)
-        df_r['posicion'] = pd.to_numeric(df_r['posicion'], errors='coerce').fillna(0)
-        t_oro = len(df_t[df_t['posicion']==1]) + len(df_r[df_r['posicion']==1])
-        t_plata = len(df_t[df_t['posicion']==2]) + len(df_r[df_r['posicion']==2])
-        t_bronce = len(df_t[df_t['posicion']==3]) + len(df_r[df_r['posicion']==3])
-        total_med = t_oro + t_plata + t_bronce
-        
-        st.markdown(f"""
-        <div style="display: flex; justify-content: space-between; gap: 10px; margin-bottom: 10px;">
-            <div style="background-color: #262730; padding: 15px; border-radius: 10px; width: 48%; text-align: center; border: 1px solid #444; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
-                <div style="font-size: 32px; font-weight: bold; color: white;">{len(db['nadadores'])}</div>
-                <div style="font-size: 13px; color: #ccc;">NADADORES</div>
-            </div>
-            <div style="background-color: #262730; padding: 15px; border-radius: 10px; width: 48%; text-align: center; border: 1px solid #444; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
-                <div style="font-size: 32px; font-weight: bold; color: white;">{len(df_t)+len(df_r)}</div>
-                <div style="font-size: 13px; color: #ccc;">REGISTROS</div>
-            </div>
-        </div>
-        <div style="background-color: #1E1E1E; border: 1px solid #333; border-radius: 10px; padding: 12px; margin-bottom: 25px;">
-            <div style="text-align:center; font-size:11px; color:#aaa; margin-bottom:8px; font-weight:bold;">MEDALLERO HISTÓRICO</div>
-            <div style="display: flex; justify-content: space-between; gap: 2px;">
-                <div style="flex:1; text-align:center;"><div style="font-size:22px; color:#FFD700;">🥇 {t_oro}</div></div>
-                <div style="flex:1; text-align:center; border-left:1px solid #333;"><div style="font-size:22px; color:#C0C0C0;">🥈 {t_plata}</div></div>
-                <div style="flex:1; text-align:center; border-left:1px solid #333;"><div style="font-size:22px; color:#CD7F32;">🥉 {t_bronce}</div></div>
-                <div style="flex:1; text-align:center; border-left:1px solid #333; background:rgba(255,255,255,0.05);"><div style="font-size:22px; color:#fff;">★ {total_med}</div></div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        render_graficos_comunes(db['nadadores'].copy(), db['tiempos'].copy(), db['relevos'].copy())
-        
-        st.divider()
-        if st.button("Cerrar Sesión"): cerrar_sesion()
+    st.write(""); st.write("")
+    col_space, col_lock = st.columns([8, 1])
+    with col_lock:
+        if not st.session_state.admin_unlocked:
+            if st.button("🔒", key="lock_m", help="Acceso Admin", type="tertiary"):
+                st.session_state.show_password = not st.session_state.show_password
+    if st.session_state.show_password and not st.session_state.admin_unlocked:
+        c_pass, c_ok = st.columns([3, 1])
+        st.session_state.pass_input = c_pass.text_input("Clave", type="password", label_visibility="collapsed")
+        if c_ok.button("OK"): intentar_desbloqueo()
+    if st.session_state.admin_unlocked: st.success("🔓 Admin Activo.")
+    st.divider()
+    if st.button("Cerrar Sesión"): cerrar_sesion()
 
-# --- 9. RUTEO ---
+def dashboard_n():
+    dashboard_common_structure()
+    st.divider()
+    if st.button("Cerrar Sesión", type="secondary"): cerrar_sesion()
+
+# --- 8. RUTEO ---
 pg_dash_m = st.Page(dashboard_m, title="Inicio", icon="🏠")
 pg_dash_n = st.Page(dashboard_n, title="Mi Perfil", icon="🏊")
 pg_datos = st.Page("pages/2_visualizar_datos.py", title="Base de Datos", icon="🗃️")
