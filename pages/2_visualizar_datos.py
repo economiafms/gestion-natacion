@@ -7,7 +7,7 @@ import plotly.express as px
 # --- 1. CONFIGURACIÓN ---
 st.set_page_config(page_title="Base de Datos", layout="centered")
 
-# --- SEGURIDAD ---
+# --- SEGURIDAD: VERIFICACIÓN DE ROL ---
 if "role" not in st.session_state or not st.session_state.role:
     st.warning("⚠️ Acceso denegado. Por favor, inicia sesión desde el Inicio.")
     st.stop()
@@ -182,7 +182,6 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
         o, pl, br = int(row_m.iloc[0]['Oro']), int(row_m.iloc[0]['Plata']), int(row_m.iloc[0]['Bronce'])
     else: o, pl, br = 0, 0, 0
 
-    # CABECERA
     st.markdown(f"""
     <div class="ficha-header">
         <div class="ficha-name">{info['nombre']} {info['apellido']}</div>
@@ -331,7 +330,6 @@ def render_tab_padron():
         </div>
         """, unsafe_allow_html=True)
         
-        # Botón VER
         if st.button(f"Ver Ficha {row['nombre']} ➝", key=f"btn_p_{row['codnadador']}", use_container_width=True):
             st.session_state.nadador_seleccionado = row['Nombre Completo']
             st.rerun()
