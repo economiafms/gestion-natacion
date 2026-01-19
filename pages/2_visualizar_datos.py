@@ -7,7 +7,7 @@ from datetime import datetime
 st.set_page_config(page_title="Base de Datos", layout="centered", initial_sidebar_state="collapsed")
 st.title("🗃️ Base de Datos")
 
-# Estilos CSS para Tarjetas Mobile
+# Estilos CSS para Tarjetas Mobile (Diseño Responsivo)
 st.markdown("""
 <style>
     .mobile-card {
@@ -36,14 +36,14 @@ st.markdown("""
 
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# --- 2. CARGA DE DATOS (Lógica Intacta) ---
+# --- 2. CARGA DE DATOS ---
 @st.cache_data(ttl="15m")
 def cargar_visualizacion():
     try:
         return {
             "nadadores": conn.read(worksheet="Nadadores"),
             "tiempos": conn.read(worksheet="Tiempos"),
-            "relevos": conn.read(worksheet=\"Relevos\"),
+            "relevos": conn.read(worksheet="Relevos"), # <--- AQUÍ ESTABA EL ERROR CORREGIDO
             "estilos": conn.read(worksheet="Estilos"),
             "distancias": conn.read(worksheet="Distancias"),
             "piletas": conn.read(worksheet="Piletas"),
@@ -54,13 +54,14 @@ def cargar_visualizacion():
 
 data = cargar_visualizacion()
 if not data: 
-    st.error("Error de conexión. Intenta recargar.")
+    st.error("Error de conexión o datos no disponibles.")
     st.stop()
 
 # --- 3. PROCESAMIENTO PREVIO ---
-# Preparamos nombres legibles
 df_nad = data['nadadores'].copy()
+# Crear nombre completo para búsquedas
 df_nad['Nombre Completo'] = df_nad['apellido'].astype(str).str.upper() + ", " + df_nad['nombre'].astype(str)
+# Diccionario para mapear IDs a Nombres rápidamente
 dict_id_nombre = df_nad.set_index('codnadador')['Nombre Completo'].to_dict()
 
 # --- 4. NAVEGACIÓN POR PESTAÑAS ---
@@ -71,7 +72,6 @@ tab1, tab2, tab3 = st.tabs(["👤 Padrón", "⏱️ Individuales", "🏊‍♂�
 # ==========================================
 with tab1:
     st.markdown("### Perfil de Atleta")
-    # Buscador principal
     busqueda = st.selectbox("Buscar Nadador:", df_nad['Nombre Completo'].sort_values().unique(), index=None, placeholder="Escribe un apellido...")
     
     if busqueda:
@@ -79,32 +79,29 @@ with tab1:
         anio_nac = pd.to_datetime(perfil['fechanac']).year
         edad = datetime.now().year - anio_nac
         
-        # Tarjeta de Perfil
+        # Tarjeta de Perfil Mobile
         st.markdown(f"""
-        <div style="background: linear-gradient(135deg, #1f77b4 0%, #0d47a1 100%); padding: 20px; border-radius: 12px; color: white; text-align: center;">
+        <div style="background: linear-gradient(135deg, #1f77b4 0%, #0d47a1 100%); padding: 20px; border-radius: 12px; color: white; text-align: center; margin-bottom: 20px;">
             <h2 style="margin:0; color:white;">{perfil['nombre']} {perfil['apellido']}</h2>
-            <p style="opacity:0.9; margin-top:5px;">{edad} Años | Categoría {perfil['codgenero']}</p>
+            <p style="opacity:0.9; margin-top:5px;">{edad} Años | Género {perfil['codgenero']}</p>
             <div style="font-size:12px; margin-top:10px; opacity:0.7;">DNI: {perfil['dni']}</div>
         </div>
         """, unsafe_allow_html=True)
     else:
-        st.info("👆 Busca un nadador para ver su ficha completa.")
-        
-        # Opción: Ver lista completa si no busca nada (Expandible para no molestar)
-        with st.expander("Ver lista completa de nadadores"):
+        st.info("👆 Busca un nadador para ver su ficha.")
+        with st.expander("Ver lista completa"):
             st.dataframe(df_nad[['apellido', 'nombre', 'codgenero', 'fechanac']], hide_index=True, use_container_width=True)
 
 # ==========================================
 # TAB 2: RESULTADOS INDIVIDUALES
 # ==========================================
 with tab2:
-    # Preparar datos
     mi = data['tiempos'].copy()
     mi = mi.merge(data['estilos'], on='codestilo').merge(data['distancias'], on='coddistancia').merge(data['piletas'], on='codpileta')
     mi['Nadador'] = mi['codnadador'].map(dict_id_nombre)
     mi['Fecha_dt'] = pd.to_datetime(mi['fecha'])
     
-    # --- FILTROS OCULTABLES (Acordeón) ---
+    # Filtros Ocultables (Accordion)
     with st.expander("🔍 Filtros de Búsqueda", expanded=False):
         f1, f2 = st.columns(2)
         f_nad = f1.selectbox("Filtrar Nadador", ["Todos"] + sorted(df_nad['Nombre Completo'].unique().tolist()))
@@ -117,21 +114,15 @@ with tab2:
     if f_est != "Todos": df_view = df_view[df_view['descripcion_x'] == f_est]
     if f_pil != "Todas": df_view = df_view[df_view['medida'].str.contains(f_pil[:2])]
 
-    # Ordenar: Más reciente primero
     df_view = df_view.sort_values(by='Fecha_dt', ascending=False)
 
-    # --- RENDERIZADO TIPO "LISTA DE SPOTIFY" ---
-    st.write(f"**Resultados encontrados:** {len(df_view)}")
+    st.caption(f"Resultados encontrados: {len(df_view)}")
     
     if df_view.empty:
-        st.warning("No hay registros con esos filtros.")
+        st.warning("No hay registros.")
     else:
-        # Limitamos a los últimos 50 para no trabar el celular
-        for _, row in df_view.head(50).iterrows():
-            # Icono según pileta
-            icon_pool = "🟦" if "50" in str(row['medida']) else "Small"
-            
-            # HTML Card
+        # Renderizado de Tarjetas (Card View)
+        for _, row in df_view.head(50).iterrows(): # Limitamos a 50 para performance en celular
             st.markdown(f"""
             <div class="mobile-card">
                 <div class="card-header">
@@ -146,14 +137,13 @@ with tab2:
             """, unsafe_allow_html=True)
 
 # ==========================================
-# TAB 3: RELEVOS (Con Tarjetas de Equipo)
+# TAB 3: RELEVOS
 # ==========================================
 with tab3:
     mr = data['relevos'].copy()
     mr = mr.merge(data['estilos'], on='codestilo').merge(data['distancias'], on='coddistancia').merge(data['piletas'], on='codpileta')
     mr = mr.rename(columns={'descripcion_x': 'Estilo', 'descripcion_y': 'Distancia'})
 
-    # --- FILTROS ---
     with st.expander("🔍 Filtros de Relevos", expanded=False):
         c1, c2 = st.columns(2)
         r_gen = c1.selectbox("Género Relevo", ["Todos", "M", "F", "X"])
@@ -162,29 +152,26 @@ with tab3:
     if r_gen != "Todos": mr = mr[mr['codgenero'] == r_gen]
     if r_est != "Todos": mr = mr[mr['Estilo'] == r_est]
 
-    # --- RENDERIZADO DE TARJETAS DE EQUIPO ---
-    st.write(f"**Equipos encontrados:** {len(mr)}")
+    st.caption(f"Equipos encontrados: {len(mr)}")
 
     for _, row in mr.iterrows():
-        # Calcular Suma de Edades (Lógica que pediste mantener)
         nombres_integrantes = []
         suma_edades = 0
         
+        # Procesar integrantes
         for i in range(1, 5):
             id_n = row[f'nadador_{i}']
-            # Buscamos datos del nadador
             nad = df_nad[df_nad['codnadador'] == id_n]
             if not nad.empty:
-                nombre = nad.iloc[0]['Nombre Completo']
-                # Cálculo edad
+                nombre = nad.iloc[0]['Nombre Completo'].split(',')[1] + " " + nad.iloc[0]['Nombre Completo'].split(',')[0]
                 edad = datetime.now().year - pd.to_datetime(nad.iloc[0]['fechanac']).year
                 suma_edades += edad
-                parcial = row[f'tiempo_{i}'] if row[f'tiempo_{i}'] else "-.-"
-                nombres_integrantes.append(f"{nombre} <b>({parcial})</b>")
+                parcial = row[f'tiempo_{i}'] if row[f'tiempo_{i}'] else "--"
+                nombres_integrantes.append(f"{nombre} ({parcial})")
             else:
                 nombres_integrantes.append("Desconocido")
         
-        # Tarjeta Compleja de Relevo
+        # Tarjeta de Relevo
         st.markdown(f"""
         <div class="mobile-card" style="border-left: 5px solid #FF4B4B;">
             <div class="card-header">
