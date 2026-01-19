@@ -99,6 +99,7 @@ def render_tarjeta_resumen(tiempo, categoria, suma, dark=False):
 # --- 5. POSTA MANUAL ---
 st.subheader("🧪 Posta Manual")
 with st.container(border=True):
+    # Selectores generales (estos pueden ir en columnas o apilados, columnas está bien para ahorrar espacio vertical inicial)
     c1, c2, c3 = st.columns(3)
     s_reg_m = c1.selectbox("Reglamento", data['cat_relevos']['tipo_reglamento'].unique(), key="s_reg_m")
     s_tipo_m = c2.selectbox("Prueba", ["Libre (Crol)", "Combinado (Medley)"], key="s_tipo_m")
@@ -108,18 +109,16 @@ with st.container(border=True):
     legs = [("Espalda", "E2"), ("Pecho", "E3"), ("Mariposa", "E1"), ("Crol", "E4")] if "Medley" in s_tipo_m else [("Crol", "E4")] * 4
     n_sel = []
     
-    # RESPONSIVE: Usamos 2 columnas en lugar de 4 o 1 para los selectores
-    cols = st.columns(2)
+    # --- CAMBIO AQUI: SIN COLUMNAS, UNA CAJA DEBAJO DE LA OTRA ---
     for i, (nom_e, cod_e) in enumerate(legs):
         aptos = df_nad[df_nad['codnadador'].isin(df_tiempos_50[df_tiempos_50['codestilo'] == cod_e]['codnadador'])]
         if s_gen != "X": aptos = aptos[aptos['codgenero'] == s_gen]
-        # Selector en columna alternada
-        with cols[i % 2]:
-            n_sel.append(st.selectbox(f"{i+1}. {nom_e}", sorted(aptos['Nombre Completo'].tolist()), index=None, key=f"man_sel_{i}"))
+        # Al no usar 'with cols:', Streamlit los apila verticalmente por defecto (100% ancho)
+        n_sel.append(st.selectbox(f"{i+1}. {nom_e}", sorted(aptos['Nombre Completo'].tolist()), index=None, key=f"man_sel_{i}"))
 
     btn_manual = st.button("🚀 Calcular Posta", use_container_width=True)
 
-# Contenedor para resultados manuales (Evita saltos)
+# Contenedor para resultados manuales
 res_manual_container = st.container()
 
 if btn_manual:
@@ -142,7 +141,6 @@ if btn_manual:
                 st.write("") 
                 render_tarjeta_resumen(seg_a_tiempo(total), cat_n, se)
 
-                # RESPONSIVE: Grilla 2x2 para resultados parciales
                 t_cols = st.columns(4)
                 for i in range(4):
                     t_cols[i].metric(n_sel[i].split(',')[0], seg_a_tiempo(tiempos_p[i]), delta=legs[i][0])
@@ -215,7 +213,7 @@ if st.button("🪄 Generar Estrategia Óptima", type="primary", use_container_wi
                             render_tarjeta_resumen(seg_a_tiempo(row['t']), row['cat'], row['se'], dark=True)
                             cs = st.columns(4)
                             for j in range(4):
-                                cs[j].write(f"**{legs_o[j][1]}**")
+                                cs[j].caption(f"**{legs_o[j][1]}**")
                                 cs[j].write(row['eq'][j].split(',')[0]) # Solo apellido
                                 cs[j].code(seg_a_tiempo(m_map[row['eq'][j]].get(legs_o[j][0], 999.0)))
                             
