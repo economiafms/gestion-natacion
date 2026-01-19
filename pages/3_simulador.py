@@ -10,6 +10,13 @@ st.markdown("<h3 style='text-align: center; color: red;'>🔴⚫ SIMULADOR DE ES
 
 conn = st.connection("gsheets", type=GSheetsConnection)
 
+# --- FUNCIÓN DE TIEMPO (MOVIDA AL INICIO PARA USARLA EN LA CARGA) ---
+def tiempo_a_seg(t_str):
+    try:
+        partes = str(t_str).replace('.', ':').split(':')
+        return float(partes[0]) * 60 + float(partes[1]) + (float(partes[2])/100 if len(partes)>2 else 0)
+    except: return 999.0
+
 # --- 2. CARGA Y PRE-PROCESAMIENTO ---
 @st.cache_data(ttl="15m")
 def cargar_datos_sim():
@@ -22,11 +29,22 @@ def cargar_datos_sim():
             "piletas": conn.read(worksheet="Piletas")
         }
         df_n = data['nadadores'].copy()
-        # Formato APELLIDO, Nombre obligatorio para evitar duplicados
         df_n['Nombre Completo'] = df_n['apellido'].astype(str).str.upper() + ", " + df_n['nombre'].astype(str)
         df_n['Edad_Master'] = 2026 - pd.to_datetime(df_n['fechanac']).dt.year
-        df_t_50 = data['tiempos'][data['tiempos']['coddistancia'] == 'D1'].copy()
-        return data, df_n, df_t_50
+        
+        # --- CORRECCIÓN CLAVE: SELECCIONAR MEJOR TIEMPO ---
+        df_t = data['tiempos'][data['tiempos']['coddistancia'] == 'D1'].copy() # Solo 50m
+        
+        # 1. Calculamos segundos para poder ordenar
+        df_t['segundos_calc'] = df_t['tiempo'].apply(tiempo_a_seg)
+        
+        # 2. Ordenamos por nadador, estilo y tiempo (ascendente)
+        df_t = df_t.sort_values(by=['codnadador', 'codestilo', 'segundos_calc'], ascending=[True, True, True])
+        
+        # 3. Quitamos duplicados, quedándonos con el PRIMERO (que es el más rápido por el orden anterior)
+        df_t_50_best = df_t.drop_duplicates(subset=['codnadador', 'codestilo'], keep='first')
+        
+        return data, df_n, df_t_50_best
     except Exception as e:
         st.error(f"Error de conexión: {e}")
         return None, None, None
@@ -36,13 +54,7 @@ if not data: st.stop()
 
 dict_piletas = data['piletas'].set_index('codpileta').to_dict('index')
 
-# --- 3. FUNCIONES TÉCNICAS ---
-def tiempo_a_seg(t_str):
-    try:
-        partes = str(t_str).replace('.', ':').split(':')
-        return float(partes[0]) * 60 + float(partes[1]) + (float(partes[2])/100 if len(partes)>2 else 0)
-    except: return 999.0
-
+# --- 3. FUNCIONES TÉCNICAS ADICIONALES ---
 def seg_a_tiempo(seg):
     if seg >= 900: return "S/T"
     return f"{int(seg // 60):02d}:{int(seg % 60):02d}.{int((seg % 1) * 100):02d}"
@@ -99,13 +111,16 @@ with st.container(border=True):
     n_sel = []
     cols = st.columns(2)
     for i, (nom_e, cod_e) in enumerate(legs):
+        # Filtramos nadadores que tengan AL MENOS un tiempo en ese estilo (en la tabla de mejores tiempos)
         aptos = df_nad[df_nad['codnadador'].isin(df_tiempos_50[df_tiempos_50['codestilo'] == cod_e]['codnadador'])]
         if s_gen != "X": aptos = aptos[aptos['codgenero'] == s_gen]
         n_sel.append(cols[i % 2].selectbox(f"{nom_e}", sorted(aptos['Nombre Completo'].tolist()), index=None, key=f"man_sel_{i}"))
 
     if st.button("🚀 Calcular Posta", use_container_width=True):
         if len(set(n_sel)) == 4 and None not in n_sel:
-            m_loc = {n: {r['codestilo']: tiempo_a_seg(r['tiempo']) for _, r in df_tiempos_50[df_tiempos_50['codnadador'] == df_nad[df_nad['Nombre Completo'] == n]['codnadador'].iloc[0]].iterrows()} for n in n_sel}
+            # Mapeo usando YA los mejores tiempos filtrados
+            m_loc = {n: {r['codestilo']: r['segundos_calc'] for _, r in df_tiempos_50[df_tiempos_50['codnadador'] == df_nad[df_nad['Nombre Completo'] == n]['codnadador'].iloc[0]].iterrows()} for n in n_sel}
+            
             tiempos_p = [m_loc[n_sel[i]].get(legs[i][1], 999.0) for i in range(4)]
             total = sum(tiempos_p)
             se = sum([df_nad[df_nad['Nombre Completo'] == n]['Edad_Master'].iloc[0] for n in n_sel])
@@ -115,7 +130,7 @@ with st.container(border=True):
 
             t_cols = st.columns(4)
             for i in range(4):
-                t_cols[i].metric(n_sel[i], seg_a_tiempo(tiempos_p[i])) # Muestra Apellido, Nombre
+                t_cols[i].metric(n_sel[i], seg_a_tiempo(tiempos_p[i]))
 
             # --- OBSERVACIONES ---
             st.markdown("---")
@@ -157,7 +172,8 @@ if st.button("🪄 Generar Estrategia Óptima", type="primary", use_container_wi
     if len(pool) < 4: st.warning("Seleccione al menos 4 nadadores.")
     else:
         with st.spinner("Calculando..."):
-            m_map = {n: {r['codestilo']: tiempo_a_seg(r['tiempo']) for _, r in df_tiempos_50[df_tiempos_50['codnadador'] == df_nad[df_nad['Nombre Completo'] == n]['codnadador'].iloc[0]].iterrows()} for n in pool}
+            # Usamos segundos_calc que ya calculamos y filtramos
+            m_map = {n: {r['codestilo']: r['segundos_calc'] for _, r in df_tiempos_50[df_tiempos_50['codnadador'] == df_nad[df_nad['Nombre Completo'] == n]['codnadador'].iloc[0]].iterrows()} for n in pool}
             for n in pool: m_map[n].update({'gen': df_nad[df_nad['Nombre Completo'] == n]['codgenero'].iloc[0], 'edad': df_nad[df_nad['Nombre Completo'] == n]['Edad_Master'].iloc[0]})
             legs_o = [("E2", "Espalda"), ("E3", "Pecho"), ("E1", "Mariposa"), ("E4", "Crol")] if "Medley" in o_tipo else [("E4", "Crol")]*4
             
@@ -174,7 +190,7 @@ if st.button("🪄 Generar Estrategia Óptima", type="primary", use_container_wi
                     cn, s_min = get_cat_info(se, o_reg)
                     resultados.append({'eq': mo, 't': mt, 'cat': cn, 'se': se, 's_min': s_min})
 
-            if not resultados: st.info("No se encontraron combinaciones.")
+            if not resultados: st.info("No se encontraron combinaciones válidas.")
             else:
                 df_res = pd.DataFrame(resultados).sort_values(by=['s_min', 't'])
                 for cat_nombre, group in df_res.groupby('cat', sort=False):
@@ -186,7 +202,7 @@ if st.button("🪄 Generar Estrategia Óptima", type="primary", use_container_wi
                             cs = st.columns(4)
                             for j in range(4):
                                 cs[j].write(f"**{legs_o[j][1]}**")
-                                cs[j].write(row['eq'][j]) # Muestra Apellido, Nombre
+                                cs[j].write(row['eq'][j])
                                 cs[j].code(seg_a_tiempo(m_map[row['eq'][j]].get(legs_o[j][0], 999.0)))
                             
                             st.markdown("**Observaciones:**")
