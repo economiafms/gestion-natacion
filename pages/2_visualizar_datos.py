@@ -113,7 +113,7 @@ def cargar_visualizacion():
             "distancias": conn.read(worksheet="Distancias"),
             "piletas": conn.read(worksheet="Piletas"),
             "categorias": conn.read(worksheet="Categorias"),
-            "cat_relevos": conn.read(worksheet="Categorias_Relevos") # Nueva tabla necesaria
+            "cat_relevos": conn.read(worksheet="Categorias_Relevos")
         }
     except Exception as e: return None
 
@@ -123,7 +123,6 @@ if not data: st.stop()
 # --- 3. PROCESAMIENTO GLOBAL ---
 df_nad = data['nadadores'].copy()
 df_nad['Nombre Completo'] = df_nad['apellido'].astype(str).str.upper() + ", " + df_nad['nombre'].astype(str)
-# Diccionarios de búsqueda rápida
 dict_id_nombre = df_nad.set_index('codnadador')['Nombre Completo'].to_dict()
 # Diccionario para buscar el año de nacimiento por ID (para calcular edades en relevos)
 df_nad['anio_nac'] = pd.to_datetime(df_nad['fechanac'], errors='coerce').dt.year.fillna(0).astype(int)
@@ -144,39 +143,31 @@ def asignar_cat(edad):
         return "-"
     except: return "-"
 
-# Función para calcular el Grupo del Relevo dinámicamente
 def calcular_grupo_relevo(row_rel, df_cats):
     try:
         suma_edades = 0
         anio_competencia = pd.to_datetime(row_rel['fecha']).year
-        
-        # Sumar edades de los 4 nadadores
         for k in range(1, 5):
             nid = row_rel[f'nadador_{k}']
             anio_nac = dict_id_anionac.get(nid, 0)
             if anio_nac > 0:
                 suma_edades += (anio_competencia - anio_nac)
         
-        # Buscar en la tabla de categorías según reglamento y suma
-        reglamento = row_rel.get('tipo_reglamento', 'FED') # Default FED si no existe
-        
+        reglamento = row_rel.get('tipo_reglamento', 'FED') 
         filtro = df_cats[
             (df_cats['tipo_reglamento'] == reglamento) & 
             (df_cats['suma_min'] <= suma_edades) & 
             (df_cats['suma_max'] >= suma_edades)
         ]
-        
-        if not filtro.empty:
-            return filtro.iloc[0]['descripcion']
-        return f"Suma {suma_edades}" # Fallback si no encuentra rango
-    except:
-        return "-"
+        if not filtro.empty: return filtro.iloc[0]['descripcion']
+        return f"Suma {suma_edades}"
+    except: return "-"
 
+# Mezclamos con piletas para tener el dato de 'medida'
 df_full = data['tiempos'].copy()
 df_full = df_full.merge(data['estilos'], on='codestilo').merge(data['distancias'], on='coddistancia').merge(data['piletas'], on='codpileta')
 df_full = df_full.rename(columns={'descripcion_x': 'Estilo', 'descripcion_y': 'Distancia'})
 
-# Preparar Medallero General
 df_t_c = data['tiempos'].copy(); df_r_c = data['relevos'].copy()
 df_t_c['posicion'] = pd.to_numeric(df_t_c['posicion'], errors='coerce').fillna(0).astype(int)
 df_r_c['posicion'] = pd.to_numeric(df_r_c['posicion'], errors='coerce').fillna(0).astype(int)
@@ -275,7 +266,7 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
         
         st.divider()
 
-    # --- HISTORIAL (POSICIÓN ABAJO) ---
+    # --- HISTORIAL (MODIFICADO: Medida de pileta y Posición más grande) ---
     st.subheader("📜 Historial Completo")
     with st.expander("Filtrar Historial"):
         h1, h2 = st.columns(2)
@@ -297,21 +288,22 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
             else: medal_str = "-"
         except: medal_str = "-"
 
+        # AJUSTE: medida pileta + posición size 15px
         st.markdown(f"""
         <div class="mobile-card" style="padding:10px;">
             <div style="display:flex; justify-content:space-between; align-items: flex-start;">
                 <div style="flex:1;">
                     <div style="font-weight:bold; color:white; font-size:15px;">{r['Distancia']} {r['Estilo']}</div>
-                    <div style="font-size:12px; color:#aaa; margin-top:4px;">📅 {r['fecha']} • {r['club']}</div>
+                    <div style="font-size:12px; color:#aaa; margin-top:4px;">📅 {r['fecha']} • {r['club']} ({r['medida']})</div>
                 </div>
                 <div style="text-align: right; min-width: 80px;">
                     <div style="font-family:monospace; font-weight:bold; color:#4CAF50; font-size:18px;">{r['tiempo']}</div>
-                    <div style="font-size:13px; color:#ddd; font-weight:bold; margin-top:2px;">{medal_str}</div>
+                    <div style="font-size:15px; color:#ddd; font-weight:bold; margin-top:2px;">{medal_str}</div>
                 </div>
             </div>
         </div>""", unsafe_allow_html=True)
 
-    # 5. MIS RELEVOS (CON CÁLCULO DE GRUPO)
+    # 5. MIS RELEVOS (MODIFICADO: Sin decimales + Grupo + Medida Pileta)
     st.subheader("🏊‍♂️ Mis Relevos")
     mr_base = data['relevos'].copy()
     cond_rel = (mr_base['nadador_1'] == target_id) | (mr_base['nadador_2'] == target_id) | (mr_base['nadador_3'] == target_id) | (mr_base['nadador_4'] == target_id)
@@ -323,7 +315,6 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
         mis_relevos = mis_relevos.sort_values('fecha', ascending=False)
         
         for _, r in mis_relevos.iterrows():
-            # Calcular Grupo en vivo
             grupo_txt = calcular_grupo_relevo(r, data['cat_relevos'])
             
             html_grid = ""
@@ -345,6 +336,7 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
             elif p_rel > 0: pos_icon = f"Pos: {p_rel}"
             else: pos_icon = ""
             
+            # AJUSTE: Agregar medida pileta
             st.markdown(f"""
             <div class="mobile-card" style="border-left: 4px solid #E91E63;">
                 <div class="relay-header">
@@ -358,7 +350,7 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
                     </div>
                 </div>
                 <div class="relay-meta">
-                    <span>📅 {r['fecha']} • {r['club']}</span>
+                    <span>📅 {r['fecha']} • {r['club']} ({r['medida']})</span>
                 </div>
                 <div class="swimmer-grid">{html_grid}</div>
             </div>""", unsafe_allow_html=True)
@@ -408,7 +400,6 @@ def render_tab_relevos_general():
         if fg_gen != "Todos": mr_all = mr_all[mr_all['codgenero'] == fg_gen]
         
         for _, r in mr_all.sort_values('fecha', ascending=False).head(20).iterrows():
-            # Calcular Grupo en vivo
             grupo_txt = calcular_grupo_relevo(r, data['cat_relevos'])
 
             html_grid = ""
@@ -428,6 +419,7 @@ def render_tab_relevos_general():
             elif p_rel > 0: pos_icon = f"Pos: {p_rel}"
             else: pos_icon = ""
 
+            # AJUSTE: Agregar medida pileta
             st.markdown(f"""
             <div class="mobile-card" style="border-left: 4px solid #9C27B0;">
                 <div class="relay-header">
@@ -441,7 +433,7 @@ def render_tab_relevos_general():
                     </div>
                 </div>
                 <div class="relay-meta">
-                    <span>📅 {r['fecha']} • {r['club']}</span>
+                    <span>📅 {r['fecha']} • {r['club']} ({r['medida']})</span>
                 </div>
                 <div class="swimmer-grid">{html_grid}</div>
             </div>""", unsafe_allow_html=True)
