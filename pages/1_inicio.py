@@ -28,7 +28,7 @@ def cargar_data():
             "tiempos": conn.read(worksheet="Tiempos"),
             "relevos": conn.read(worksheet="Relevos"),
             "categorias": conn.read(worksheet="Categorias"),
-            "estilos": conn.read(worksheet="Estilos") # Necesario para los nombres
+            "estilos": conn.read(worksheet="Estilos") 
         }
     except: return None
 
@@ -75,7 +75,7 @@ def intentar_desbloqueo():
 
 # --- VISUALIZACIÓN ---
 
-# CAJA NEGRA PARA EL TÍTULO
+# BANNER TÍTULO (SOLUCIÓN MODO CLARO)
 st.markdown("""
     <style>
         .banner-box {
@@ -125,7 +125,7 @@ if db and st.session_state.user_id:
     mis_bronces = len(df_t[(df_t['codnadador']==user_id)&(df_t['posicion']==3)]) + len(df_r[((df_r['nadador_1']==user_id)|(df_r['nadador_2']==user_id)|(df_r['nadador_3']==user_id)|(df_r['nadador_4']==user_id))&(df_r['posicion']==3)])
     mi_total = mis_oros + mis_platas + mis_bronces
 
-    # 1. TARJETA PERFIL (ORIGINAL)
+    # 1. TARJETA PERFIL
     st.write("### 👤 Tu Perfil")
     st.markdown(f"""
     <style>
@@ -153,47 +153,38 @@ if db and st.session_state.user_id:
         st.session_state.ver_nadador_especifico = st.session_state.user_name
         st.switch_page("pages/2_visualizar_datos.py")
     
-    st.write("") # Espacio
+    st.write("") 
 
     # =================================================================
-    # 2. NUEVA SECCIÓN: MIS REGISTROS (FRECUENCIA POR ESTILO)
+    # 2. NUEVA SECCIÓN: MIS REGISTROS (CORREGIDO VISUALMENTE)
     # =================================================================
     
-    # Procesar datos solo individuales
     mis_regs = db['tiempos'][db['tiempos']['codnadador'] == user_id].copy()
     
     if not mis_regs.empty:
         st.markdown("<h5 style='text-align: center; color: #aaa; margin-bottom: 15px;'>🏊 MIS ESTILOS FRECUENTES</h5>", unsafe_allow_html=True)
         
-        # Merge para obtener nombre del estilo
+        # Merge para obtener nombre
         mis_regs = mis_regs.merge(db['estilos'], on='codestilo', how='left')
         
-        # Resolver nombre columna descripción
         col_desc = 'descripcion'
         if 'descripcion' not in mis_regs.columns and 'descripcion_x' in mis_regs.columns: 
             col_desc = 'descripcion_x'
         
-        # Contar y Ordenar (Value counts ordena por defecto desc)
         conteo = mis_regs[col_desc].value_counts()
         
-        # Generar HTML Horizontal
-        html_stats = "<div style='display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-bottom: 20px;'>"
+        # --- USAMOS COLUMNAS NATIVAS DE STREAMLIT PARA EVITAR ERRORES VISUALES ---
+        cols = st.columns(len(conteo))
         
-        for estilo, cantidad in conteo.items():
-            # Color de borde sutil dependiendo de la cantidad (Estético)
-            border_color = "#4CAF50" if cantidad == conteo.max() else "#444"
-            
-            html_stats += f"""
-            <div style="background-color: #262730; border: 1px solid {border_color}; border-radius: 8px; padding: 10px; text-align: center; min-width: 90px; flex: 1;">
-                <div style="font-size: 11px; color: #aaa; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px;">{estilo}</div>
-                <div style="font-size: 22px; font-weight: bold; color: white; line-height: 1;">{cantidad}</div>
-                <div style="font-size: 9px; color: #666;">carreras</div>
-            </div>
-            """
-        html_stats += "</div>"
-        
-        st.markdown(html_stats, unsafe_allow_html=True)
-
+        for (estilo, cantidad), col in zip(conteo.items(), cols):
+            with col:
+                st.markdown(f"""
+                <div style="background-color: #262730; border: 1px solid #444; border-radius: 8px; padding: 10px; text-align: center; height: 100%;">
+                    <div style="font-size: 11px; color: #aaa; text-transform: uppercase; margin-bottom: 5px; height: 25px; display: flex; align-items: center; justify-content: center;">{estilo}</div>
+                    <div style="font-size: 24px; font-weight: bold; color: white; line-height: 1;">{cantidad}</div>
+                    <div style="font-size: 10px; color: #666; margin-top: 5px;">carreras</div>
+                </div>
+                """, unsafe_allow_html=True)
     # =================================================================
 
     st.divider()
@@ -248,11 +239,10 @@ if db and st.session_state.user_id:
         ).properties(height=200)
         st.altair_chart(chart, use_container_width=True)
 
-# --- 5. ZONA DE HERRAMIENTAS Y CANDADO (Solo Rol M o P) ---
+# --- 5. HERRAMIENTAS ---
 if st.session_state.role in ["M", "P"]:
     st.divider()
     
-    # Botones de navegación extra en el cuerpo
     c1, c2 = st.columns(2)
     with c1: 
         if st.button("🗃️ Base de Datos", use_container_width=True, key="btn_bd_home"): 
@@ -264,7 +254,6 @@ if st.session_state.role in ["M", "P"]:
     st.write("")
     if st.button("⏱️ Simulador de Postas", type="primary", use_container_width=True, key="btn_sim_home"): st.switch_page("pages/3_simulador.py")
 
-    # --- CANDADO DEL PROFE ---
     st.write(""); st.write("")
     col_space, col_lock = st.columns([8, 1])
     with col_lock:
