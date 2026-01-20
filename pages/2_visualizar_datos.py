@@ -3,6 +3,7 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime
 import plotly.express as px
+import plotly.graph_objects as go
 
 # --- 1. CONFIGURACIÓN ---
 st.set_page_config(page_title="Base de Datos", layout="centered")
@@ -57,7 +58,7 @@ st.markdown("""
     .relay-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #555; padding-bottom: 8px; margin-bottom: 8px; }
     .relay-title { font-weight: bold; font-size: 15px; color: white; }
     .relay-time { font-family: monospace; font-weight: bold; font-size: 20px; color: #4CAF50; }
-    .relay-meta { font-size: 12px; color: #aaa; display: flex; justify-content: space-between; margin-bottom: 10px; }
+    .relay-meta { font-size: 12px; color: #aaa; display: flex; justify-content: space-between; margin-bottom: 5px; margin-top: -2px; } /* Ajuste de px solicitado */
     .swimmer-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px; color: #eee; }
     .swimmer-item { background: rgba(255,255,255,0.05); padding: 4px 8px; border-radius: 4px; }
 </style>
@@ -101,6 +102,7 @@ def tiempo_a_segundos(t_str):
 
 def asignar_cat(edad):
     try:
+        # Busca en el DF de categorías cargado
         for _, r in data['categorias'].iterrows():
             if r['edad_min'] <= edad <= r['edad_max']: return r['nombre_cat']
         return "-"
@@ -126,36 +128,26 @@ def calcular_grupo_relevo(row_rel, df_cats):
         return f"Suma {suma_edades}"
     except: return "-"
 
-# --- UNIFICACIÓN DE DATOS LIMPIA (SÓLO PILETAS) ---
+# --- UNIFICACIÓN DE DATOS ---
 df_full = data['tiempos'].copy()
 
-# 1. Eliminamos 'club' de Tiempos si existe, porque NO LO QUEREMOS (causa conflicto)
-if 'club' in df_full.columns:
-    df_full = df_full.drop(columns=['club'])
+if 'club' in df_full.columns: df_full = df_full.drop(columns=['club'])
 
-# 2. Merges normales
 df_full = df_full.merge(data['estilos'], on='codestilo', how='left')
 df_full = df_full.merge(data['distancias'], on='coddistancia', how='left')
-# Al hacer merge con piletas, nos traerá el 'club' (Sede) y 'medida' correctos
 df_full = df_full.merge(data['piletas'], on='codpileta', how='left')
 
-# 3. Renombrado y limpieza final
-# Renombrar descripciones si pandas les puso sufijos
 if 'descripcion_x' in df_full.columns: df_full = df_full.rename(columns={'descripcion_x': 'Estilo'})
 elif 'descripcion' in df_full.columns: df_full = df_full.rename(columns={'descripcion': 'Estilo'})
 
 if 'descripcion_y' in df_full.columns: df_full = df_full.rename(columns={'descripcion_y': 'Distancia'})
 
-# Renombrar 'club' (que viene de Piletas) a 'sede' para que sea claro en el código
-if 'club' in df_full.columns:
-    df_full = df_full.rename(columns={'club': 'sede'})
-else:
-    df_full['sede'] = '-' # Si falló el cruce
+if 'club' in df_full.columns: df_full = df_full.rename(columns={'club': 'sede'})
+else: df_full['sede'] = '-'
 
 if 'medida' not in df_full.columns: df_full['medida'] = '-'
 
-# --- FIN UNIFICACIÓN ---
-
+# Lógica Medallero
 df_t_c = data['tiempos'].copy(); df_r_c = data['relevos'].copy()
 df_t_c['posicion'] = pd.to_numeric(df_t_c['posicion'], errors='coerce').fillna(0).astype(int)
 df_r_c['posicion'] = pd.to_numeric(df_r_c['posicion'], errors='coerce').fillna(0).astype(int)
@@ -181,12 +173,18 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
     if not target_id: return
 
     info = df_nad[df_nad['codnadador'] == target_id].iloc[0]
+    
+    # Datos básicos nadador
     try: 
         nac = pd.to_datetime(info['fechanac'])
-        edad = datetime.now().year - nac.year
+        anio_nacimiento_nadador = nac.year
+        edad_actual = datetime.now().year - anio_nacimiento_nadador
         nac_str = nac.strftime('%d/%m/%Y')
-    except: edad = 0; nac_str = "-"
-    cat = asignar_cat(edad)
+    except: 
+        anio_nacimiento_nadador = 0
+        edad_actual = 0; nac_str = "-"
+    
+    cat_actual = asignar_cat(edad_actual)
     
     row_m = df_view[df_view['codnadador'] == target_id]
     if not row_m.empty:
@@ -198,8 +196,8 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
         <div class="ficha-name">{info['nombre']} {info['apellido']}</div>
         <div class="ficha-grid">
             <div>📅 Nacimiento: <b>{nac_str}</b></div>
-            <div>🎂 Edad (al 31/12): <b>{edad} años</b></div>
-            <div>🏷️ Categoría: <b>{cat}</b></div>
+            <div>🎂 Edad (al 31/12): <b>{edad_actual} años</b></div>
+            <div>🏷️ Categoría Actual: <b>{cat_actual}</b></div>
             <div>⚧️ Género: <b>{info['codgenero']}</b></div>
         </div>
         <div class="ficha-medals">
@@ -210,7 +208,7 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
 
     mis_t = df_full[df_full['codnadador'] == target_id].copy()
 
-    # MEJORES MARCAS
+    # --- MEJORES MARCAS ---
     if not mis_t.empty:
         st.subheader("✨ Mejores Marcas (PB)")
         mis_t['segundos'] = mis_t['tiempo'].apply(tiempo_a_segundos)
@@ -226,8 +224,8 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
                 </div>""", unsafe_allow_html=True)
         st.divider()
 
-        # GRÁFICO
-        st.subheader("📈 Evolución de Tiempos")
+        # --- GRÁFICO ---
+        st.subheader(f"📈 Evolución de Tiempos - {info['nombre']} {info['apellido']}")
         conteo = mis_t.groupby(['Estilo', 'Distancia']).size().reset_index(name='count')
         validos = conteo[conteo['count'] >= 2]
         
@@ -240,12 +238,39 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
             g_dist = c2.selectbox("Distancia Gráfico", dist_ok, key=f"g_dist{unique_key_suffix}")
             
             df_graph = mis_t[(mis_t['Estilo'] == g_est) & (mis_t['Distancia'] == g_dist)].sort_values('fecha')
+            
+            # Calcular categoría histórica para cada punto del gráfico
+            df_graph['fecha_dt'] = pd.to_datetime(df_graph['fecha'])
+            if anio_nacimiento_nadador > 0:
+                df_graph['cat_hist'] = df_graph['fecha_dt'].apply(lambda x: asignar_cat(x.year - anio_nacimiento_nadador))
+            else:
+                df_graph['cat_hist'] = "-"
+
+            # Eje Y: Tiempo (Fake date para plot)
             df_graph['TimeObj'] = pd.to_datetime('2024-01-01') + pd.to_timedelta(df_graph['segundos'], unit='s')
             
-            fig = px.line(df_graph, x='fecha', y='TimeObj', markers=True, template="plotly_dark")
+            # Media Móvil (Suavizado)
+            df_graph['segundos_ma'] = df_graph['segundos'].rolling(window=3, min_periods=1).mean()
+            df_graph['TimeObjMA'] = pd.to_datetime('2024-01-01') + pd.to_timedelta(df_graph['segundos_ma'], unit='s')
+
+            fig = px.line(df_graph, x='fecha', y='TimeObj', markers=True, template="plotly_dark",
+                          hover_data={
+                              'fecha': False, 'TimeObj': False, # Ocultar defaults feos
+                              'sede': True, 'Distancia': True, 'cat_hist': True, 'tiempo': True
+                          })
+            
+            # Trace Principal (Puntos Reales)
+            fig.update_traces(line_color='#E53935', name="Tiempo Real",
+                              hovertemplate="<b>%{customdata[3]}</b><br>📅 %{x|%d/%m/%Y}<br>🏊 %{customdata[1]}<br>📍 %{customdata[0]}<br>🏷️ %{customdata[2]}")
+            
+            # Trace Media Móvil (Complemento)
+            fig.add_trace(go.Scatter(x=df_graph['fecha'], y=df_graph['TimeObjMA'], mode='lines', 
+                                     name='Media Móvil (Tendencia)',
+                                     line=dict(color='gray', width=1, dash='dot'),
+                                     hoverinfo='skip'))
+
             fig.update_yaxes(tickformat="%M:%S.%f", title="Tiempo")
-            fig.update_traces(line_color='#E53935')
-            fig.update_layout(height=300, margin=dict(t=10, b=10, l=40, r=20))
+            fig.update_layout(height=350, margin=dict(t=20, b=20, l=40, r=20), hovermode="x unified")
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("Necesitas al menos 2 carreras en la misma prueba para ver la evolución.")
@@ -275,17 +300,27 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
 
         sede_txt = r.get('sede', '-')
         medida_txt = r.get('medida', '-')
+        
+        # Calcular categoría en esa fecha específica
+        try:
+            anio_carrera = pd.to_datetime(r['fecha']).year
+            edad_en_carrera = anio_carrera - anio_nacimiento_nadador
+            cat_torneo = asignar_cat(edad_en_carrera)
+        except: cat_torneo = "-"
 
+        # Ajuste Visual: margin-top:2px para subir info, y cat_torneo al lado de posición
         st.markdown(f"""
         <div class="mobile-card" style="padding:10px;">
             <div style="display:flex; justify-content:space-between; align-items: flex-start;">
                 <div style="flex:1;">
                     <div style="font-weight:bold; color:white; font-size:15px;">{r['Distancia']} {r['Estilo']}</div>
-                    <div style="font-size:12px; color:#aaa; margin-top:4px;">📅 {r['fecha']} • {sede_txt} ({medida_txt})</div>
+                    <div style="font-size:12px; color:#aaa; margin-top:2px;">📅 {r['fecha']} • {sede_txt} ({medida_txt})</div>
                 </div>
-                <div style="text-align: right; min-width: 80px;">
+                <div style="text-align: right; min-width: 100px;">
                     <div style="font-family:monospace; font-weight:bold; color:#4CAF50; font-size:18px;">{r['tiempo']}</div>
-                    <div style="font-size:15px; color:#ddd; font-weight:bold; margin-top:2px;">{medal_str}</div>
+                    <div style="font-size:14px; color:#ddd; font-weight:bold; margin-top:2px;">
+                        {medal_str} <span style="font-size:11px; color:#999; font-weight:normal;">({cat_torneo})</span>
+                    </div>
                 </div>
             </div>
         </div>""", unsafe_allow_html=True)
@@ -301,32 +336,28 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
         mis_relevos = mis_relevos.merge(data['distancias'], on='coddistancia', how='left')
         mis_relevos = mis_relevos.merge(data['piletas'], on='codpileta', how='left')
         
-        # Limpieza
         if 'descripcion_x' in mis_relevos.columns: mis_relevos = mis_relevos.rename(columns={'descripcion_x': 'Estilo'})
         elif 'descripcion' in mis_relevos.columns: mis_relevos = mis_relevos.rename(columns={'descripcion': 'Estilo'})
         
         if 'descripcion_y' in mis_relevos.columns: mis_relevos = mis_relevos.rename(columns={'descripcion_y': 'Distancia'})
         
-        # Renombrar club -> sede si existe
         if 'club' in mis_relevos.columns: mis_relevos = mis_relevos.rename(columns={'club': 'sede'})
         else: mis_relevos['sede'] = '-'
-        
         if 'medida' not in mis_relevos.columns: mis_relevos['medida'] = '-'
 
         mis_relevos = mis_relevos.sort_values('fecha', ascending=False)
         
         for _, r in mis_relevos.iterrows():
             grupo_txt = calcular_grupo_relevo(r, data['cat_relevos'])
-            
             html_grid = ""
             for k in range(1, 5):
                 nid = r[f'nadador_{k}']
                 nom = dict_id_nombre.get(nid, "??").split(',')[0]
                 t = str(r[f'tiempo_{k}']).strip()
-                if t and t not in ["00.00", "0", "None", "nan"]: nom += f" ({t})"
+                if t and t not in ["00.00", "0", "None", "nan"]: nom += f" <b>({t})</b>"
                 border_style = "border: 1px solid #E91E63;" if nid == target_id else ""
                 html_grid += f"<div class='swimmer-item' style='{border_style}'>{k}. {nom}</div>"
-            
+
             try: p_rel = int(r['posicion'])
             except: p_rel = 0
             if p_rel == 1: pos_icon = "🥇 1º"
@@ -334,9 +365,10 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
             elif p_rel == 3: pos_icon = "🥉 3º"
             elif p_rel > 0: pos_icon = f"Pos: {p_rel}"
             else: pos_icon = ""
-            
+
             sede_r = r.get('sede', '-')
 
+            # Ajuste Visual: margin-top:-2px para subir info en Relevos
             st.markdown(f"""
             <div class="mobile-card" style="border-left: 4px solid #E91E63;">
                 <div class="relay-header">
@@ -349,7 +381,7 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
                         <div style="font-size:12px; color:#ddd; font-weight:bold;">{pos_icon}</div>
                     </div>
                 </div>
-                <div class="relay-meta">
+                <div class="relay-meta" style="margin-top:-3px; margin-bottom:8px;">
                     <span>📅 {r['fecha']} • {sede_r} ({r['medida']})</span>
                 </div>
                 <div class="swimmer-grid">{html_grid}</div>
@@ -398,7 +430,6 @@ def render_tab_relevos_general():
         
         if 'descripcion_y' in mr_all.columns: mr_all = mr_all.rename(columns={'descripcion_y': 'Distancia'})
         
-        # Rename club -> sede
         if 'club' in mr_all.columns: mr_all = mr_all.rename(columns={'club': 'sede'})
         else: mr_all['sede'] = '-'
         if 'medida' not in mr_all.columns: mr_all['medida'] = '-'
@@ -442,7 +473,7 @@ def render_tab_relevos_general():
                         <div style="font-size:12px; color:#ddd; font-weight:bold;">{pos_icon}</div>
                     </div>
                 </div>
-                <div class="relay-meta">
+                <div class="relay-meta" style="margin-top:-3px; margin-bottom:8px;">
                     <span>📅 {r['fecha']} • {sede_r} ({r['medida']})</span>
                 </div>
                 <div class="swimmer-grid">{html_grid}</div>
