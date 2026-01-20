@@ -126,7 +126,6 @@ tab_ver, tab_cargar = st.tabs(["📂 Historial", "📝 Cargar Test"])
 #  CARGA DE TEST
 # ==============================================================================
 with tab_cargar:
-    # Contenedor dinámico: se regenera SOLO cuando reset_carga() cambia el ID (éxito)
     with st.container(key=f"carga_container_{st.session_state.form_reset_id}"):
         
         # --- PASO 1: DEFINIR PRUEBA ---
@@ -179,7 +178,6 @@ with tab_cargar:
                 </div>
                 """, unsafe_allow_html=True)
                 
-                # Toggle independiente
                 quiere_p = False
                 if m_par > 0:
                     quiere_p = st.toggle("¿Cargar tiempos parciales?", value=True)
@@ -189,7 +187,6 @@ with tab_cargar:
             st.divider()
             st.subheader("2. Registrar Tiempos")
             
-            # IMPORTANTE: clear_on_submit=False para NO borrar datos si hay error
             with st.form("form_reg", clear_on_submit=False):
                 st.markdown("<div class='section-title'>TIEMPO FINAL</div>", unsafe_allow_html=True)
                 st.text_input("Ref", value=dist_t_val, disabled=True, label_visibility="collapsed")
@@ -205,7 +202,7 @@ with tab_cargar:
                     for i in range(1, 5):
                         st.write(f"Parcial {i}")
                         px1, px2, px3, px4 = st.columns([1.2, 1, 1, 1])
-                        px1.text_input(f"d{i}", value=f"{m_par} mts", disabled=True, label_visibility="collapsed", key=f"d_show_{i}")
+                        px1.text_input(f"d{i}", value=f"{m_par} mts", disabled=True, label_visibility="collapsed", key=f"d_vis_{i}")
                         pm = px2.number_input("M", 0, 59, 0, key=f"pm_{i}", label_visibility="collapsed")
                         ps = px3.number_input("S", 0, 59, 0, key=f"ps_{i}", label_visibility="collapsed")
                         pc = px4.number_input("C", 0, 99, 0, key=f"pc_{i}", label_visibility="collapsed")
@@ -215,26 +212,20 @@ with tab_cargar:
                 
                 if submitted:
                     s_final = (mf*60) + sf + (cf/100)
-                    
-                    # 1. Validación de Tiempo Final > 0
                     if s_final == 0:
-                        st.error("⚠️ El tiempo final no puede ser 00:00.00.")
+                        st.error("⚠️ El tiempo final es obligatorio.")
                     else:
                         es_valido = True
-                        
-                        # 2. Validación de Coherencia de Parciales (BLOQUEANTE)
                         if quiere_p:
                             s_parciales = 0
                             for p_str in lp:
                                 sec = a_segundos(p_str)
                                 if sec: s_parciales += sec
                             
-                            # Si la diferencia es mayor a 0.5 segundos, ERROR y NO GUARDA
                             if s_parciales > 0 and abs(s_parciales - s_final) > 0.5:
-                                st.error(f"❌ Error Matemático: La suma de los parciales ({s_parciales:.2f}s) no coincide con el Tiempo Final ({s_final:.2f}s). Por favor corrige los tiempos antes de guardar.")
+                                st.error(f"❌ Error Matemático: La suma de los parciales ({s_parciales:.2f}s) no coincide con el Tiempo Final ({s_final:.2f}s).")
                                 es_valido = False
                         
-                        # 3. Guardado (Solo si pasó todas las validaciones)
                         if es_valido:
                             with st.spinner("Guardando..."):
                                 try:
@@ -264,15 +255,14 @@ with tab_cargar:
                                     
                                     st.success("✅ Guardado con éxito.")
                                     time.sleep(1)
-                                    reset_carga() # Aquí sí limpiamos el formulario para el próximo uso
+                                    reset_carga()
                                     st.cache_data.clear()
                                     st.rerun()
-                                    
                                 except Exception as e:
                                     st.error(f"Error técnico: {e}")
 
 # ==============================================================================
-#  HISTORIAL
+#  HISTORIAL Y ANÁLISIS
 # ==============================================================================
 with tab_ver:
     target_id = mi_id if rol == "N" else None
@@ -286,15 +276,31 @@ with tab_ver:
         if not df_h.empty:
             df_h = df_h.merge(db['estilos'], on='codestilo', how='left').merge(db['distancias'], left_on='coddistancia', right_on='coddistancia', how='left')
             
-            # Filtros
+            # --- LÓGICA DE FILTROS CASCADA (INTERDEPENDIENTES) ---
             st.markdown("<div class='section-title'>🔍 Filtros</div>", unsafe_allow_html=True)
-            est_opts = ["Todos"] + sorted(df_h['descripcion_x'].unique().tolist())
-            dist_opts = ["Todos"] + sorted(df_h['descripcion_y'].unique().tolist())
             
+            # 1. Recuperar valores actuales de los filtros (si existen) para calcular opciones
+            curr_est = st.session_state.get("f_estilo", "Todos")
+            curr_dist = st.session_state.get("f_distancia", "Todos")
+            
+            # 2. Calcular opciones válidas para Estilo (basado en la Distancia seleccionada)
+            if curr_dist != "Todos":
+                valid_styles = sorted(df_h[df_h['descripcion_y'] == curr_dist]['descripcion_x'].unique().tolist())
+            else:
+                valid_styles = sorted(df_h['descripcion_x'].unique().tolist())
+                
+            # 3. Calcular opciones válidas para Distancia (basado en el Estilo seleccionado)
+            if curr_est != "Todos":
+                valid_dists = sorted(df_h[df_h['descripcion_x'] == curr_est]['descripcion_y'].unique().tolist())
+            else:
+                valid_dists = sorted(df_h['descripcion_y'].unique().tolist())
+            
+            # 4. Renderizar Selectboxes
             c_f1, c_f2 = st.columns(2)
-            f_est = c_f1.selectbox("Estilo", est_opts)
-            f_dist = c_f2.selectbox("Distancia", dist_opts)
+            f_est = c_f1.selectbox("Estilo", ["Todos"] + valid_styles, key="f_estilo")
+            f_dist = c_f2.selectbox("Distancia", ["Todos"] + valid_dists, key="f_distancia")
 
+            # 5. Aplicar Filtros al Dataframe
             df_filt = df_h.copy()
             if f_est != "Todos": df_filt = df_filt[df_filt['descripcion_x'] == f_est]
             if f_dist != "Todos": df_filt = df_filt[df_filt['descripcion_y'] == f_dist]
@@ -316,7 +322,7 @@ with tab_ver:
                 
                 f_fmt = datetime.strptime(str(r['fecha']), '%Y-%m-%d').strftime('%d/%m/%Y')
                 
-                # Procesar Parciales
+                # Parciales
                 ps = [r.get(f'parcial_{i}') for i in range(1, 5)]
                 p_validos = [p for p in ps if p and str(p).lower() not in ['nan', 'none', '', '00:00.00']]
                 
@@ -325,7 +331,7 @@ with tab_ver:
                     grid_items = "".join([f"<div class='split-item'><span class='split-label'>P{i+1}</span><span class='split-val'>{p}</span></div>" for i, p in enumerate(p_validos)])
                     splits_html_block = f"""<div class='splits-container'><div class='splits-grid'>{grid_items}</div></div>"""
                 
-                # Tarjeta limpia
+                # Tarjeta (Sin observaciones)
                 card_html = f"""
                 <div class="test-card">
                     <div class="test-header">
@@ -343,7 +349,7 @@ with tab_ver:
                 if p_validos and st.checkbox(f"Analizar tramos", key=f"chk_{r['id_entrenamiento']}"):
                     p_seg = [a_segundos(p) for p in p_validos]
                     fig_bar = px.bar(x=[f"P{i+1}" for i in range(len(p_seg))], y=p_seg, 
-                                     labels={'x': 'Parcial', 'y': 'Tiempo (s)'},
+                                     labels={'x': 'Parcial', 'y': 'Segundos'},
                                      color_discrete_sequence=['#E30613'])
                     fig_bar.update_layout(height=200, template="plotly_dark", showlegend=False, margin=dict(l=0, r=0, t=10, b=0))
                     st.plotly_chart(fig_bar, use_container_width=True)
