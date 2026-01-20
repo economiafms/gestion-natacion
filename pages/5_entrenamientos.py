@@ -12,7 +12,7 @@ if "role" not in st.session_state or not st.session_state.role:
     st.switch_page("index.py")
 
 rol = st.session_state.role
-mi_id = st.session_state.user_id # codnadador
+mi_id = st.session_state.user_id 
 mi_nombre = st.session_state.user_name
 
 st.title("⏱️ Centro de Entrenamiento")
@@ -58,21 +58,24 @@ data = cargar_entrenamientos()
 if not data: st.stop()
 
 df_nad = data['nadadores'].copy()
-# Buscamos el nombre exacto del nadador logueado usando el codnadador para el perfil N
 nadador_logueado_row = df_nad[df_nad['codnadador'] == mi_id]
 mi_nombre_completo = f"{nadador_logueado_row.iloc[0]['apellido'].upper()}, {nadador_logueado_row.iloc[0]['nombre']}" if not nadador_logueado_row.empty else mi_nombre
 
 lista_nombres = sorted((df_nad['apellido'].astype(str).str.upper() + ", " + df_nad['nombre'].astype(str)).unique().tolist())
 
-# Filtros de Distancia solicitados
+# Filtros de Distancia
 dist_options = data['distancias']['descripcion'].unique().tolist()
 list_dist_total = [d for d in dist_options if "25" not in d and "4x" not in d.lower()]
-list_dist_parcial = [d for d in dist_options if d.startswith("25 ") or d.startswith("50 ") or d.startswith("100 ")]
+list_dist_parcial = ["Sin parciales"] + [d for d in dist_options if d.startswith("25 ") or d.startswith("50 ") or d.startswith("100 ")]
 
 def tiempo_str(m, s, c): return f"{int(m):02d}:{int(s):02d}.{int(c):02d}"
 
+def extraer_metros(texto):
+    try: return int(texto.split(" ")[0])
+    except: return 0
+
 # ==============================================================================
-#  SINCRONIZACIÓN (Cola de Carga)
+#  SINCRONIZACIÓN
 # ==============================================================================
 if st.session_state.cola_tests:
     st.info(f"📋 **{len(st.session_state.cola_tests)} tests** en cola para sincronizar.")
@@ -89,7 +92,7 @@ if st.session_state.cola_tests:
         st.session_state.cola_tests = []; st.rerun()
 
 # ==============================================================================
-#  PESTAÑAS
+#  VISTAS
 # ==============================================================================
 tab_ver, tab_cargar = st.tabs(["📂 Historial", "📝 Cargar Test"])
 
@@ -111,13 +114,16 @@ with tab_ver:
                 ps = [r.get(f'parcial_{i}') for i in range(1,5)]
                 splits = "".join([f"<div class='split-item'><span class='split-label'>P{i+1}</span><span class='split-val'>{p}</span></div>" for i, p in enumerate(ps) if p and str(p) not in ['nan','']])
                 
+                fecha_f = datetime.strptime(str(r['fecha']), '%Y-%m-%d').strftime('%d/%m/%Y')
+                d_par_txt = r.get('descripcion_par', 'N/A')
+                
                 st.markdown(f"""
                 <div class="test-card">
                     <div class="test-header">
                         <div>
                             <div class="test-style">{r.get('descripcion', '-')}</div>
-                            <div class="test-dist">{r.get('descripcion_tot', '-')} <span style='font-weight:normal; color:#888; font-size:11px;'>(Parciales: {r.get('descripcion_par', '-')})</span></div>
-                            <div class="test-date">📅 {datetime.strptime(str(r['fecha']), '%Y-%m-%d').strftime('%d/%m/%Y')}</div>
+                            <div class="test-dist">{r.get('descripcion_tot', '-')} <span style='font-weight:normal; color:#888; font-size:11px;'>(Parciales: {d_par_txt})</span></div>
+                            <div class="test-date">📅 {fecha_f}</div>
                         </div>
                         <div class="final-time">{r['tiempo_final']}</div>
                     </div>
@@ -131,7 +137,6 @@ with tab_cargar:
         c1, c2 = st.columns([1, 2])
         f_val = c1.date_input("Fecha", date.today(), format="DD/MM/YYYY")
         
-        # Lógica de Nadador: Bloqueado para N, Libre para M/P
         if rol == "N":
             n_in = c2.selectbox("Nadador", [mi_nombre_completo], disabled=True)
         else:
@@ -140,7 +145,7 @@ with tab_cargar:
         c3, c4, c5 = st.columns(3)
         est_val = c3.selectbox("Estilo", data['estilos']['descripcion'].unique(), index=None)
         dist_t_val = c4.selectbox("Distancia TOTAL", list_dist_total, index=None)
-        dist_p_val = c5.selectbox("Distancia PARCIAL", list_dist_parcial, index=None)
+        dist_p_val = c5.selectbox("Distancia PARCIAL", list_dist_parcial, index=0)
         
         st.markdown("##### ⏱️ Tiempo Final (MM:SS.CC)")
         tf1, tf_s1, tf2, tf_s2, tf3 = st.columns([1, 0.2, 1, 0.2, 1])
@@ -150,46 +155,51 @@ with tab_cargar:
         tf_s2.markdown("<div class='time-sep'>.</div>", unsafe_allow_html=True)
         tm_c = tf3.number_input("Cent", 0, 99, 0, key="tfc", format="%02d")
 
-        st.markdown("##### 📊 Parciales")
-        label_p = dist_p_val if dist_p_val else "---"
+        # LÓGICA DINÁMICA DE PARCIALES
+        t_metros = extraer_metros(dist_t_val) if dist_t_val else 0
+        p_metros = extraer_metros(dist_p_val) if dist_p_val and dist_p_val != "Sin parciales" else 0
         
-        # Función para generar filas de parciales verticales
-        def input_parcial(idx, label):
-            st.markdown(f"**Parcial {idx}**")
-            col_d, col_m, col_s1, col_s, col_s2, col_c = st.columns([1.5, 1, 0.2, 1, 0.2, 1])
-            col_d.text_input(f"Dist {idx}", value=label, disabled=True, key=f"pd{idx}", label_visibility="collapsed")
-            m = col_m.number_input("Min", 0, 59, 0, key=f"p{idx}m", format="%02d", label_visibility="collapsed")
-            col_s1.markdown("<div style='margin-top:8px; text-align:center;'>:</div>", unsafe_allow_html=True)
-            s = col_s.number_input("Seg", 0, 59, 0, key=f"p{idx}s", format="%02d", label_visibility="collapsed")
-            col_s2.markdown("<div style='margin-top:8px; text-align:center;'>.</div>", unsafe_allow_html=True)
-            c = col_c.number_input("Cent", 0, 99, 0, key=f"p{idx}c", format="%02d", label_visibility="collapsed")
-            return tiempo_str(m, s, c) if (m+s+c) > 0 else ""
+        # Calculamos cantidad de parciales (máximo 4 para esta tabla)
+        num_parciales = 0
+        if p_metros > 0 and t_metros > 0:
+            num_parciales = min(int(t_metros / p_metros), 4)
 
-        tp1 = input_parcial(1, label_p)
-        tp2 = input_parcial(2, label_p)
-        tp3 = input_parcial(3, label_p)
-        tp4 = input_parcial(4, label_p)
+        tps = ["", "", "", ""]
+        if num_parciales > 0:
+            st.markdown(f"##### 📊 Parciales (cada {dist_p_val})")
+            for i in range(1, num_parciales + 1):
+                st.markdown(f"**Parcial {i}**")
+                col_d, col_m, col_s1, col_s, col_s2, col_c = st.columns([1.5, 1, 0.2, 1, 0.2, 1])
+                col_d.text_input(f"D{i}", value=dist_p_val, disabled=True, key=f"pd{i}", label_visibility="collapsed")
+                m = col_m.number_input("M", 0, 59, 0, key=f"p{i}m", format="%02d", label_visibility="collapsed")
+                col_s1.markdown("<div style='margin-top:8px; text-align:center;'>:</div>", unsafe_allow_html=True)
+                s = col_s.number_input("S", 0, 59, 0, key=f"p{i}s", format="%02d", label_visibility="collapsed")
+                col_s2.markdown("<div style='margin-top:8px; text-align:center;'>.</div>", unsafe_allow_html=True)
+                c = col_c.number_input("C", 0, 99, 0, key=f"p{i}c", format="%02d", label_visibility="collapsed")
+                if (m+s+c) > 0: tps[i-1] = tiempo_str(m, s, c)
 
         obs_val = st.text_area("Observaciones (Máx 400 caracteres)", max_chars=400, height=80)
         
         if st.form_submit_button("📥 Agregar a la Cola", use_container_width=True):
             if (rol != "N" and not n_in) or not est_val or not dist_t_val:
-                st.error("⚠️ Error: El Nadador, Estilo y Distancia Total son campos obligatorios.")
+                st.error("⚠️ Error: Campos obligatorios incompletos.")
             else:
-                # Obtener codnadador correcto según selección o sesión
                 final_codnadador = mi_id if rol == "N" else df_nad[(df_nad['apellido'].str.upper() + ", " + df_nad['nombre']) == n_in].iloc[0]['codnadador']
                 
+                id_dp = ""
+                if dist_p_val != "Sin parciales":
+                    id_dp = data['distancias'][data['distancias']['descripcion'] == dist_p_val].iloc[0]['coddistancia']
+
                 new_id = (data['entrenamientos']['id_entrenamiento'].max() if not data['entrenamientos'].empty else 0) + len(st.session_state.cola_tests) + 1
                 
                 st.session_state.cola_tests.append({
-                    "id_entrenamiento": int(new_id), 
-                    "fecha": f_val.strftime('%Y-%m-%d'),
+                    "id_entrenamiento": int(new_id), "fecha": f_val.strftime('%Y-%m-%d'),
                     "codnadador": int(final_codnadador), 
                     "codestilo": data['estilos'][data['estilos']['descripcion'] == est_val].iloc[0]['codestilo'],
                     "coddistancia": data['distancias'][data['distancias']['descripcion'] == dist_t_val].iloc[0]['coddistancia'],
-                    "coddistancia_parcial": data['distancias'][data['distancias']['descripcion'] == dist_p_val].iloc[0]['coddistancia'] if dist_p_val else "",
+                    "coddistancia_parcial": id_dp,
                     "tiempo_final": tiempo_str(tm_m, tm_s, tm_c),
-                    "parcial_1": tp1, "parcial_2": tp2, "parcial_3": tp3, "parcial_4": tp4,
+                    "parcial_1": tps[0], "parcial_2": tps[1], "parcial_3": tps[2], "parcial_4": tps[3],
                     "observaciones": obs_val
                 })
-                st.success("✅ Test agregado a la cola."); st.rerun()
+                st.success("✅ Test agregado a la cola. ¡No olvides subir los datos al finalizar!"); st.rerun()
