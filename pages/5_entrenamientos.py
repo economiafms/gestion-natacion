@@ -14,7 +14,7 @@ rol = st.session_state.role
 mi_id = st.session_state.user_id 
 mi_nombre = st.session_state.user_name
 
-# --- GESTIÓN DE REINICIO TOTAL ---
+# --- GESTIÓN DE RESETEO TOTAL ---
 if "form_reset_id" not in st.session_state:
     st.session_state.form_reset_id = 0
 
@@ -23,7 +23,7 @@ def reset_carga():
 
 st.title("⏱️ Centro de Entrenamiento")
 
-# --- CSS PERSONALIZADO (Historial original restaurado) ---
+# --- CSS PERSONALIZADO ---
 st.markdown("""
 <style>
     .test-card { background-color: #262730; border: 1px solid #444; border-radius: 10px; padding: 15px; margin-bottom: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.3); }
@@ -38,6 +38,7 @@ st.markdown("""
     .time-sep { text-align: center; font-size: 18px; font-weight: bold; margin-top: 32px; color: #666; }
     .config-box { background: #1e1e1e; padding: 15px; border-radius: 10px; border-left: 5px solid #E30613; margin-bottom: 20px; }
     .section-title { color: #E30613; font-weight: bold; margin-top: 15px; margin-bottom: 5px; border-bottom: 1px solid #333; font-size: 14px; text-transform: uppercase; }
+    .dist-label-final { color: #aaa; font-size: 14px; margin-bottom: 2px; font-weight: bold; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -70,10 +71,10 @@ def to_str(m, s, c): return f"{int(m):02d}:{int(s):02d}.{int(c):02d}"
 tab_ver, tab_cargar = st.tabs(["📂 Historial de Tests", "📝 Cargar Test"])
 
 # ==============================================================================
-#  CARGA DE TEST (UNO A UNO)
+#  CARGA DE TEST
 # ==============================================================================
 with tab_cargar:
-    with st.container(key=f"carga_directa_{st.session_state.form_reset_id}"):
+    with st.container(key=f"carga_container_{st.session_state.form_reset_id}"):
         st.subheader("1. Definir Prueba")
         
         c1, c2 = st.columns([1, 2])
@@ -95,7 +96,7 @@ with tab_cargar:
             id_dt = db_data['distancias'][db_data['distancias']['descripcion'] == dist_t_val].iloc[0]['coddistancia']
             fecha_s = f_val.strftime('%Y-%m-%d')
             
-            # Validación de duplicados
+            # Validación duplicados
             df_ent = db_data['entrenamientos']
             existe = False
             if not df_ent.empty:
@@ -107,7 +108,6 @@ with tab_cargar:
             if existe:
                 st.error("🚫 Ya existe un registro para esta configuración en la fecha seleccionada.")
             else:
-                # Regla de parciales
                 m_tot = int(dist_t_val.split(" ")[0])
                 m_par = 100 if m_tot == 400 else (50 if m_tot == 200 else (25 if m_tot == 100 else 0))
                 
@@ -121,7 +121,9 @@ with tab_cargar:
                 st.divider()
                 st.subheader("2. Registrar Tiempos")
                 
-                with st.form("form_carga_final"):
+                with st.form("form_registro_def"):
+                    # Visualización Distancia Total sobre Tiempo Final
+                    st.markdown(f"<div class='dist-label-final'>{dist_t_val.upper()}</div>", unsafe_allow_html=True)
                     st.markdown("<div class='section-title'>TIEMPO FINAL</div>", unsafe_allow_html=True)
                     tf1, ts1, tf2, ts2, tf3 = st.columns([1, 0.2, 1, 0.2, 1])
                     mf = tf1.number_input("Min", 0, 59, 0, format="%02d")
@@ -148,12 +150,12 @@ with tab_cargar:
                         if s_final == 0:
                             st.error("El tiempo final es obligatorio.")
                         else:
-                            # Validación de Coherencia Bloqueante
+                            # Validación Coherencia Bloqueante
                             valido = True
                             if quiere_p:
-                                s_parciales = sum([to_sec(p[0], p[1], p[2]) for p in lista_parciales])
-                                if s_parciales > 0 and abs(s_parciales - s_final) > 0.5:
-                                    st.error(f"❌ Error: La suma de parciales ({s_parciales:.2f}s) no coincide con el final ({s_final:.2f}s). Corrija antes de guardar.")
+                                s_par = sum([to_sec(p[0], p[1], p[2]) for p in lista_parciales])
+                                if s_par > 0 and abs(s_par - s_final) > 0.5:
+                                    st.error(f"❌ Error: La suma de parciales ({s_par:.2f}s) no coincide con el final ({s_final:.2f}s).")
                                     valido = False
                             
                             if valido:
@@ -162,7 +164,7 @@ with tab_cargar:
                                     new_id = int(0 if pd.isna(max_id) else max_id) + 1
                                     id_dp = db_data['distancias'][db_data['distancias']['descripcion'].str.startswith(str(m_par))].iloc[0]['coddistancia'] if quiere_p else ""
                                     
-                                    nuevo_reg = pd.DataFrame([{
+                                    reg = pd.DataFrame([{
                                         "id_entrenamiento": new_id, "fecha": fecha_s,
                                         "codnadador": int(id_nad_final), "codestilo": id_est,
                                         "coddistancia": id_dt, "coddistancia_parcial": id_dp,
@@ -174,24 +176,24 @@ with tab_cargar:
                                         "observaciones": obs
                                     }])
                                     
-                                    conn.update(worksheet="Entrenamientos", data=pd.concat([df_ent, nuevo_reg], ignore_index=True))
+                                    conn.update(worksheet="Entrenamientos", data=pd.concat([df_ent, reg], ignore_index=True))
                                     st.cache_data.clear()
-                                    reset_carga() # Limpia Paso 1 y Paso 2
+                                    reset_carga() # Reinicia Paso 1 y 2
                                     st.success("✅ Guardado con éxito.")
                                     st.rerun()
-                                except Exception as e: st.error(f"Error al guardar: {e}")
+                                except Exception as e: st.error(f"Error: {e}")
 
 # ==============================================================================
-#  HISTORIAL (ORIGINAL RESTAURADO)
+#  HISTORIAL (Restaurado original)
 # ==============================================================================
 with tab_ver:
-    t_id_h = mi_id if rol == "N" else None
+    tid_h = mi_id if rol == "N" else None
     if rol in ["M", "P"]:
-        s_n_h = st.selectbox("Historial de:", lista_nombres, index=None, key="hist_nad")
-        if s_n_h: t_id_h = df_nad[(df_nad['apellido'].str.upper() + ", " + df_nad['nombre']) == s_n_h].iloc[0]['codnadador']
+        sn_h = st.selectbox("Historial de:", lista_nombres, index=None, key="hnad")
+        if sn_h: tid_h = df_nad[(df_nad['apellido'].str.upper() + ", " + df_nad['nombre']) == sn_h].iloc[0]['codnadador']
     
-    if t_id_h:
-        df_h = db_data['entrenamientos'][db_data['entrenamientos']['codnadador'].astype(str) == str(t_id_h)].copy()
+    if tid_h:
+        df_h = db_data['entrenamientos'][db_data['entrenamientos']['codnadador'].astype(str) == str(tid_h)].copy()
         if not df_h.empty:
             df_h = df_h.merge(db_data['estilos'], on='codestilo', how='left').merge(db_data['distancias'], left_on='coddistancia', right_on='coddistancia', how='left').merge(db_data['distancias'], left_on='coddistancia_parcial', right_on='coddistancia', how='left', suffixes=('_tot', '_par'))
             for _, r in df_h.sort_values(['fecha', 'id_entrenamiento'], ascending=False).iterrows():
