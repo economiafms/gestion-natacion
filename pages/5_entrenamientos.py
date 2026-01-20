@@ -258,23 +258,12 @@ with tab_ver:
             
             # --- FILTROS ---
             st.markdown("<div class='section-title'>🔍 Filtros</div>", unsafe_allow_html=True)
-            
-            curr_est = st.session_state.get("f_estilo", "Todos")
-            curr_dist = st.session_state.get("f_distancia", "Todos")
-            
-            if curr_dist != "Todos":
-                valid_styles = sorted(df_h[df_h['descripcion_y'] == curr_dist]['descripcion_x'].unique().tolist())
-            else:
-                valid_styles = sorted(df_h['descripcion_x'].unique().tolist())
-                
-            if curr_est != "Todos":
-                valid_dists = sorted(df_h[df_h['descripcion_x'] == curr_est]['descripcion_y'].unique().tolist())
-            else:
-                valid_dists = sorted(df_h['descripcion_y'].unique().tolist())
+            est_opts = ["Todos"] + sorted(df_h['descripcion_x'].unique().tolist())
+            dist_opts = ["Todos"] + sorted(df_h['descripcion_y'].unique().tolist())
             
             c_f1, c_f2 = st.columns(2)
-            f_est = c_f1.selectbox("Estilo", ["Todos"] + valid_styles, key="f_estilo")
-            f_dist = c_f2.selectbox("Distancia", ["Todos"] + valid_dists, key="f_distancia")
+            f_est = c_f1.selectbox("Estilo", est_opts)
+            f_dist = c_f2.selectbox("Distancia", dist_opts)
 
             df_filt = df_h.copy()
             if f_est != "Todos": df_filt = df_filt[df_filt['descripcion_x'] == f_est]
@@ -332,24 +321,29 @@ with tab_ver:
 
                 if p_validos and st.checkbox(f"Analizar tramos", key=f"chk_{r['id_entrenamiento']}"):
                     p_seg = [a_segundos(p) for p in p_validos]
+                    p_labels = [fmt_mm_ss(s) for s in p_seg]
                     
-                    # Calcular ejes
-                    min_b, max_b = min(p_seg), max(p_seg)
-                    tick_vals_b = np.linspace(min_b, max_b, 5) if max_b > min_b else [min_b]
-                    tick_text_b = [fmt_mm_ss(v) for v in tick_vals_b]
+                    df_bar = pd.DataFrame({
+                        'Tramo': [f"P{i+1}" for i in range(len(p_seg))],
+                        'Segundos': p_seg,
+                        'Etiqueta': p_labels
+                    })
 
-                    # Gráfico de Barras
-                    fig_bar = px.bar(x=[f"P{i+1}" for i in range(len(p_seg))], y=p_seg, text=p_validos,
-                                     labels={'x': 'Tramo', 'y': 'Tiempo'},
+                    # Gráfico de Barras con etiquetas
+                    fig_bar = px.bar(df_bar, x='Tramo', y='Segundos', text='Etiqueta',
                                      color_discrete_sequence=['#E30613'])
                     
-                    # Etiquetas y Tooltip solo tiempo
+                    # Tooltip solo Tiempo Parcial
                     fig_bar.update_traces(textposition='auto', hovertemplate='⏱️ %{text}<extra></extra>')
                     
-                    # Eje Y formateado
+                    # Eje Y oculto (SOLO EL EJE, la etiqueta sobre barra se mantiene)
                     fig_bar.update_layout(
-                        height=200, template="plotly_dark", showlegend=False, margin=dict(l=0, r=0, t=10, b=0),
-                        yaxis=dict(title="Tiempo", tickmode='array', tickvals=tick_vals_b, ticktext=tick_text_b)
+                        height=200, 
+                        template="plotly_dark", 
+                        showlegend=False, 
+                        margin=dict(l=0, r=0, t=10, b=0),
+                        yaxis=dict(showticklabels=False, title=None, showgrid=False), # Eje oculto limpio
+                        xaxis_title="Parcial"
                     )
                     st.plotly_chart(fig_bar, use_container_width=True)
         else:
