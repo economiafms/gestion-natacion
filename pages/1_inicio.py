@@ -156,7 +156,7 @@ if db and st.session_state.user_id:
     st.write("") 
 
     # =================================================================
-    # 2. NUEVA SECCIÓN: MIS REGISTROS
+    # 2. NUEVA SECCIÓN: MIS REGISTROS (GRID RESPONSIVE)
     # =================================================================
     
     mis_regs = db['tiempos'][db['tiempos']['codnadador'] == user_id].copy()
@@ -172,17 +172,43 @@ if db and st.session_state.user_id:
         
         conteo = mis_regs[col_desc].value_counts()
         
-        cols = st.columns(len(conteo))
+        # --- GENERACIÓN DE HTML GRID RESPONSIVE ---
+        # "grid-template-columns: repeat(auto-fit, minmax(100px, 1fr))" 
+        # Esto hace la magia: si hay espacio (PC), los pone al lado. 
+        # Si no (Mobile), trata de meter tantos de 100px como pueda (ej: 2 o 3 por fila).
         
-        for (estilo, cantidad), col in zip(conteo.items(), cols):
-            with col:
-                st.markdown(f"""
-                <div style="background-color: #262730; border: 1px solid #444; border-radius: 8px; padding: 10px; text-align: center; height: 100%;">
-                    <div style="font-size: 11px; color: #aaa; text-transform: uppercase; margin-bottom: 5px; height: 25px; display: flex; align-items: center; justify-content: center;">{estilo}</div>
-                    <div style="font-size: 24px; font-weight: bold; color: white; line-height: 1;">{cantidad}</div>
-                    <div style="font-size: 10px; color: #666; margin-top: 5px;">carreras</div>
-                </div>
-                """, unsafe_allow_html=True)
+        html_cards = ""
+        for estilo, cantidad in conteo.items():
+            html_cards += f"""
+            <div style="
+                background-color: #262730; 
+                border: 1px solid #444; 
+                border-radius: 8px; 
+                padding: 10px; 
+                text-align: center; 
+                display: flex; 
+                flex-direction: column; 
+                justify-content: center;
+                align-items: center;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            ">
+                <div style="font-size: 11px; color: #aaa; text-transform: uppercase; margin-bottom: 4px;">{estilo}</div>
+                <div style="font-size: 22px; font-weight: bold; color: white; line-height: 1;">{cantidad}</div>
+                <div style="font-size: 10px; color: #666; margin-top: 4px;">carreras</div>
+            </div>
+            """
+            
+        st.markdown(f"""
+        <div style="
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+            gap: 10px;
+            margin-bottom: 20px;
+        ">
+            {html_cards}
+        </div>
+        """, unsafe_allow_html=True)
+        
     # =================================================================
 
     st.divider()
@@ -215,16 +241,15 @@ if db and st.session_state.user_id:
     </div>
     """, unsafe_allow_html=True)
     
-    # 4. GRÁFICOS (ORDEN INVERTIDO: CATEGORÍAS PRIMERO)
+    # 4. GRÁFICOS
     df_n = db['nadadores'].copy()
     df_n['Anio'] = pd.to_datetime(df_n['fechanac'], errors='coerce').dt.year
     df_n['Categoria'] = df_n['Anio'].apply(calcular_categoria_grafico)
     
-    # --- CAMBIO DE ORDEN ---
     t_c, t_g = st.tabs(["Categorías Master", "Género"])
     colors = alt.Scale(domain=['M', 'F'], range=['#1f77b4', '#FF69B4'])
     
-    with t_c: # Ahora es el primero
+    with t_c:
         orden = ["Juvenil", "PRE", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K+"]
         chart = alt.Chart(df_n).mark_bar(cornerRadius=3).encode(
             x=alt.X('Categoria', sort=orden, title=None), 
@@ -233,17 +258,16 @@ if db and st.session_state.user_id:
         ).properties(height=200)
         st.altair_chart(chart, use_container_width=True)
 
-    with t_g: # Ahora es el segundo
+    with t_g:
         base = alt.Chart(df_n).encode(theta=alt.Theta("count()", stack=True))
         pie = base.mark_arc(outerRadius=80, innerRadius=50).encode(color=alt.Color("codgenero", scale=colors, legend=None))
         text = base.mark_text(radius=100).encode(text="count()", order=alt.Order("codgenero"), color=alt.value("white"))
         st.altair_chart(pie + text, use_container_width=True)
 
-# --- 5. ZONA DE HERRAMIENTAS Y CANDADO (Solo Rol M o P) ---
+# --- 5. HERRAMIENTAS ---
 if st.session_state.role in ["M", "P"]:
     st.divider()
     
-    # Botones de navegación extra en el cuerpo
     c1, c2 = st.columns(2)
     with c1: 
         if st.button("🗃️ Base de Datos", use_container_width=True, key="btn_bd_home"): 
@@ -255,7 +279,6 @@ if st.session_state.role in ["M", "P"]:
     st.write("")
     if st.button("⏱️ Simulador de Postas", type="primary", use_container_width=True, key="btn_sim_home"): st.switch_page("pages/3_simulador.py")
 
-    # --- CANDADO DEL PROFE ---
     st.write(""); st.write("")
     col_space, col_lock = st.columns([8, 1])
     with col_lock:
