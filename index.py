@@ -88,7 +88,7 @@ def login_screen():
                 box-shadow: 0 10px 25px rgba(0,0,0,0.5);
             }
             .nob-title {
-                font-size: 38px;
+                font-size: 32px;
                 font-weight: 900;
                 color: #E30613;
                 text-transform: uppercase;
@@ -148,3 +148,4 @@ else:
             cerrar_sesion()
             
     pg.run()
+
