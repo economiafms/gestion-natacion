@@ -34,19 +34,62 @@ st.title("⏱️ Centro de Entrenamiento")
 # --- CSS PERSONALIZADO ---
 st.markdown("""
 <style>
-    .test-card { background-color: #262730; border: 1px solid #444; border-radius: 10px; padding: 15px; margin-bottom: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.3); border-left: 5px solid #E30613; }
-    .test-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; border-bottom: 1px solid #444; padding-bottom: 8px; }
+    .test-card { 
+        background-color: #262730; 
+        border: 1px solid #444; 
+        border-radius: 12px; 
+        padding: 16px; 
+        margin-bottom: 16px; 
+        border-left: 5px solid #E30613; 
+        box-shadow: 0 4px 6px rgba(0,0,0,0.3); 
+    }
+    .test-header { 
+        display: flex; 
+        justify-content: space-between; 
+        align-items: center; 
+        margin-bottom: 8px; 
+        border-bottom: 1px solid #444; 
+        padding-bottom: 8px; 
+    }
     .test-style { font-size: 18px; font-weight: bold; color: white; text-transform: uppercase; }
     .test-dist { font-size: 14px; color: #aaa; font-weight: bold; }
     .test-date { font-size: 12px; color: #888; margin-left: 5px; }
-    .final-time { font-family: monospace; font-size: 24px; font-weight: bold; color: #E30613; text-align: right; background: rgba(0,0,0,0.2); padding: 2px 8px; border-radius: 4px; }
+    .final-time { 
+        font-family: 'Courier New', monospace; 
+        font-size: 24px; 
+        font-weight: bold; 
+        color: #E30613; 
+        text-align: right; 
+        background: rgba(0,0,0,0.2); 
+        padding: 2px 8px; 
+        border-radius: 4px; 
+    }
     
     /* Contenedor de parciales */
-    .splits-container { margin-top: 10px; padding: 10px; background: #1e1e1e; border-radius: 6px; border: 1px solid #333; }
+    .splits-container { 
+        margin-top: 10px; 
+        padding: 10px; 
+        background: #1e1e1e; 
+        border-radius: 6px; 
+        border: 1px solid #333; 
+    }
     .splits-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
     .split-item { text-align: center; background: rgba(255,255,255,0.05); padding: 5px; border-radius: 4px; }
     .split-label { font-size: 10px; color: #aaa; display: block; }
     .split-val { font-family: monospace; font-size: 14px; color: #eee; }
+    
+    /* Observaciones (Ahora arriba de los parciales) */
+    .obs-box { 
+        margin-top: 8px; 
+        margin-bottom: 8px;
+        font-size: 13px; 
+        color: #ddd; 
+        font-style: italic; 
+        background: rgba(227, 6, 19, 0.1); 
+        padding: 10px; 
+        border-radius: 4px; 
+        border-left: 3px solid #E30613; 
+    }
     
     .section-title { color: #E30613; font-weight: bold; margin-top: 20px; margin-bottom: 10px; border-bottom: 1px solid #333; font-size: 14px; text-transform: uppercase; }
 </style>
@@ -161,7 +204,7 @@ with tab_ver:
             df_h = df_h.merge(db['estilos'], on='codestilo', how='left').merge(db['distancias'], left_on='coddistancia', right_on='coddistancia', how='left')
             
             # Filtros
-            st.markdown("<div class='section-title'>🔍 Filtros</div>", unsafe_allow_html=True)
+            st.markdown("<div class='section-title'>🔍 Filtros de Búsqueda</div>", unsafe_allow_html=True)
             est_opts = ["Todos"] + sorted(df_h['descripcion_x'].unique().tolist())
             dist_opts = ["Todos"] + sorted(df_h['descripcion_y'].unique().tolist())
             
@@ -175,7 +218,7 @@ with tab_ver:
 
             # Gráfico de Progresión
             if f_est != "Todos" and f_dist != "Todos" and len(df_filt) >= 2:
-                st.markdown("<div class='section-title'>📈 Evolución</div>", unsafe_allow_html=True)
+                st.markdown("<div class='section-title'>📈 Evolución Temporal</div>", unsafe_allow_html=True)
                 df_filt['seg'] = df_filt['tiempo_final'].apply(a_segundos)
                 df_filt['fecha_dt'] = pd.to_datetime(df_filt['fecha'])
                 fig = px.line(df_filt.sort_values('fecha_dt'), x='fecha_dt', y='seg', markers=True, 
@@ -190,7 +233,13 @@ with tab_ver:
                 
                 f_fmt = datetime.strptime(str(r['fecha']), '%Y-%m-%d').strftime('%d/%m/%Y')
                 
-                # 1. Parciales
+                # 1. Observaciones (AHORA PRIMERO)
+                obs_raw = str(r.get('observaciones', '')).strip()
+                obs_html_block = ""
+                if obs_raw and obs_raw.lower() not in ['nan', 'none', '']:
+                    obs_html_block = f"""<div class='obs-box'>📝 {obs_raw}</div>"""
+
+                # 2. Parciales (AHORA DESPUÉS)
                 ps = [r.get(f'parcial_{i}') for i in range(1, 5)]
                 p_validos = [p for p in ps if p and str(p).lower() not in ['nan', 'none', '', '00:00.00']]
                 
@@ -199,7 +248,7 @@ with tab_ver:
                     grid_items = "".join([f"<div class='split-item'><span class='split-label'>P{i+1}</span><span class='split-val'>{p}</span></div>" for i, p in enumerate(p_validos)])
                     splits_html_block = f"""<div class='splits-container'><div class='splits-grid'>{grid_items}</div></div>"""
                 
-                # Renderizado SIN Observaciones
+                # 3. Ensamblado: Header -> Observaciones -> Parciales
                 card_html = f"""
                 <div class="test-card">
                     <div class="test-header">
@@ -209,6 +258,7 @@ with tab_ver:
                         </div>
                         <div class="final-time">{r['tiempo_final']}</div>
                     </div>
+                    {obs_html_block}
                     {splits_html_block}
                 </div>
                 """
@@ -216,8 +266,9 @@ with tab_ver:
 
                 if p_validos and st.checkbox(f"Analizar tramos", key=f"chk_{r['id_entrenamiento']}"):
                     p_seg = [a_segundos(p) for p in p_validos]
+                    # GRÁFICO CON REFERENCIAS EN EJES
                     fig_bar = px.bar(x=[f"P{i+1}" for i in range(len(p_seg))], y=p_seg, 
-                                     labels={'x': 'Parcial', 'y': 'Tiempo (s)'},
+                                     labels={'x': 'Parcial', 'y': 'Segundos'},
                                      color_discrete_sequence=['#E30613'])
                     fig_bar.update_layout(height=200, template="plotly_dark", showlegend=False, margin=dict(l=0, r=0, t=10, b=0))
                     st.plotly_chart(fig_bar, use_container_width=True)
