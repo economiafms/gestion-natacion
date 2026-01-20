@@ -14,7 +14,7 @@ rol = st.session_state.role
 mi_id = st.session_state.user_id 
 mi_nombre = st.session_state.user_name
 
-# --- GESTIÓN DE RESETEO TOTAL ---
+# --- GESTIÓN DE REINICIO TOTAL ---
 if "form_reset_id" not in st.session_state:
     st.session_state.form_reset_id = 0
 
@@ -38,7 +38,6 @@ st.markdown("""
     .time-sep { text-align: center; font-size: 18px; font-weight: bold; margin-top: 32px; color: #666; }
     .config-box { background: #1e1e1e; padding: 15px; border-radius: 10px; border-left: 5px solid #E30613; margin-bottom: 20px; }
     .section-title { color: #E30613; font-weight: bold; margin-top: 15px; margin-bottom: 5px; border-bottom: 1px solid #333; font-size: 14px; text-transform: uppercase; }
-    .dist-label-final { color: #aaa; font-size: 14px; margin-bottom: 2px; font-weight: bold; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -114,7 +113,7 @@ with tab_cargar:
                 quiere_p = False
                 if m_par > 0:
                     st.markdown(f"<div class='config-box'><b>Configuración:</b> {dist_t_val} {est_val}.<br>Parciales cada {m_par} mts.</div>", unsafe_allow_html=True)
-                    quiere_p = st.toggle("¿Deseas cargar tiempos parciales?", value=True)
+                    quiere_p = st.toggle("¿Cargar tiempos parciales?", value=True)
                 else:
                     st.markdown(f"<div class='config-box'><b>Configuración:</b> {dist_t_val} {est_val}.<br>Regla automática: Sin parciales.</div>", unsafe_allow_html=True)
 
@@ -122,9 +121,10 @@ with tab_cargar:
                 st.subheader("2. Registrar Tiempos")
                 
                 with st.form("form_registro_def"):
-                    # Visualización Distancia Total sobre Tiempo Final
-                    st.markdown(f"<div class='dist-label-final'>{dist_t_val.upper()}</div>", unsafe_allow_html=True)
+                    # SECCIÓN TIEMPO FINAL CON DISTANCIA BLOQUEADA
                     st.markdown("<div class='section-title'>TIEMPO FINAL</div>", unsafe_allow_html=True)
+                    st.text_input("Distancia de referencia", value=dist_t_val, disabled=True, label_visibility="collapsed")
+                    
                     tf1, ts1, tf2, ts2, tf3 = st.columns([1, 0.2, 1, 0.2, 1])
                     mf = tf1.number_input("Min", 0, 59, 0, format="%02d")
                     sf = tf2.number_input("Seg", 0, 59, 0, format="%02d")
@@ -184,7 +184,7 @@ with tab_cargar:
                                 except Exception as e: st.error(f"Error: {e}")
 
 # ==============================================================================
-#  HISTORIAL (Restaurado original)
+#  HISTORIAL (ORIGINAL RESTAURADO)
 # ==============================================================================
 with tab_ver:
     tid_h = mi_id if rol == "N" else None
