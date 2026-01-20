@@ -126,6 +126,7 @@ tab_ver, tab_cargar = st.tabs(["📂 Historial", "📝 Cargar Test"])
 #  CARGA DE TEST
 # ==============================================================================
 with tab_cargar:
+    # Contenedor dinámico: se regenera SOLO cuando reset_carga() cambia el ID (éxito)
     with st.container(key=f"carga_container_{st.session_state.form_reset_id}"):
         
         # --- PASO 1: DEFINIR PRUEBA ---
@@ -164,7 +165,7 @@ with tab_cargar:
             else:
                 mostrar_paso_2 = True
                 
-                # --- CONFIGURACIÓN AMIGABLE (FUERA DEL FORMULARIO) ---
+                # --- CONFIGURACIÓN AMIGABLE ---
                 m_tot = int(dist_t_val.split(" ")[0])
                 m_par = 100 if m_tot == 400 else (50 if m_tot == 200 else (25 if m_tot == 100 else 0))
                 
@@ -178,7 +179,7 @@ with tab_cargar:
                 </div>
                 """, unsafe_allow_html=True)
                 
-                # Toggle independiente (solo si aplica)
+                # Toggle independiente
                 quiere_p = False
                 if m_par > 0:
                     quiere_p = st.toggle("¿Cargar tiempos parciales?", value=True)
@@ -188,9 +189,10 @@ with tab_cargar:
             st.divider()
             st.subheader("2. Registrar Tiempos")
             
-            with st.form("form_reg", clear_on_submit=True):
+            # IMPORTANTE: clear_on_submit=False para NO borrar datos si hay error
+            with st.form("form_reg", clear_on_submit=False):
                 st.markdown("<div class='section-title'>TIEMPO FINAL</div>", unsafe_allow_html=True)
-                st.text_input("Distancia", value=dist_t_val, disabled=True, label_visibility="collapsed")
+                st.text_input("Ref", value=dist_t_val, disabled=True, label_visibility="collapsed")
                 
                 tf1, tf2, tf3 = st.columns(3)
                 mf = tf1.number_input("Min", 0, 59, 0)
@@ -203,7 +205,7 @@ with tab_cargar:
                     for i in range(1, 5):
                         st.write(f"Parcial {i}")
                         px1, px2, px3, px4 = st.columns([1.2, 1, 1, 1])
-                        px1.text_input(f"d{i}", value=f"{m_par} mts", disabled=True, label_visibility="collapsed", key=f"d_vis_{i}")
+                        px1.text_input(f"d{i}", value=f"{m_par} mts", disabled=True, label_visibility="collapsed", key=f"d_show_{i}")
                         pm = px2.number_input("M", 0, 59, 0, key=f"pm_{i}", label_visibility="collapsed")
                         ps = px3.number_input("S", 0, 59, 0, key=f"ps_{i}", label_visibility="collapsed")
                         pc = px4.number_input("C", 0, 99, 0, key=f"pc_{i}", label_visibility="collapsed")
@@ -213,52 +215,61 @@ with tab_cargar:
                 
                 if submitted:
                     s_final = (mf*60) + sf + (cf/100)
+                    
+                    # 1. Validación de Tiempo Final > 0
                     if s_final == 0:
-                        st.error("⚠️ El tiempo final es obligatorio.")
+                        st.error("⚠️ El tiempo final no puede ser 00:00.00.")
                     else:
+                        es_valido = True
+                        
+                        # 2. Validación de Coherencia de Parciales (BLOQUEANTE)
                         if quiere_p:
                             s_parciales = 0
                             for p_str in lp:
                                 sec = a_segundos(p_str)
                                 if sec: s_parciales += sec
                             
+                            # Si la diferencia es mayor a 0.5 segundos, ERROR y NO GUARDA
                             if s_parciales > 0 and abs(s_parciales - s_final) > 0.5:
-                                st.warning(f"⚠️ Nota: La suma de parciales ({s_parciales:.2f}s) difiere del tiempo final ({s_final:.2f}s). Se guardará de todas formas.")
+                                st.error(f"❌ Error Matemático: La suma de los parciales ({s_parciales:.2f}s) no coincide con el Tiempo Final ({s_final:.2f}s). Por favor corrige los tiempos antes de guardar.")
+                                es_valido = False
                         
-                        with st.spinner("Guardando..."):
-                            try:
-                                max_id = pd.to_numeric(db['entrenamientos']['id_entrenamiento'], errors='coerce').max() if not db['entrenamientos'].empty else 0
-                                new_id = int(0 if pd.isna(max_id) else max_id) + 1
-                                
-                                id_dp = ""
-                                if quiere_p:
-                                     id_dp = db['distancias'][db['distancias']['descripcion'].str.startswith(str(m_par))].iloc[0]['coddistancia']
+                        # 3. Guardado (Solo si pasó todas las validaciones)
+                        if es_valido:
+                            with st.spinner("Guardando..."):
+                                try:
+                                    max_id = pd.to_numeric(db['entrenamientos']['id_entrenamiento'], errors='coerce').max() if not db['entrenamientos'].empty else 0
+                                    new_id = int(0 if pd.isna(max_id) else max_id) + 1
+                                    
+                                    id_dp = ""
+                                    if quiere_p:
+                                         id_dp = db['distancias'][db['distancias']['descripcion'].str.startswith(str(m_par))].iloc[0]['coddistancia']
 
-                                row = pd.DataFrame([{
-                                    "id_entrenamiento": new_id, 
-                                    "fecha": fecha_str, 
-                                    "codnadador": int(id_nad_target), 
-                                    "codestilo": id_est,
-                                    "coddistancia": id_dt,
-                                    "coddistancia_parcial": id_dp,
-                                    "tiempo_final": f"{mf:02d}:{sf:02d}.{cf:02d}",
-                                    "parcial_1": lp[0] if len(lp)>0 else "", 
-                                    "parcial_2": lp[1] if len(lp)>1 else "",
-                                    "parcial_3": lp[2] if len(lp)>2 else "", 
-                                    "parcial_4": lp[3] if len(lp)>3 else "",
-                                    "observaciones": ""
-                                }])
-                                
-                                conn.update(worksheet="Entrenamientos", data=pd.concat([db['entrenamientos'], row], ignore_index=True))
-                                
-                                st.success("✅ Guardado con éxito.")
-                                time.sleep(1)
-                                reset_carga()
-                                st.cache_data.clear()
-                                st.rerun()
-                                
-                            except Exception as e:
-                                st.error(f"Error técnico: {e}")
+                                    row = pd.DataFrame([{
+                                        "id_entrenamiento": new_id, 
+                                        "fecha": fecha_str, 
+                                        "codnadador": int(id_nad_target), 
+                                        "codestilo": id_est,
+                                        "coddistancia": id_dt,
+                                        "coddistancia_parcial": id_dp,
+                                        "tiempo_final": f"{mf:02d}:{sf:02d}.{cf:02d}",
+                                        "parcial_1": lp[0] if len(lp)>0 else "", 
+                                        "parcial_2": lp[1] if len(lp)>1 else "",
+                                        "parcial_3": lp[2] if len(lp)>2 else "", 
+                                        "parcial_4": lp[3] if len(lp)>3 else "",
+                                        "observaciones": ""
+                                    }])
+                                    
+                                    conn.update(worksheet="Entrenamientos", data=pd.concat([db['entrenamientos'], row], ignore_index=True))
+                                    
+                                    st.success("✅ Guardado con éxito.")
+                                    time.sleep(1)
+                                    reset_carga() # Aquí sí limpiamos el formulario para el próximo uso
+                                    st.cache_data.clear()
+                                    st.rerun()
+                                    
+                                except Exception as e:
+                                    st.error(f"Error técnico: {e}")
 
 # ==============================================================================
 #  HISTORIAL
@@ -305,7 +316,7 @@ with tab_ver:
                 
                 f_fmt = datetime.strptime(str(r['fecha']), '%Y-%m-%d').strftime('%d/%m/%Y')
                 
-                # Parciales
+                # Procesar Parciales
                 ps = [r.get(f'parcial_{i}') for i in range(1, 5)]
                 p_validos = [p for p in ps if p and str(p).lower() not in ['nan', 'none', '', '00:00.00']]
                 
@@ -314,7 +325,7 @@ with tab_ver:
                     grid_items = "".join([f"<div class='split-item'><span class='split-label'>P{i+1}</span><span class='split-val'>{p}</span></div>" for i, p in enumerate(p_validos)])
                     splits_html_block = f"""<div class='splits-container'><div class='splits-grid'>{grid_items}</div></div>"""
                 
-                # Renderizado Simple (Sin observaciones)
+                # Tarjeta limpia
                 card_html = f"""
                 <div class="test-card">
                     <div class="test-header">
@@ -332,7 +343,7 @@ with tab_ver:
                 if p_validos and st.checkbox(f"Analizar tramos", key=f"chk_{r['id_entrenamiento']}"):
                     p_seg = [a_segundos(p) for p in p_validos]
                     fig_bar = px.bar(x=[f"P{i+1}" for i in range(len(p_seg))], y=p_seg, 
-                                     labels={'x': 'Parcial', 'y': 'Segundos'},
+                                     labels={'x': 'Parcial', 'y': 'Tiempo (s)'},
                                      color_discrete_sequence=['#E30613'])
                     fig_bar.update_layout(height=200, template="plotly_dark", showlegend=False, margin=dict(l=0, r=0, t=10, b=0))
                     st.plotly_chart(fig_bar, use_container_width=True)
