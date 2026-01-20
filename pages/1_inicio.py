@@ -7,7 +7,7 @@ from datetime import datetime
 # --- CONFIGURACIÓN ---
 st.set_page_config(page_title="Inicio", layout="centered")
 
-# --- INICIALIZACIÓN SEGURA ---
+# --- INICIALIZACIÓN SEGURA DE VARIABLES ---
 if "role" not in st.session_state or not st.session_state.role:
     st.switch_page("index.py")
 
@@ -116,7 +116,6 @@ if db and st.session_state.user_id:
     except: edad = 0
     cat = calcular_cat_exacta(edad, db['categorias'])
     
-    # Procesar Datos
     df_t = db['tiempos'].copy(); df_r = db['relevos'].copy()
     df_t['posicion'] = pd.to_numeric(df_t['posicion'], errors='coerce').fillna(0).astype(int)
     df_r['posicion'] = pd.to_numeric(df_r['posicion'], errors='coerce').fillna(0).astype(int)
@@ -156,17 +155,17 @@ if db and st.session_state.user_id:
     
     st.write("") 
 
-    # 2. MIS REGISTROS (FRECUENCIA)
+    # 2. MIS REGISTROS (FRECUENCIA DE ESTILOS)
     mis_regs = db['tiempos'][db['tiempos']['codnadador'] == user_id].copy()
     if not mis_regs.empty:
         st.markdown("<h5 style='text-align: center; color: #aaa; margin-bottom: 15px;'>🏊 MIS ESTILOS FRECUENTES</h5>", unsafe_allow_html=True)
         mis_regs = mis_regs.merge(db['estilos'], on='codestilo', how='left')
-        
-        col_desc = 'descripcion'
-        if 'descripcion' not in mis_regs.columns and 'descripcion_x' in mis_regs.columns: col_desc = 'descripcion_x'
+        col_desc = 'descripcion' if 'descripcion' in mis_regs.columns and 'descripcion_x' in mis_regs.columns else 'descripcion_x'
+        if col_desc not in mis_regs.columns: col_desc = 'descripcion' 
         
         conteo = mis_regs[col_desc].value_counts()
         cols = st.columns(len(conteo))
+        
         for (estilo, cantidad), col in zip(conteo.items(), cols):
             with col:
                 st.markdown(f"""
@@ -184,32 +183,30 @@ if db and st.session_state.user_id:
     
     # --- ROL NADADOR (N) ---
     if st.session_state.role == "N":
-        # Diseño simple: 2 columnas
+        # Solo Entrenamientos y Categoría (Sin Fichero, está en la card)
         c1, c2 = st.columns(2)
-        with c1: 
-            if st.button("🗃️ Fichero", type="primary", use_container_width=True, key="btn_bd_N"): 
-                st.session_state.ver_nadador_especifico = None
-                st.switch_page("pages/2_visualizar_datos.py")
-        with c2:
+        with c1:
             if st.button("⏱️ Entrenamientos", type="primary", use_container_width=True, key="btn_train_N"): 
                 st.switch_page("pages/5_entrenamientos.py")
-        
-        # Botón Ancho Completo
-        if st.button("🏅 Mi Categoría", type="primary", use_container_width=True, key="btn_cat_N"): 
-            st.switch_page("pages/6_mi_categoria.py")
+        with c2:
+            if st.button("🏅 Mi Categoría", type="primary", use_container_width=True, key="btn_cat_N"): 
+                st.switch_page("pages/6_mi_categoria.py")
 
     # --- ROL MAESTRO (M/P) ---
     else:
-        # Diseño completo: Herramientas extra
+        # Fichero y Ranking (Sin color = tipo 'secondary' implícito)
         c1, c2 = st.columns(2)
         with c1: 
-            if st.button("🗃️ Fichero", type="primary", use_container_width=True, key="btn_bd_M"): 
+            # Fichero sin color
+            if st.button("🗃️ Fichero", use_container_width=True, key="btn_bd_M"): 
                 st.session_state.ver_nadador_especifico = None
                 st.switch_page("pages/2_visualizar_datos.py")
         with c2: 
+            # Ranking sin color
             if st.button("🏆 Ver Ranking", use_container_width=True, key="btn_rk_M"): 
                 st.switch_page("pages/4_ranking.py")
         
+        # Entrenamientos y Categoría (Con color = type 'primary')
         c3, c4 = st.columns(2)
         with c3:
             if st.button("⏱️ Entrenamientos", type="primary", use_container_width=True, key="btn_train_M"): 
@@ -218,12 +215,13 @@ if db and st.session_state.user_id:
             if st.button("🏅 Mi Categoría", type="primary", use_container_width=True, key="btn_cat_M"): 
                 st.switch_page("pages/6_mi_categoria.py")
 
+        # Simulador (Sin color)
         if st.button("🏊‍♂️ Simulador Postas", use_container_width=True, key="btn_sim_M"): 
             st.switch_page("pages/3_simulador.py")
 
     st.write("")
 
-    # 4. ESTADÍSTICAS GLOBALES DEL CLUB (PARA TODOS)
+    # 4. ESTADÍSTICAS GLOBALES DEL CLUB
     st.markdown("<h5 style='text-align: center; color: #888;'>ESTADÍSTICAS DEL CLUB</h5>", unsafe_allow_html=True)
     
     t_oro = len(df_t[df_t['posicion']==1]) + len(df_r[df_r['posicion']==1])
