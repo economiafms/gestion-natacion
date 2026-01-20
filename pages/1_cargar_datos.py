@@ -57,7 +57,11 @@ df_nad = data['nadadores'].copy()
 df_nad['Nombre Completo'] = df_nad['apellido'].astype(str).str.strip().str.upper() + ", " + df_nad['nombre'].astype(str).str.strip().str.upper()
 set_nadadores_existentes = set(df_nad['Nombre Completo'].unique())
 
-set_socios_existentes = set(data['users']['nrosocio'].astype(str).unique())
+# Validación de socios existentes (Limpieza previa para evitar float o vacíos)
+df_users_clean = data['users'].copy()
+df_users_clean['nrosocio'] = pd.to_numeric(df_users_clean['nrosocio'], errors='coerce') # Forzar numérico
+df_users_clean = df_users_clean.dropna(subset=['nrosocio']) # Borrar vacíos
+set_socios_existentes = set(df_users_clean['nrosocio'].astype(int).astype(str).unique()) # Set de strings limpios
 
 df_t = data['tiempos'].copy()
 df_t['hash_validacion'] = df_t['codnadador'].astype(str) + "_" + df_t['codestilo'].astype(str) + "_" + df_t['coddistancia'].astype(str) + "_" + df_t['fecha'].astype(str)
@@ -121,7 +125,7 @@ seccion_activa = st.radio("📍 Seleccionar Herramienta:",
                           label_visibility="collapsed",
                           key="navegacion_principal")
 
-# --- SECCIÓN 1: NADADORES (CON USUARIO SPLIT) ---
+# --- SECCIÓN 1: NADADORES ---
 if seccion_activa == "👤 Nuevo Nadador":
     st.subheader("👤 Alta de Nuevo Nadador y Usuario")
     with st.container(border=True):
@@ -142,31 +146,26 @@ if seccion_activa == "👤 Nuevo Nadador":
             
             st.markdown("**Datos de Sistema (Obligatorio)**")
             
-            # --- MODIFICACIÓN: SOCIO DIVIDIDO EN 3 COLUMNAS ---
-            ca, cb, cc = st.columns(3)
-            
-            # Columna A: DNI
-            n_dni = ca.text_input("DNI")
-            
-            # Columna B: Socio dividido (Input Real - Separador - Input Basura)
-            with cb:
-                st.write("Nro Socio (Login)") # Etiqueta manual
-                # Sub-columnas: [Input Grande] [Guion] [Input Chico]
-                s_main, s_sep, s_trash = st.columns([3, 0.3, 1.2])
-                
-                with s_main:
-                    # ESTE ES EL QUE VALE (n_socio)
-                    n_socio = st.text_input("Socio Real", label_visibility="collapsed", placeholder="Ej: 12345")
-                with s_sep:
-                    # SEPARADOR VISUAL
-                    st.markdown("<div style='text-align: center; font-weight: bold; font-size: 20px; margin-top: 2px;'>-</div>", unsafe_allow_html=True)
-                with s_trash:
-                    # INPUT DESCARTABLE (No lo guardamos en ninguna variable útil)
-                    st.text_input("Socio Trash", label_visibility="collapsed", placeholder="00", help="Este número se ignora")
-
-            # Columna C: Perfil
-            n_perfil_sel = cc.selectbox("Perfil de Acceso", ["N - Nadador (Normal)", "M - Maestro (Admin)"])
+            # FILA 1: DNI y PERFIL (Arriba)
+            c_dni, c_perfil = st.columns(2)
+            n_dni = c_dni.text_input("DNI")
+            n_perfil_sel = c_perfil.selectbox("Perfil de Acceso", ["N - Nadador (Normal)", "M - Maestro (Admin)"])
             n_perfil = "M" if "Maestro" in str(n_perfil_sel) else "N"
+
+            # FILA 2: SOCIO (Abajo, ocupando estructura propia para no romperse)
+            st.write("Nro Socio (Login)") 
+            # Estructura centrada o con ancho controlado
+            c_soc_main, c_soc_sep, c_soc_trash, c_void = st.columns([2, 0.2, 1, 2]) 
+            
+            with c_soc_main:
+                # CAJA PRINCIPAL (La que guardamos)
+                n_socio = st.text_input("Socio Real", label_visibility="collapsed", placeholder="Ej: 12345")
+            with c_soc_sep:
+                # GUIÓN
+                st.markdown("<div style='text-align: center; font-weight: bold; font-size: 20px; margin-top: 2px;'>-</div>", unsafe_allow_html=True)
+            with c_soc_trash:
+                # CAJA DESCARTABLE
+                st.text_input("Socio Trash", label_visibility="collapsed", placeholder="00", help="Este número se ignora")
 
             st.write("") 
             if st.form_submit_button("Guardar Ficha", use_container_width=True):
@@ -338,11 +337,19 @@ elif seccion_activa == "🏊‍♂️ Relevos":
 elif seccion_activa == "🔑 Gestión Permisos":
     st.subheader("🛠️ Modificar Perfil de Usuario")
     
+    # 1. Limpieza de Tabla Users (Filtrar NaN y convertir a Int -> Str)
     df_users = data['users'].copy()
+    df_users['nrosocio'] = pd.to_numeric(df_users['nrosocio'], errors='coerce') # Force NaN si no es numero
+    df_users = df_users.dropna(subset=['nrosocio']) # Eliminar vacíos
+    df_users['nrosocio'] = df_users['nrosocio'].astype(int).astype(str) # 12345.0 -> 12345 -> "12345"
+
+    # 2. Limpieza de Tabla Nadadores (Mismo proceso para coincidir en el merge)
     df_nad_info = df_nad[['nrosocio', 'Nombre Completo', 'dni']].copy()
-    df_users['nrosocio'] = df_users['nrosocio'].astype(str)
-    df_nad_info['nrosocio'] = df_nad_info['nrosocio'].astype(str)
+    df_nad_info['nrosocio'] = pd.to_numeric(df_nad_info['nrosocio'], errors='coerce')
+    df_nad_info = df_nad_info.dropna(subset=['nrosocio'])
+    df_nad_info['nrosocio'] = df_nad_info['nrosocio'].astype(int).astype(str)
     
+    # 3. Merge Limpio
     df_merged = df_nad_info.merge(df_users, on='nrosocio', how='inner')
     
     with st.container(border=True):
@@ -355,6 +362,7 @@ elif seccion_activa == "🔑 Gestión Permisos":
         if sel_socio:
             nro_socio_sel = sel_socio.split("Socio: ")[1].replace(")", "")
             
+            # Buscar en el DF limpio
             row_actual = df_users[df_users['nrosocio'] == nro_socio_sel].iloc[0]
             perfil_actual = row_actual['perfil']
             
@@ -368,10 +376,19 @@ elif seccion_activa == "🔑 Gestión Permisos":
             if st.button("💾 Actualizar Permisos", type="primary"):
                 if nuevo_perfil_code != perfil_actual:
                     try:
-                        df_users.loc[df_users['nrosocio'] == nro_socio_sel, 'perfil'] = nuevo_perfil_code
-                        conn.update(worksheet="User", data=df_users)
-                        st.success(f"✅ Perfil actualizado a '{nuevo_perfil_code}' para el socio {nro_socio_sel}.")
-                        refrescar_datos()
+                        # Actualizar en el DF original (el que subimos a Sheets)
+                        # Nota: data['users'] puede tener basura, asi que buscamos donde coincida el numero (como float o int)
+                        
+                        # Estrategia segura: Convertir la columna del DF original temporalmente para encontrar el index
+                        idx_match = data['users'][pd.to_numeric(data['users']['nrosocio'], errors='coerce') == int(nro_socio_sel)].index
+                        
+                        if not idx_match.empty:
+                            data['users'].at[idx_match[0], 'perfil'] = nuevo_perfil_code
+                            conn.update(worksheet="User", data=data['users'])
+                            st.success(f"✅ Perfil actualizado a '{nuevo_perfil_code}' para el socio {nro_socio_sel}.")
+                            refrescar_datos()
+                        else:
+                            st.error("Error: No se encontró el índice original para actualizar.")
                     except Exception as e:
                         st.error(f"Error al actualizar: {e}")
                 else:
