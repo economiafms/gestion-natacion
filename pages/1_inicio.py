@@ -77,7 +77,7 @@ def intentar_desbloqueo():
 st.markdown("""
     <div style='text-align: center; margin-bottom: 25px;'>
         <h3 style='color: white; font-size: 20px; margin: 0;'>BIENVENIDOS AL COMPLEJO ACUÁTICO</h3>
-        <h1 style='color: #E30613; font-size: 32px; margin: 0; font-weight: 800;'>🔴⚫ NEWELL'S OLD BOYS ⚫🔴</h1>
+        <h1 style='color: #E30613; font-size: 30px; margin: 0; font-weight: 800;'>🔴⚫ NEWELL'S OLD BOYS ⚫🔴</h1>
     </div>
 """, unsafe_allow_html=True)
 st.divider()
