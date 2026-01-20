@@ -117,9 +117,9 @@ def login_screen():
         validar_socio()
 
 # --- 6. DEFINICIÓN DE PÁGINAS ---
-# Registramos TODAS las páginas aquí para que st.switch_page las encuentre
 pg_inicio = st.Page("pages/1_inicio.py", title="Inicio", icon="🏠")
-pg_datos = st.Page("pages/2_visualizar_datos.py", title="Base de Datos", icon="🗃️")
+# CAMBIO AQUÍ: "Base de Datos" -> "Fichero"
+pg_datos = st.Page("pages/2_visualizar_datos.py", title="Fichero", icon="🗃️")
 pg_ranking = st.Page("pages/4_ranking.py", title="Ranking", icon="🏆")
 pg_simulador = st.Page("pages/3_simulador.py", title="Simulador", icon="⏱️")
 pg_entrenamientos = st.Page("pages/5_entrenamientos.py", title="Entrenamientos", icon="🏋️")
@@ -132,23 +132,20 @@ if not st.session_state.role:
     pg = st.navigation([pg_login_obj])
     pg.run()
 else:
-    # --- MENÚ PRINCIPAL (Visible para Todos) ---
-    # Aquí agregamos Entrenamientos y Mi Categoría
+    # --- MENÚ PRINCIPAL ---
     menu_pages = {
         "Principal": [pg_inicio, pg_datos, pg_entrenamientos, pg_categoria]
     }
     
-    # --- MENÚ HERRAMIENTAS (Solo Profesores) ---
+    # --- MENÚ HERRAMIENTAS ---
     if st.session_state.role in ["M", "P"]:
         menu_pages["Herramientas"] = [pg_ranking, pg_simulador]
         
-        # Panel de carga solo si desbloqueó el candado
         if st.session_state.admin_unlocked:
             menu_pages["Administración"] = [pg_carga]
             
     pg = st.navigation(menu_pages)
     
-    # --- SIDEBAR (Botón Salir) ---
     with st.sidebar:
         st.write("") 
         if st.button("Cerrar Sesión", type="secondary", use_container_width=True):
