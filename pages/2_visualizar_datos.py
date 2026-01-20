@@ -54,15 +54,22 @@ st.markdown("""
     .pb-dist { font-size: 15px; color: #eee; }
     .pb-time { font-size: 18px; font-weight: bold; font-family: monospace; color: #fff; }
 
-    .mobile-card { background-color: #262730; border: 1px solid #444; border-radius: 8px; padding: 15px; margin-bottom: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
-    .relay-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #555; padding-bottom: 8px; margin-bottom: 8px; }
-    .relay-title { font-weight: bold; font-size: 15px; color: white; }
-    .relay-time { font-family: monospace; font-weight: bold; font-size: 20px; color: #4CAF50; }
+    .mobile-card { background-color: #262730; border: 1px solid #444; border-radius: 8px; padding: 10px 15px; margin-bottom: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
     
-    /* MODIFICADO: Agrandar fuente fecha/sede en relevos (de 12 a 14px) */
-    .relay-meta { font-size: 14px; color: #aaa; display: flex; justify-content: space-between; margin-bottom: 5px; margin-top: -2px; }
+    /* ESTILOS NUEVOS PARA CARD CENTRADA */
+    .card-title-center { 
+        text-align: center; 
+        font-weight: bold; 
+        color: white; 
+        font-size: 16px; 
+        border-bottom: 1px solid #444; 
+        padding-bottom: 5px; 
+        margin-bottom: 8px; 
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
     
-    .swimmer-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px; color: #eee; }
+    .swimmer-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px; color: #eee; margin-top: 8px; border-top: 1px solid #444; padding-top: 8px;}
     .swimmer-item { background: rgba(255,255,255,0.05); padding: 4px 8px; border-radius: 4px; }
 </style>
 """, unsafe_allow_html=True)
@@ -185,7 +192,6 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
 
     info = df_nad[df_nad['codnadador'] == target_id].iloc[0]
     
-    # Datos básicos nadador
     try: 
         nac = pd.to_datetime(info['fechanac'])
         anio_nacimiento_nadador = nac.year
@@ -235,7 +241,7 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
                 </div>""", unsafe_allow_html=True)
         st.divider()
 
-        # --- GRÁFICO (MODIFICADO: Sin Media Móvil, con Promedio en Subtítulo) ---
+        # --- GRÁFICO (SIN MEDIA MÓVIL, PROMEDIO SUBTÍTULO) ---
         conteo = mis_t.groupby(['Estilo', 'Distancia']).size().reset_index(name='count')
         validos = conteo[conteo['count'] >= 2]
         
@@ -251,19 +257,18 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
             
             df_graph = mis_t[(mis_t['Estilo'] == g_est) & (mis_t['Distancia'] == g_dist)].sort_values('fecha')
             
-            # Calcular Promedio
+            # Subtítulo Promedio
             promedio_seg = df_graph['segundos'].mean()
             tiempo_promedio = seg_a_tiempo(promedio_seg)
-            
-            st.markdown(f"**⏱️ Tiempo Promedio:** {tiempo_promedio}")
+            st.markdown(f"<div style='font-size:16px; margin-bottom:10px;'>⏱️ Tiempo Promedio Histórico: <b>{tiempo_promedio}</b></div>", unsafe_allow_html=True)
 
-            # Calcular categoría histórica para tooltip
+            # Tooltip Data
             df_graph['fecha_dt'] = pd.to_datetime(df_graph['fecha'])
             if anio_nacimiento_nadador > 0:
                 df_graph['cat_hist'] = df_graph['fecha_dt'].apply(lambda x: asignar_cat(x.year - anio_nacimiento_nadador))
             else: df_graph['cat_hist'] = "-"
 
-            # Eje Y: Tiempo (Fake date para plot)
+            # Plot
             df_graph['TimeObj'] = pd.to_datetime('2024-01-01') + pd.to_timedelta(df_graph['segundos'], unit='s')
             
             fig = px.line(df_graph, x='fecha', y='TimeObj', markers=True, template="plotly_dark",
@@ -276,13 +281,13 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
                               hovertemplate="<b>%{customdata[3]}</b><br>📅 %{x|%d/%m/%Y}<br>📍 %{customdata[0]}<br>🏷️ %{customdata[2]}")
             
             fig.update_yaxes(tickformat="%M:%S.%f", title="Tiempo")
-            fig.update_layout(height=350, margin=dict(t=20, b=20, l=40, r=20), hovermode="x unified")
+            fig.update_layout(height=350, margin=dict(t=10, b=20, l=40, r=20), hovermode="x unified")
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("Necesitas al menos 2 carreras en la misma prueba para ver la evolución.")
         st.divider()
 
-    # --- HISTORIAL COMPLETO ---
+    # --- HISTORIAL COMPLETO (REDISEÑO CARD: Estilo/Metros Centrado) ---
     st.subheader("📜 Historial Completo")
     with st.expander("Filtrar Historial"):
         h1, h2 = st.columns(2)
@@ -307,31 +312,31 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
         sede_txt = r.get('sede', '-')
         medida_txt = r.get('medida', '-')
         
-        # Calcular categoría en esa fecha
         try:
             anio_carrera = pd.to_datetime(r['fecha']).year
             edad_en_carrera = anio_carrera - anio_nacimiento_nadador
             cat_torneo = asignar_cat(edad_en_carrera)
         except: cat_torneo = "-"
 
-        # MODIFICADO: Fuente 14px en fecha/sede y 13px en categoría
         st.markdown(f"""
-        <div class="mobile-card" style="padding:10px;">
-            <div style="display:flex; justify-content:space-between; align-items: flex-start;">
+        <div class="mobile-card">
+            <div class="card-title-center">{r['Estilo']} {r['Distancia']}</div>
+            
+            <div style="display:flex; justify-content:space-between; align-items: center;">
                 <div style="flex:1;">
-                    <div style="font-weight:bold; color:white; font-size:15px;">{r['Distancia']} {r['Estilo']}</div>
-                    <div style="font-size:14px; color:#aaa; margin-top:2px;">📅 {r['fecha']} • {sede_txt} ({medida_txt})</div>
+                    <div style="font-size:14px; color:#aaa; font-weight:bold;">📅 {r['fecha']}</div>
+                    <div style="font-size:14px; color:#aaa;">📍 {sede_txt} ({medida_txt})</div>
                 </div>
                 <div style="text-align: right; min-width: 100px;">
                     <div style="font-family:monospace; font-weight:bold; color:#4CAF50; font-size:18px;">{r['tiempo']}</div>
-                    <div style="font-size:14px; color:#ddd; font-weight:bold; margin-top:2px;">
-                        {medal_str} <span style="font-size:13px; color:#999; font-weight:normal;">({cat_torneo})</span>
+                    <div style="font-size:14px; color:#ddd; margin-top:2px;">
+                        <b>{medal_str}</b> <span style="font-size:14px; color:#999; margin-left:3px;">({cat_torneo})</span>
                     </div>
                 </div>
             </div>
         </div>""", unsafe_allow_html=True)
 
-    # 5. MIS RELEVOS
+    # 5. MIS RELEVOS (REDISEÑO CARD)
     st.subheader("🏊‍♂️ Mis Relevos")
     mr_base = data['relevos'].copy()
     cond_rel = (mr_base['nadador_1'] == target_id) | (mr_base['nadador_2'] == target_id) | (mr_base['nadador_3'] == target_id) | (mr_base['nadador_4'] == target_id)
@@ -374,21 +379,20 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
 
             sede_r = r.get('sede', '-')
 
-            # MODIFICADO: Aumentada fuente por CSS (.relay-meta ahora es 14px)
             st.markdown(f"""
             <div class="mobile-card" style="border-left: 4px solid #E91E63;">
-                <div class="relay-header">
-                    <div>
-                        <div class="relay-title">{r['Distancia']} {r['Estilo']}</div>
-                        <div style="font-size:11px; color:#aaa;">{grupo_txt} ({r['codgenero']})</div>
+                <div class="card-title-center">{r['Estilo']} {r['Distancia']}</div>
+                
+                <div style="display:flex; justify-content:space-between; align-items: center;">
+                    <div style="flex:1;">
+                        <div style="font-size:14px; color:#aaa; font-weight:bold;">📅 {r['fecha']}</div>
+                        <div style="font-size:14px; color:#aaa;">📍 {sede_r} ({r['medida']})</div>
+                        <div style="font-size:13px; color:#888; margin-top:2px;">{grupo_txt} ({r['codgenero']})</div>
                     </div>
-                    <div style="text-align:right;">
+                    <div style="text-align: right;">
                         <div class="relay-time">{r['tiempo_final']}</div>
-                        <div style="font-size:12px; color:#ddd; font-weight:bold;">{pos_icon}</div>
+                        <div style="font-size:14px; color:#ddd; font-weight:bold;">{pos_icon}</div>
                     </div>
-                </div>
-                <div class="relay-meta" style="margin-top:-3px; margin-bottom:8px;">
-                    <span>📅 {r['fecha']} • {sede_r} ({r['medida']})</span>
                 </div>
                 <div class="swimmer-grid">{html_grid}</div>
             </div>""", unsafe_allow_html=True)
@@ -467,21 +471,20 @@ def render_tab_relevos_general():
 
             sede_r = r.get('sede', '-')
 
-            # MODIFICADO: Aumentada fuente por CSS
             st.markdown(f"""
             <div class="mobile-card" style="border-left: 4px solid #9C27B0;">
-                <div class="relay-header">
-                    <div>
-                        <div class="relay-title">{r['Distancia']} {r['Estilo']}</div>
-                        <div style="font-size:11px; color:#aaa;">{grupo_txt} ({r['codgenero']})</div>
+                <div class="card-title-center">{r['Estilo']} {r['Distancia']}</div>
+                
+                <div style="display:flex; justify-content:space-between; align-items: center;">
+                    <div style="flex:1;">
+                        <div style="font-size:14px; color:#aaa; font-weight:bold;">📅 {r['fecha']}</div>
+                        <div style="font-size:14px; color:#aaa;">📍 {sede_r} ({r['medida']})</div>
+                        <div style="font-size:13px; color:#888; margin-top:2px;">{grupo_txt} ({r['codgenero']})</div>
                     </div>
-                    <div style="text-align:right;">
+                    <div style="text-align: right;">
                         <div class="relay-time">{r['tiempo_final']}</div>
                         <div style="font-size:12px; color:#ddd; font-weight:bold;">{pos_icon}</div>
                     </div>
-                </div>
-                <div class="relay-meta" style="margin-top:-3px; margin-bottom:8px;">
-                    <span>📅 {r['fecha']} • {sede_r} ({r['medida']})</span>
                 </div>
                 <div class="swimmer-grid">{html_grid}</div>
             </div>""", unsafe_allow_html=True)
