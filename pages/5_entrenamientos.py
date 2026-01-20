@@ -31,73 +31,106 @@ def a_segundos(t_str):
 
 st.title("⏱️ Centro de Entrenamiento")
 
-# --- CSS PERSONALIZADO (DISEÑO APROBADO) ---
+# --- CSS PERSONALIZADO (DISEÑO ORIGINAL RESTAURADO + PALETA NEWELL'S) ---
 st.markdown("""
 <style>
+    /* Tarjeta Principal */
     .test-card { 
-        background-color: #1e1e1e; 
-        border: 1px solid #333; 
-        border-radius: 12px; 
-        padding: 16px; 
-        margin-bottom: 16px; 
-        border-left: 5px solid #E30613; /* Rojo Newell's */
-        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        background-color: #262730; 
+        border: 1px solid #444; 
+        border-radius: 8px; 
+        padding: 0; /* Padding controlado internamente */
+        margin-bottom: 15px; 
+        overflow: hidden; /* Para contener los hijos */
     }
+    
+    /* Cabecera: Estilo, Distancia, Fecha y Tiempo */
     .test-header { 
+        padding: 15px 15px 10px 15px;
         display: flex; 
         justify-content: space-between; 
-        align-items: center; 
-        margin-bottom: 12px; 
-        border-bottom: 1px solid #333;
-        padding-bottom: 8px;
+        align-items: flex-start; 
     }
-    .header-left { display: flex; flex-direction: column; }
-    .test-style { font-size: 18px; font-weight: bold; color: #E30613; text-transform: uppercase; letter-spacing: 0.5px; }
-    .test-meta { font-size: 13px; color: #ddd; margin-top: 2px; }
-    .test-date { color: #888; font-size: 12px; margin-left: 5px; }
+    
+    .header-info { display: flex; flex-direction: column; }
+    
+    .test-style { 
+        font-size: 18px; 
+        font-weight: 800; 
+        color: white; 
+        text-transform: uppercase; 
+        margin-bottom: 4px;
+    }
+    
+    .test-sub { 
+        font-size: 14px; 
+        color: #E30613; /* Rojo Newell's para la distancia */
+        font-weight: bold; 
+    }
+    
+    .test-date {
+        font-size: 12px;
+        color: #999;
+        font-weight: normal;
+        margin-left: 8px;
+    }
+    
     .final-time { 
         font-family: 'Courier New', monospace; 
-        font-size: 24px; 
+        font-size: 26px; 
         font-weight: bold; 
-        color: #fff; 
-        background-color: #E30613; 
-        padding: 4px 10px; 
-        border-radius: 6px; 
+        color: #E30613; /* Rojo Newell's */
+        text-align: right; 
+        background: rgba(0,0,0,0.3);
+        padding: 4px 10px;
+        border-radius: 6px;
     }
-    .splits-container { 
-        margin-top: 12px; 
-        padding: 10px; 
-        background-color: #252525; 
-        border-radius: 8px; 
-        border: 1px solid #333;
+    
+    /* Sección de Parciales */
+    .splits-section {
+        padding: 0 15px 10px 15px;
     }
     .splits-grid { 
         display: grid; 
         grid-template-columns: repeat(4, 1fr); 
-        gap: 8px; 
+        gap: 6px; 
+        padding-top: 10px; 
+        border-top: 1px solid #444; 
     }
-    .split-item { text-align: center; }
-    .split-label { font-size: 10px; color: #aaa; text-transform: uppercase; display: block; margin-bottom: 2px; }
-    .split-val { font-family: monospace; font-size: 14px; color: #fff; font-weight: bold; }
-    .obs-box { 
-        margin-top: 12px; 
+    .split-item { 
+        background: rgba(255,255,255,0.05); 
+        padding: 6px; 
+        border-radius: 4px; 
+        text-align: center; 
+    }
+    .split-label { font-size: 10px; color: #aaa; display: block; margin-bottom: 2px; }
+    .split-val { font-family: monospace; font-size: 14px; color: #fff; }
+    
+    /* Sección de Observaciones (Footer) */
+    .obs-footer {
+        background-color: #1a1a1a;
+        padding: 10px 15px;
+        border-top: 1px solid #333;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .obs-icon { font-size: 16px; }
+    .obs-text { 
         font-size: 13px; 
         color: #ccc; 
         font-style: italic; 
-        background-color: rgba(255, 255, 255, 0.05); 
-        padding: 12px; 
-        border-radius: 6px; 
-        border-left: 3px solid #666;
     }
+    
+    /* Títulos de Streamlit */
     .section-title { 
         color: #E30613; 
         font-weight: bold; 
-        margin-top: 25px; 
-        margin-bottom: 15px; 
-        border-bottom: 1px solid #444; 
-        font-size: 15px; 
+        margin-top: 20px; 
+        margin-bottom: 10px; 
+        border-bottom: 1px solid #555; 
+        font-size: 14px; 
         text-transform: uppercase; 
-        padding-bottom: 5px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -118,6 +151,7 @@ def cargar_entrenamientos():
 db = cargar_entrenamientos()
 if not db: st.stop()
 
+# --- DATOS ---
 df_nad = db['nadadores'].copy()
 nad_info = df_nad[df_nad['codnadador'].astype(str) == str(mi_id)]
 mi_nom_comp = f"{nad_info.iloc[0]['apellido'].upper()}, {nad_info.iloc[0]['nombre']}" if not nad_info.empty else mi_nombre
@@ -130,18 +164,14 @@ tab_ver, tab_cargar = st.tabs(["📂 Historial", "📝 Cargar Test"])
 #  CARGA DE TEST
 # ==============================================================================
 with tab_cargar:
-    with st.container(key=f"carga_main_{st.session_state.form_reset_id}"):
+    with st.container(key=f"carga_{st.session_state.form_reset_id}"):
         st.subheader("1. Definir Prueba")
         c1, c2 = st.columns([1, 2])
         f_val = c1.date_input("Fecha", date.today(), format="DD/MM/YYYY")
         
-        if rol == "N":
-            n_in = c2.selectbox("Nadador", [mi_nom_comp], disabled=True)
-            id_nad_target = mi_id
-        else:
-            n_in = c2.selectbox("Nadador", lista_nombres, index=None, placeholder="Seleccionar...")
-            id_nad_target = df_nad[(df_nad['apellido'].str.upper() + ", " + df_nad['nombre']) == n_in].iloc[0]['codnadador'] if n_in else None
-
+        n_in = c2.selectbox("Nadador", [mi_nom_comp] if rol=="N" else lista_nombres, index=0 if rol=="N" else None)
+        id_nad_target = mi_id if rol=="N" else (df_nad[(df_nad['apellido'].str.upper() + ", " + df_nad['nombre']) == n_in].iloc[0]['codnadador'] if n_in else None)
+        
         c3, c4 = st.columns(2)
         est_val = c3.selectbox("Estilo", db['estilos']['descripcion'].unique(), index=None)
         dist_t_val = c4.selectbox("Distancia TOTAL", list_dist_total, index=None)
@@ -152,7 +182,7 @@ with tab_cargar:
             quiere_p = st.toggle("¿Cargar tiempos parciales?", value=True) if m_par > 0 else False
             
             st.divider()
-            with st.form("form_reg_final"):
+            with st.form("form_reg"):
                 st.markdown("<div class='section-title'>TIEMPO FINAL</div>", unsafe_allow_html=True)
                 st.text_input("Distancia", value=dist_t_val, disabled=True, label_visibility="collapsed")
                 tf1, tf2, tf3 = st.columns(3)
@@ -179,22 +209,29 @@ with tab_cargar:
                         max_id = pd.to_numeric(db['entrenamientos']['id_entrenamiento'], errors='coerce').max() if not db['entrenamientos'].empty else 0
                         new_id = int(0 if pd.isna(max_id) else max_id) + 1
                         
-                        # ID distancia parcial si aplica
                         id_dp = ""
                         if quiere_p:
                              id_dp = db['distancias'][db['distancias']['descripcion'].str.startswith(str(m_par))].iloc[0]['coddistancia']
 
-                        # Validación final y guardado...
-                        # [Tu lógica de guardado aquí]
-                        
+                        row = pd.DataFrame([{
+                            "id_entrenamiento": new_id, "fecha": f_val.strftime('%Y-%m-%d'), 
+                            "codnadador": int(id_nad_target), "codestilo": db['estilos'][db['estilos']['descripcion'] == est_val].iloc[0]['codestilo'],
+                            "coddistancia": db['distancias'][db['distancias']['descripcion'] == dist_t_val].iloc[0]['coddistancia'],
+                            "coddistancia_parcial": id_dp,
+                            "tiempo_final": f"{mf:02d}:{sf:02d}.{cf:02d}",
+                            "parcial_1": lp[0] if len(lp)>0 else "", "parcial_2": lp[1] if len(lp)>1 else "",
+                            "parcial_3": lp[2] if len(lp)>2 else "", "parcial_4": lp[3] if len(lp)>3 else "",
+                            "observaciones": obs
+                        }])
+                        conn.update(worksheet="Entrenamientos", data=pd.concat([db['entrenamientos'], row], ignore_index=True))
                         reset_carga()
+                        st.cache_data.clear()
                         st.success("Guardado.")
                         st.rerun()
-                    except Exception as e:
-                        st.error(f"Error: {e}")
+                    except Exception as e: st.error(f"Error: {e}")
 
 # ==============================================================================
-#  HISTORIAL Y ANÁLISIS
+#  HISTORIAL
 # ==============================================================================
 with tab_ver:
     target_id = mi_id if rol == "N" else None
@@ -208,7 +245,7 @@ with tab_ver:
         if not df_h.empty:
             df_h = df_h.merge(db['estilos'], on='codestilo', how='left').merge(db['distancias'], left_on='coddistancia', right_on='coddistancia', how='left')
             
-            # --- FILTROS ---
+            # Filtros
             st.markdown("<div class='section-title'>🔍 Filtros de Búsqueda</div>", unsafe_allow_html=True)
             est_opts = ["Todos"] + sorted(df_h['descripcion_x'].unique().tolist())
             dist_opts = ["Todos"] + sorted(df_h['descripcion_y'].unique().tolist())
@@ -221,65 +258,68 @@ with tab_ver:
             if f_est != "Todos": df_filt = df_filt[df_filt['descripcion_x'] == f_est]
             if f_dist != "Todos": df_filt = df_filt[df_filt['descripcion_y'] == f_dist]
 
-            # --- GRÁFICO DE PROGRESIÓN GENERAL ---
+            # Gráfico de Progresión
             if f_est != "Todos" and f_dist != "Todos" and len(df_filt) >= 2:
                 st.markdown("<div class='section-title'>📈 Evolución Temporal</div>", unsafe_allow_html=True)
                 df_filt['seg'] = df_filt['tiempo_final'].apply(a_segundos)
                 df_filt['fecha_dt'] = pd.to_datetime(df_filt['fecha'])
-                fig = px.line(df_filt.sort_values('fecha_dt'), x='fecha_dt', y='seg', markers=True, color_discrete_sequence=['#E30613'])
-                fig.update_layout(height=250, margin=dict(l=0, r=0, t=10, b=0), template="plotly_dark", yaxis_title="Segundos", xaxis_title="Fecha")
+                fig = px.line(df_filt.sort_values('fecha_dt'), x='fecha_dt', y='seg', markers=True, 
+                              color_discrete_sequence=['#E30613'])
+                fig.update_layout(height=250, margin=dict(l=0, r=0, t=10, b=0), template="plotly_dark", 
+                                  yaxis_title="Segundos", xaxis_title="")
                 st.plotly_chart(fig, use_container_width=True)
 
-            # --- LISTADO DE CARDS ---
+            # Listado
             st.markdown("<div class='section-title'>📋 Registros</div>", unsafe_allow_html=True)
             for _, r in df_filt.sort_values(['fecha', 'id_entrenamiento'], ascending=False).iterrows():
                 
-                # 1. Procesar Parciales
+                # --- Preparar Bloques HTML ---
+                f_fmt = datetime.strptime(str(r['fecha']), '%Y-%m-%d').strftime('%d/%m/%Y')
+                
+                # 1. Parciales
                 ps = [r.get(f'parcial_{i}') for i in range(1, 5)]
                 p_validos = [p for p in ps if p and str(p).lower() not in ['nan', 'none', '', '00:00.00']]
                 
-                # HTML Dinámico: Parciales
-                splits_section = ""
+                html_splits = ""
                 if p_validos:
                     grid_items = "".join([f"<div class='split-item'><span class='split-label'>P{i+1}</span><span class='split-val'>{p}</span></div>" for i, p in enumerate(p_validos)])
-                    splits_section = f"""<div class='splits-container'><div class='splits-grid'>{grid_items}</div></div>"""
+                    html_splits = f"<div class='splits-section'><div class='splits-grid'>{grid_items}</div></div>"
                 
-                # 2. Procesar Observaciones (Solución definitiva para renderizado)
-                obs_raw = str(r.get('observaciones', '')).strip()
-                obs_section = ""
-                if obs_raw and obs_raw.lower() not in ['nan', 'none', '']:
-                    # Importante: No concatenamos variables nulas, se inserta el bloque completo solo si existe texto
-                    obs_section = f"""<div class='obs-box'>📝 {obs_raw}</div>"""
+                # 2. Observaciones
+                html_obs = ""
+                obs_txt = str(r.get('observaciones', '')).strip()
+                if obs_txt and obs_txt.lower() not in ['nan', 'none', '']:
+                    html_obs = f"""
+                    <div class='obs-footer'>
+                        <span class='obs-icon'>📝</span>
+                        <span class='obs-text'>{obs_txt}</span>
+                    </div>
+                    """
                 
-                f_fmt = datetime.strptime(str(r['fecha']), '%Y-%m-%d').strftime('%d/%m/%Y')
-                
-                # 3. Construcción del HTML Final (Estructura limpia)
-                card_html = f"""
-<div class="test-card">
-    <div class="test-header">
-        <div class="header-left">
-            <span class="test-style">{r.get('descripcion_x', '-')}</span>
-            <span class="test-meta">{r.get('descripcion_y', '-')} <span class="test-date">| {f_fmt}</span></span>
-        </div>
-        <div class="final-time">{r['tiempo_final']}</div>
-    </div>
-    {splits_section}
-    {obs_section}
-</div>
-"""
-                st.markdown(card_html, unsafe_allow_html=True)
+                # 3. Ensamblar Tarjeta
+                # Usamos una estructura donde los bloques vacíos (splits u obs) simplemente no se añaden
+                st.markdown(f"""
+                <div class="test-card">
+                    <div class="test-header">
+                        <div class="header-info">
+                            <span class="test-style">{r.get('descripcion_x', '-')}</span>
+                            <span class="test-sub">{r.get('descripcion_y', '-')} <span class="test-date">| {f_fmt}</span></span>
+                        </div>
+                        <div class="final-time">{r['tiempo_final']}</div>
+                    </div>
+                    {html_splits}
+                    {html_obs}
+                </div>
+                """, unsafe_allow_html=True)
 
-                # Gráfico individual (Color Rojo y Etiquetas en Ejes)
-                if p_validos:
-                    if st.checkbox(f"Analizar tramos", key=f"chk_{r['id_entrenamiento']}"):
-                        p_seg = [a_segundos(p) for p in p_validos]
-                        fig_bar = px.bar(
-                            x=[f"Tramo {i+1}" for i in range(len(p_seg))], 
-                            y=p_seg, 
-                            labels={'x': 'Tramo', 'y': 'Segundos'},
-                            color_discrete_sequence=['#E30613']
-                        )
-                        fig_bar.update_layout(height=200, template="plotly_dark", showlegend=False, margin=dict(l=0, r=0, t=10, b=0))
-                        st.plotly_chart(fig_bar, use_container_width=True)
+                if p_validos and st.checkbox(f"Analizar tramos", key=f"chk_{r['id_entrenamiento']}"):
+                    p_seg = [a_segundos(p) for p in p_validos]
+                    fig_bar = px.bar(
+                        x=[f"P{i+1}" for i in range(len(p_seg))], y=p_seg, 
+                        labels={'x': 'Tramo', 'y': 'Segundos'},
+                        color_discrete_sequence=['#E30613']
+                    )
+                    fig_bar.update_layout(height=200, template="plotly_dark", showlegend=False, margin=dict(l=0, r=0, t=10, b=0))
+                    st.plotly_chart(fig_bar, use_container_width=True)
         else:
-            st.info("No se encontraron registros para este nadador.")
+            st.info("No hay registros.")
