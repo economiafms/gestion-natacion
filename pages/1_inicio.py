@@ -7,7 +7,7 @@ from datetime import datetime
 # --- CONFIGURACIÓN ---
 st.set_page_config(page_title="Inicio", layout="centered")
 
-# --- INICIALIZACIÓN SEGURA ---
+# --- INICIALIZACIÓN SEGURA DE VARIABLES ---
 if "role" not in st.session_state or not st.session_state.role:
     st.switch_page("index.py")
 
@@ -28,7 +28,7 @@ def cargar_data():
             "tiempos": conn.read(worksheet="Tiempos"),
             "relevos": conn.read(worksheet="Relevos"),
             "categorias": conn.read(worksheet="Categorias"),
-            "estilos": conn.read(worksheet="Estilos") 
+            "estilos": conn.read(worksheet="Estilos")
         }
     except: return None
 
@@ -172,22 +172,39 @@ if db and st.session_state.user_id:
         
         conteo = mis_regs[col_desc].value_counts()
         
+        # Usamos columns estándar de Streamlit para evitar que se rompa el CSS
         cols = st.columns(len(conteo))
         
         for (estilo, cantidad), col in zip(conteo.items(), cols):
             with col:
                 st.markdown(f"""
                 <div style="background-color: #262730; border: 1px solid #444; border-radius: 8px; padding: 10px; text-align: center; height: 100%;">
-                    <div style="font-size: 11px; color: #aaa; text-transform: uppercase; margin-bottom: 5px; height: 25px; display: flex; align-items: center; justify-content: center;">{estilo}</div>
+                    <div style="font-size: 11px; color: #aaa; text-transform: uppercase; margin-bottom: 5px;">{estilo}</div>
                     <div style="font-size: 24px; font-weight: bold; color: white; line-height: 1;">{cantidad}</div>
-                    <div style="font-size: 10px; color: #666; margin-top: 5px;">carreras</div>
-                </div>
-                """, unsafe_allow_html=True)
-    # =================================================================
-
+                    <div style="font-size: 10px; color: #666;">carreras</div>
+                </div>""", unsafe_allow_html=True)
+    
     st.divider()
 
-    # 3. ESTADÍSTICAS GLOBALES DEL CLUB
+    # 3. BOTONERA PRINCIPAL (AGREGADO ENTRENAMIENTOS)
+    c1, c2 = st.columns(2)
+    with c1: 
+        if st.button("🗃️ Base de Datos", use_container_width=True, key="btn_bd_home"): 
+            st.session_state.ver_nadador_especifico = None
+            st.switch_page("pages/2_visualizar_datos.py")
+    with c2: 
+        if st.button("🏆 Ver Ranking", use_container_width=True, key="btn_rk_home"): st.switch_page("pages/4_ranking.py")
+    
+    # Segunda fila
+    c3, c4 = st.columns(2)
+    with c3:
+        if st.button("⏱️ Entrenamientos", type="primary", use_container_width=True, key="btn_train_home"): st.switch_page("pages/5_entrenamientos.py")
+    with c4:
+        if st.button("🏊‍♂️ Simulador Postas", use_container_width=True, key="btn_sim_home"): st.switch_page("pages/3_simulador.py")
+
+    st.write("")
+
+    # 4. ESTADÍSTICAS GLOBALES DEL CLUB
     st.markdown("<h5 style='text-align: center; color: #888;'>ESTADÍSTICAS DEL CLUB</h5>", unsafe_allow_html=True)
     
     t_oro = len(df_t[df_t['posicion']==1]) + len(df_r[df_r['posicion']==1])
@@ -215,64 +232,40 @@ if db and st.session_state.user_id:
     </div>
     """, unsafe_allow_html=True)
     
-    # 4. GRÁFICOS (ORDEN INVERTIDO: CATEGORÍAS PRIMERO)
+    # 5. GRÁFICOS
     df_n = db['nadadores'].copy()
     df_n['Anio'] = pd.to_datetime(df_n['fechanac'], errors='coerce').dt.year
     df_n['Categoria'] = df_n['Anio'].apply(calcular_categoria_grafico)
-    
-    # --- CAMBIO DE ORDEN ---
-    t_c, t_g = st.tabs(["Categorías Master", "Género"])
     colors = alt.Scale(domain=['M', 'F'], range=['#1f77b4', '#FF69B4'])
     
-    with t_c: # Ahora es el primero
+    t_c, t_g = st.tabs(["Categorías Master", "Género"])
+    with t_c:
         orden = ["Juvenil", "PRE", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K+"]
-        chart = alt.Chart(df_n).mark_bar(cornerRadius=3).encode(
-            x=alt.X('Categoria', sort=orden, title=None), 
-            y=alt.Y('count()', title=None), 
-            color=alt.Color('codgenero', legend=None, scale=colors)
-        ).properties(height=200)
-        st.altair_chart(chart, use_container_width=True)
-
-    with t_g: # Ahora es el segundo
+        st.altair_chart(alt.Chart(df_n).mark_bar(cornerRadius=3).encode(x=alt.X('Categoria', sort=orden, title=None), y=alt.Y('count()', title=None), color=alt.Color('codgenero', legend=None, scale=colors)).properties(height=200), use_container_width=True)
+    with t_g:
         base = alt.Chart(df_n).encode(theta=alt.Theta("count()", stack=True))
-        pie = base.mark_arc(outerRadius=80, innerRadius=50).encode(color=alt.Color("codgenero", scale=colors, legend=None))
-        text = base.mark_text(radius=100).encode(text="count()", order=alt.Order("codgenero"), color=alt.value("white"))
-        st.altair_chart(pie + text, use_container_width=True)
+        st.altair_chart((base.mark_arc(outerRadius=80, innerRadius=50).encode(color=alt.Color("codgenero", scale=colors, legend=None)) + base.mark_text(radius=100).encode(text="count()", order=alt.Order("codgenero"), color=alt.value("white"))), use_container_width=True)
 
-# --- 5. ZONA DE HERRAMIENTAS Y CANDADO (Solo Rol M o P) ---
-if st.session_state.role in ["M", "P"]:
-    st.divider()
-    
-    # Botones de navegación extra en el cuerpo
-    c1, c2 = st.columns(2)
-    with c1: 
-        if st.button("🗃️ Base de Datos", use_container_width=True, key="btn_bd_home"): 
-            st.session_state.ver_nadador_especifico = None
-            st.switch_page("pages/2_visualizar_datos.py")
-    with c2: 
-        if st.button("🏆 Ver Ranking", use_container_width=True, key="btn_rk_home"): st.switch_page("pages/4_ranking.py")
-    
-    st.write("")
-    if st.button("⏱️ Simulador de Postas", type="primary", use_container_width=True, key="btn_sim_home"): st.switch_page("pages/3_simulador.py")
+# --- 6. CANDADO DEL PROFE ---
+st.write(""); st.write("")
+col_space, col_lock = st.columns([8, 1])
+with col_lock:
+    if not st.session_state.admin_unlocked:
+        if st.button("🔒", help="Desbloquear Admin", type="tertiary", key="btn_lock_open"):
+            st.session_state.show_login_form = not st.session_state.show_login_form
+    else:
+        if st.button("🔓", help="Bloquear Admin", key="btn_lock_close"):
+            st.session_state.admin_unlocked = False
+            st.rerun()
 
-    # --- CANDADO DEL PROFE ---
-    st.write(""); st.write("")
-    col_space, col_lock = st.columns([8, 1])
-    with col_lock:
-        if not st.session_state.admin_unlocked:
-            if st.button("🔒", help="Desbloquear Admin", type="tertiary", key="btn_lock_open"):
-                st.session_state.show_login_form = not st.session_state.show_login_form
-        else:
-            if st.button("🔓", help="Bloquear Admin", key="btn_lock_close"):
-                st.session_state.admin_unlocked = False
-                st.rerun()
+if st.session_state.show_login_form and not st.session_state.admin_unlocked:
+    with st.form("admin_login_form"):
+        st.write("**Acceso Profesor**")
+        st.text_input("Usuario", key="u_in")
+        st.text_input("Contraseña", type="password", key="p_in")
+        st.form_submit_button("Desbloquear", on_click=intentar_desbloqueo)
 
-    if st.session_state.show_login_form and not st.session_state.admin_unlocked:
-        with st.form("admin_login_form"):
-            st.write("**Acceso Profesor**")
-            st.text_input("Usuario", key="u_in")
-            st.text_input("Contraseña", type="password", key="p_in")
-            st.form_submit_button("Desbloquear", on_click=intentar_desbloqueo)
-    
-    if st.session_state.admin_unlocked:
-        st.success("🔓 Gestión Habilitada: Ver menú lateral")
+if st.session_state.admin_unlocked:
+    st.success("🔓 Gestión Habilitada: Ver menú lateral")
+    if st.button("⚙️ IR AL PANEL DE CARGA", type="primary", use_container_width=True):
+        st.switch_page("pages/1_cargar_datos.py")
