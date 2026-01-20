@@ -7,7 +7,7 @@ from datetime import datetime
 # --- CONFIGURACIÓN ---
 st.set_page_config(page_title="Inicio", layout="centered")
 
-# --- INICIALIZACIÓN SEGURA DE VARIABLES (FIX ERROR) ---
+# --- INICIALIZACIÓN SEGURA ---
 if "role" not in st.session_state or not st.session_state.role:
     st.switch_page("index.py")
 
@@ -28,7 +28,7 @@ def cargar_data():
             "tiempos": conn.read(worksheet="Tiempos"),
             "relevos": conn.read(worksheet="Relevos"),
             "categorias": conn.read(worksheet="Categorias"),
-            "estilos": conn.read(worksheet="Estilos") # Agregado para nombres de estilos
+            "estilos": conn.read(worksheet="Estilos") # Necesario para los nombres
         }
     except: return None
 
@@ -75,11 +75,11 @@ def intentar_desbloqueo():
 
 # --- VISUALIZACIÓN ---
 
-# CAJA NEGRA PARA EL TÍTULO (SOLUCIÓN MODO CLARO)
+# CAJA NEGRA PARA EL TÍTULO
 st.markdown("""
     <style>
         .banner-box {
-            background-color: #262730; /* Color oscuro fijo */
+            background-color: #262730;
             padding: 20px;
             border-radius: 12px;
             border: 1px solid #444;
@@ -109,7 +109,6 @@ st.markdown("""
 st.divider()
 
 if db and st.session_state.user_id:
-    # 1. TARJETA PERSONAL
     user_id = st.session_state.user_id
     me = db['nadadores'][db['nadadores']['codnadador'] == user_id].iloc[0]
     
@@ -117,84 +116,35 @@ if db and st.session_state.user_id:
     except: edad = 0
     cat = calcular_cat_exacta(edad, db['categorias'])
     
-    # --- PROCESAMIENTO DE DATOS ---
-    df_t = db['tiempos'].copy()
-    df_r = db['relevos'].copy()
-    
-    # Datos para Medallero (Global)
+    df_t = db['tiempos'].copy(); df_r = db['relevos'].copy()
     df_t['posicion'] = pd.to_numeric(df_t['posicion'], errors='coerce').fillna(0).astype(int)
     df_r['posicion'] = pd.to_numeric(df_r['posicion'], errors='coerce').fillna(0).astype(int)
     
     mis_oros = len(df_t[(df_t['codnadador']==user_id)&(df_t['posicion']==1)]) + len(df_r[((df_r['nadador_1']==user_id)|(df_r['nadador_2']==user_id)|(df_r['nadador_3']==user_id)|(df_r['nadador_4']==user_id))&(df_r['posicion']==1)])
     mis_platas = len(df_t[(df_t['codnadador']==user_id)&(df_t['posicion']==2)]) + len(df_r[((df_r['nadador_1']==user_id)|(df_r['nadador_2']==user_id)|(df_r['nadador_3']==user_id)|(df_r['nadador_4']==user_id))&(df_r['posicion']==2)])
     mis_bronces = len(df_t[(df_t['codnadador']==user_id)&(df_t['posicion']==3)]) + len(df_r[((df_r['nadador_1']==user_id)|(df_r['nadador_2']==user_id)|(df_r['nadador_3']==user_id)|(df_r['nadador_4']==user_id))&(df_r['posicion']==3)])
-    
-    # Datos para Actividad Individual (Sin Relevos)
-    mis_registros = df_t[df_t['codnadador'] == user_id].copy()
-    total_individuales = len(mis_registros)
-    
-    html_estilos = ""
-    if total_individuales > 0:
-        # Unir con nombres de estilos
-        mis_registros = mis_registros.merge(db['estilos'], on='codestilo', how='left')
-        
-        # Corrección nombre columna descripcion
-        col_desc = 'descripcion'
-        if 'descripcion_x' in mis_registros.columns: col_desc = 'descripcion_x'
-        elif 'descripcion' in mis_registros.columns: col_desc = 'descripcion'
-        
-        # Contar y Ordenar
-        conteo_estilos = mis_registros[col_desc].value_counts()
-        
-        for estilo, cant in conteo_estilos.items():
-            html_estilos += f"""
-            <div style="display:flex; justify-content:space-between; font-size:13px; border-bottom:1px dashed #444; padding:2px 0;">
-                <span style="color:#ddd;">{estilo}</span>
-                <span style="color:#4CAF50; font-weight:bold;">{cant}</span>
-            </div>
-            """
-    else:
-        html_estilos = "<div style='color:#777; font-size:12px; font-style:italic;'>Sin registros individuales aún.</div>"
+    mi_total = mis_oros + mis_platas + mis_bronces
 
+    # 1. TARJETA PERFIL (ORIGINAL)
     st.write("### 👤 Tu Perfil")
     st.markdown(f"""
     <style>
-        .padron-card {{ 
-            background-color: #262730; 
-            border: 1px solid #444; 
-            border-radius: 12px; 
-            padding: 15px; 
-            display: flex; 
-            align-items: stretch; /* Altura igual */
-            justify-content: space-between; 
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3); 
-            margin-bottom: 20px; 
-            gap: 15px;
-        }}
+        .padron-card {{ background-color: #262730; border: 1px solid #444; border-radius: 12px; padding: 15px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 6px rgba(0,0,0,0.3); margin-bottom: 20px; }}
+        .p-total {{ font-size: 26px; color: #FFD700; font-weight: bold; }}
     </style>
-    
     <div class="padron-card">
-        <div style="flex: 1.2; border-right: 1px solid #555; padding-right: 10px; display: flex; flex-direction: column; justify-content: center;">
-            <div style="font-weight: bold; font-size: 18px; color: white; line-height:1.2;">{me['nombre']}<br>{me['apellido']}</div>
-            <div style="font-size: 13px; color: #ccc; margin-top:5px;">{edad} años • {me['codgenero']}</div>
-            <div style="font-size: 14px; color: #4CAF50; font-weight: bold; margin-top: 8px;">{cat}</div>
+        <div style="flex: 2; border-right: 1px solid #555;">
+            <div style="font-weight: bold; font-size: 18px; color: white;">{me['nombre']} {me['apellido']}</div>
+            <div style="font-size: 13px; color: #ccc;">{edad} años • {me['codgenero']}</div>
         </div>
-        
-        <div style="flex: 1; text-align: center; border-right: 1px solid #555; padding-right: 10px; display: flex; flex-direction: column; justify-content: center;">
-            <div style="font-size:11px; color:#aaa; margin-bottom:5px; font-weight:bold;">PODIOS</div>
-            <div style="font-size: 16px;">🥇 {mis_oros}</div>
-            <div style="font-size: 16px;">🥈 {mis_platas}</div>
-            <div style="font-size: 16px;">🥉 {mis_bronces}</div>
+        <div style="flex: 2; text-align: center;">
+            <div style="display: flex; justify-content: center; gap: 8px; font-size: 16px;">
+                <span>🥇{mis_oros}</span> <span>🥈{mis_platas}</span> <span>🥉{mis_bronces}</span>
+            </div>
         </div>
-        
-        <div style="flex: 1.5; padding-left: 5px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
-                <span style="font-size:11px; color:#aaa; font-weight:bold;">REGISTROS</span>
-                <span style="font-size:12px; color:#fff; background:#444; padding:1px 6px; border-radius:10px;">Total: {total_individuales}</span>
-            </div>
-            <div style="max-height: 80px; overflow-y: auto; padding-right:5px;">
-                {html_estilos}
-            </div>
+        <div style="flex: 1; text-align: right; border-left: 1px solid #555; padding-left: 10px;">
+            <div class="p-total">★ {mi_total}</div>
+            <div style="font-size: 16px; color: #4CAF50; font-weight: bold;">{cat}</div>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -203,9 +153,52 @@ if db and st.session_state.user_id:
         st.session_state.ver_nadador_especifico = st.session_state.user_name
         st.switch_page("pages/2_visualizar_datos.py")
     
+    st.write("") # Espacio
+
+    # =================================================================
+    # 2. NUEVA SECCIÓN: MIS REGISTROS (FRECUENCIA POR ESTILO)
+    # =================================================================
+    
+    # Procesar datos solo individuales
+    mis_regs = db['tiempos'][db['tiempos']['codnadador'] == user_id].copy()
+    
+    if not mis_regs.empty:
+        st.markdown("<h5 style='text-align: center; color: #aaa; margin-bottom: 15px;'>🏊 MIS ESTILOS FRECUENTES</h5>", unsafe_allow_html=True)
+        
+        # Merge para obtener nombre del estilo
+        mis_regs = mis_regs.merge(db['estilos'], on='codestilo', how='left')
+        
+        # Resolver nombre columna descripción
+        col_desc = 'descripcion'
+        if 'descripcion' not in mis_regs.columns and 'descripcion_x' in mis_regs.columns: 
+            col_desc = 'descripcion_x'
+        
+        # Contar y Ordenar (Value counts ordena por defecto desc)
+        conteo = mis_regs[col_desc].value_counts()
+        
+        # Generar HTML Horizontal
+        html_stats = "<div style='display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-bottom: 20px;'>"
+        
+        for estilo, cantidad in conteo.items():
+            # Color de borde sutil dependiendo de la cantidad (Estético)
+            border_color = "#4CAF50" if cantidad == conteo.max() else "#444"
+            
+            html_stats += f"""
+            <div style="background-color: #262730; border: 1px solid {border_color}; border-radius: 8px; padding: 10px; text-align: center; min-width: 90px; flex: 1;">
+                <div style="font-size: 11px; color: #aaa; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px;">{estilo}</div>
+                <div style="font-size: 22px; font-weight: bold; color: white; line-height: 1;">{cantidad}</div>
+                <div style="font-size: 9px; color: #666;">carreras</div>
+            </div>
+            """
+        html_stats += "</div>"
+        
+        st.markdown(html_stats, unsafe_allow_html=True)
+
+    # =================================================================
+
     st.divider()
 
-    # 2. ESTADÍSTICAS GLOBALES
+    # 3. ESTADÍSTICAS GLOBALES DEL CLUB
     st.markdown("<h5 style='text-align: center; color: #888;'>ESTADÍSTICAS DEL CLUB</h5>", unsafe_allow_html=True)
     
     t_oro = len(df_t[df_t['posicion']==1]) + len(df_r[df_r['posicion']==1])
@@ -233,7 +226,7 @@ if db and st.session_state.user_id:
     </div>
     """, unsafe_allow_html=True)
     
-    # 3. GRÁFICOS
+    # 4. GRÁFICOS
     df_n = db['nadadores'].copy()
     df_n['Anio'] = pd.to_datetime(df_n['fechanac'], errors='coerce').dt.year
     df_n['Categoria'] = df_n['Anio'].apply(calcular_categoria_grafico)
@@ -255,7 +248,7 @@ if db and st.session_state.user_id:
         ).properties(height=200)
         st.altair_chart(chart, use_container_width=True)
 
-# --- 4. ZONA DE HERRAMIENTAS Y CANDADO (Solo Rol M o P) ---
+# --- 5. ZONA DE HERRAMIENTAS Y CANDADO (Solo Rol M o P) ---
 if st.session_state.role in ["M", "P"]:
     st.divider()
     
