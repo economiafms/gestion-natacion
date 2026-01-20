@@ -58,7 +58,10 @@ st.markdown("""
     .relay-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #555; padding-bottom: 8px; margin-bottom: 8px; }
     .relay-title { font-weight: bold; font-size: 15px; color: white; }
     .relay-time { font-family: monospace; font-weight: bold; font-size: 20px; color: #4CAF50; }
-    .relay-meta { font-size: 12px; color: #aaa; display: flex; justify-content: space-between; margin-bottom: 5px; margin-top: -2px; } /* Ajuste de px solicitado */
+    
+    /* MODIFICADO: Agrandar fuente fecha/sede en relevos (de 12 a 14px) */
+    .relay-meta { font-size: 14px; color: #aaa; display: flex; justify-content: space-between; margin-bottom: 5px; margin-top: -2px; }
+    
     .swimmer-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px; color: #eee; }
     .swimmer-item { background: rgba(255,255,255,0.05); padding: 4px 8px; border-radius: 4px; }
 </style>
@@ -100,9 +103,17 @@ def tiempo_a_segundos(t_str):
         return val
     except: return None
 
+def seg_a_tiempo(seg):
+    if seg is None or pd.isna(seg): return "-"
+    try:
+        m = int(seg // 60)
+        s = int(seg % 60)
+        c = int((seg % 1) * 100)
+        return f"{m:02d}:{s:02d}.{c:02d}"
+    except: return "-"
+
 def asignar_cat(edad):
     try:
-        # Busca en el DF de categorías cargado
         for _, r in data['categorias'].iterrows():
             if r['edad_min'] <= edad <= r['edad_max']: return r['nombre_cat']
         return "-"
@@ -224,12 +235,13 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
                 </div>""", unsafe_allow_html=True)
         st.divider()
 
-        # --- GRÁFICO ---
-        st.subheader(f"📈 Evolución de Tiempos - {info['nombre']} {info['apellido']}")
+        # --- GRÁFICO (MODIFICADO: Sin Media Móvil, con Promedio en Subtítulo) ---
         conteo = mis_t.groupby(['Estilo', 'Distancia']).size().reset_index(name='count')
         validos = conteo[conteo['count'] >= 2]
         
         if not validos.empty:
+            st.subheader(f"📈 Evolución de Tiempos - {info['nombre']} {info['apellido']}")
+            
             c1, c2 = st.columns(2)
             estilos_ok = sorted(validos['Estilo'].unique())
             g_est = c1.selectbox("Estilo Gráfico", estilos_ok, key=f"g_est{unique_key_suffix}")
@@ -239,36 +251,30 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
             
             df_graph = mis_t[(mis_t['Estilo'] == g_est) & (mis_t['Distancia'] == g_dist)].sort_values('fecha')
             
-            # Calcular categoría histórica para cada punto del gráfico
+            # Calcular Promedio
+            promedio_seg = df_graph['segundos'].mean()
+            tiempo_promedio = seg_a_tiempo(promedio_seg)
+            
+            st.markdown(f"**⏱️ Tiempo Promedio:** {tiempo_promedio}")
+
+            # Calcular categoría histórica para tooltip
             df_graph['fecha_dt'] = pd.to_datetime(df_graph['fecha'])
             if anio_nacimiento_nadador > 0:
                 df_graph['cat_hist'] = df_graph['fecha_dt'].apply(lambda x: asignar_cat(x.year - anio_nacimiento_nadador))
-            else:
-                df_graph['cat_hist'] = "-"
+            else: df_graph['cat_hist'] = "-"
 
             # Eje Y: Tiempo (Fake date para plot)
             df_graph['TimeObj'] = pd.to_datetime('2024-01-01') + pd.to_timedelta(df_graph['segundos'], unit='s')
             
-            # Media Móvil (Suavizado)
-            df_graph['segundos_ma'] = df_graph['segundos'].rolling(window=3, min_periods=1).mean()
-            df_graph['TimeObjMA'] = pd.to_datetime('2024-01-01') + pd.to_timedelta(df_graph['segundos_ma'], unit='s')
-
             fig = px.line(df_graph, x='fecha', y='TimeObj', markers=True, template="plotly_dark",
                           hover_data={
-                              'fecha': False, 'TimeObj': False, # Ocultar defaults feos
+                              'fecha': False, 'TimeObj': False,
                               'sede': True, 'Distancia': True, 'cat_hist': True, 'tiempo': True
                           })
             
-            # Trace Principal (Puntos Reales)
-            fig.update_traces(line_color='#E53935', name="Tiempo Real",
-                              hovertemplate="<b>%{customdata[3]}</b><br>📅 %{x|%d/%m/%Y}<br>🏊 %{customdata[1]}<br>📍 %{customdata[0]}<br>🏷️ %{customdata[2]}")
+            fig.update_traces(line_color='#E53935', name="Registro",
+                              hovertemplate="<b>%{customdata[3]}</b><br>📅 %{x|%d/%m/%Y}<br>📍 %{customdata[0]}<br>🏷️ %{customdata[2]}")
             
-            # Trace Media Móvil (Complemento)
-            fig.add_trace(go.Scatter(x=df_graph['fecha'], y=df_graph['TimeObjMA'], mode='lines', 
-                                     name='Media Móvil (Tendencia)',
-                                     line=dict(color='gray', width=1, dash='dot'),
-                                     hoverinfo='skip'))
-
             fig.update_yaxes(tickformat="%M:%S.%f", title="Tiempo")
             fig.update_layout(height=350, margin=dict(t=20, b=20, l=40, r=20), hovermode="x unified")
             st.plotly_chart(fig, use_container_width=True)
@@ -301,25 +307,25 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
         sede_txt = r.get('sede', '-')
         medida_txt = r.get('medida', '-')
         
-        # Calcular categoría en esa fecha específica
+        # Calcular categoría en esa fecha
         try:
             anio_carrera = pd.to_datetime(r['fecha']).year
             edad_en_carrera = anio_carrera - anio_nacimiento_nadador
             cat_torneo = asignar_cat(edad_en_carrera)
         except: cat_torneo = "-"
 
-        # Ajuste Visual: margin-top:2px para subir info, y cat_torneo al lado de posición
+        # MODIFICADO: Fuente 14px en fecha/sede y 13px en categoría
         st.markdown(f"""
         <div class="mobile-card" style="padding:10px;">
             <div style="display:flex; justify-content:space-between; align-items: flex-start;">
                 <div style="flex:1;">
                     <div style="font-weight:bold; color:white; font-size:15px;">{r['Distancia']} {r['Estilo']}</div>
-                    <div style="font-size:12px; color:#aaa; margin-top:2px;">📅 {r['fecha']} • {sede_txt} ({medida_txt})</div>
+                    <div style="font-size:14px; color:#aaa; margin-top:2px;">📅 {r['fecha']} • {sede_txt} ({medida_txt})</div>
                 </div>
                 <div style="text-align: right; min-width: 100px;">
                     <div style="font-family:monospace; font-weight:bold; color:#4CAF50; font-size:18px;">{r['tiempo']}</div>
                     <div style="font-size:14px; color:#ddd; font-weight:bold; margin-top:2px;">
-                        {medal_str} <span style="font-size:11px; color:#999; font-weight:normal;">({cat_torneo})</span>
+                        {medal_str} <span style="font-size:13px; color:#999; font-weight:normal;">({cat_torneo})</span>
                     </div>
                 </div>
             </div>
@@ -368,7 +374,7 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
 
             sede_r = r.get('sede', '-')
 
-            # Ajuste Visual: margin-top:-2px para subir info en Relevos
+            # MODIFICADO: Aumentada fuente por CSS (.relay-meta ahora es 14px)
             st.markdown(f"""
             <div class="mobile-card" style="border-left: 4px solid #E91E63;">
                 <div class="relay-header">
@@ -461,6 +467,7 @@ def render_tab_relevos_general():
 
             sede_r = r.get('sede', '-')
 
+            # MODIFICADO: Aumentada fuente por CSS
             st.markdown(f"""
             <div class="mobile-card" style="border-left: 4px solid #9C27B0;">
                 <div class="relay-header">
