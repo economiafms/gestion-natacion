@@ -86,6 +86,7 @@ def calcular_edad_fina(fecha_nac):
 def asignar_categoria(edad, df_cat):
     """Busca la categoría correspondiente a la edad en la tabla de referencia."""
     if edad is None: return "S/D"
+    # Filtrar rango de edad
     match = df_cat[(df_cat['edad_min'] <= edad) & (df_cat['edad_max'] >= edad)]
     if not match.empty:
         return match.iloc[0]['nombre_cat'] # Usamos 'nombre_cat' de tu tabla
@@ -102,6 +103,9 @@ def a_segundos(t_str):
             s = int(s_parts[0])
             c = int(s_parts[1]) if len(s_parts) > 1 else 0
             return (m * 60) + s + (c / 100)
+        # Manejo opcional de formato solo segundos (SS.CC)
+        elif len(parts) == 1:
+             return float(parts[0])
         return None
     except: return None
 
@@ -121,14 +125,12 @@ df_nad.columns = df_nad.columns.str.strip().str.lower()
 df_cat.columns = df_cat.columns.str.strip().str.lower()
 
 # 1. Calcular Edad y Categoría para todos
-# Se usa 'fechanac' como en tu CSV
 if 'fechanac' in df_nad.columns:
     df_nad['edad_calculada'] = df_nad['fechanac'].apply(calcular_edad_fina)
 else:
     st.error("Error: No se encuentra la columna 'fechanac' en la tabla Nadadores.")
     st.stop()
 
-# Se usa 'nombre_cat' como en tu CSV
 if 'nombre_cat' in df_cat.columns:
     df_nad['categoria_actual'] = df_nad['edad_calculada'].apply(lambda x: asignar_categoria(x, df_cat))
 else:
@@ -145,7 +147,7 @@ if rol == "N":
     if not me.empty:
         my_data = me.iloc[0]
         target_categoria = my_data['categoria_actual']
-        target_genero = my_data['codgenero'] # CSV usa 'codgenero'
+        target_genero = my_data['codgenero']
         
         edad_str = int(my_data['edad_calculada']) if pd.notna(my_data['edad_calculada']) else "-"
         st.info(f"👋 Hola **{mi_nombre}**. Edad: {edad_str} años.")
@@ -199,27 +201,25 @@ if target_categoria and target_genero:
     else:
         st.warning(f"No hay nadadores {target_genero} en {target_categoria}.")
 
-    # --- GRÁFICA COMPARATIVA (USANDO TABLA TIEMPOS) ---
+    # --- GRÁFICA COMPARATIVA (PROMEDIOS) ---
     if not rivales.empty:
-        st.markdown("<div class='section-title'>📊 Ranking de Tiempos</div>", unsafe_allow_html=True)
+        st.markdown("<div class='section-title'>📊 Ranking de Tiempos (Promedio)</div>", unsafe_allow_html=True)
         
-        # 1. Cargar Tiempos y filtrar por los nadadores de la categoría
+        # 1. Cargar Tiempos y filtrar
         df_tiempos = db['tiempos'].copy()
         df_tiempos = df_tiempos[df_tiempos['codnadador'].isin(ids_rivales)]
         
         if not df_tiempos.empty:
-            # 2. Unir con Estilos y Distancias para tener las descripciones
+            # 2. Unir con Estilos y Distancias
             df_tiempos = df_tiempos.merge(db['estilos'], on='codestilo', how='left')
             df_tiempos = df_tiempos.merge(db['distancias'], on='coddistancia', how='left')
             
             # 3. Filtros Dinámicos
             c_e, c_d = st.columns(2)
             
-            # Filtro 1: Estilos disponibles (descripcion_x viene de Estilos)
             estilos_disp = sorted(df_tiempos['descripcion_x'].dropna().unique())
             sel_est = c_e.selectbox("Estilo", estilos_disp)
             
-            # Filtro 2: Distancias disponibles para el estilo seleccionado (descripcion_y viene de Distancias)
             dist_disp = sorted(df_tiempos[df_tiempos['descripcion_x'] == sel_est]['descripcion_y'].dropna().unique())
             
             sel_dist = None
@@ -235,30 +235,31 @@ if target_categoria and target_genero:
                     (df_tiempos['descripcion_y'] == sel_dist)
                 ].copy()
                 
-                # 5. Procesar tiempos (Tomar el MEJOR tiempo de cada nadador)
+                # 5. Procesar tiempos (PROMEDIO)
                 data_chart['segundos'] = data_chart['tiempo'].apply(a_segundos)
-                # Eliminamos nulos o ceros
                 data_chart = data_chart[data_chart['segundos'] > 0]
                 
                 if not data_chart.empty:
-                    best_times = data_chart.groupby('codnadador')['segundos'].min().reset_index()
+                    # AQUÍ ESTÁ EL CAMBIO: .mean() en lugar de .min()
+                    # Calculamos el promedio de tiempos para cada nadador en esta prueba
+                    avg_times = data_chart.groupby('codnadador')['segundos'].mean().reset_index()
                     
-                    # Pegar nombres de los nadadores
-                    best_times = best_times.merge(rivales[['codnadador', 'apellido', 'nombre']], on='codnadador')
-                    best_times['Atleta'] = best_times['apellido'].str.upper() + " " + best_times['nombre'].str[0] + "."
-                    best_times['Etiqueta'] = best_times['segundos'].apply(fmt_mm_ss)
+                    # Pegar nombres
+                    avg_times = avg_times.merge(rivales[['codnadador', 'apellido', 'nombre']], on='codnadador')
+                    avg_times['Atleta'] = avg_times['apellido'].str.upper() + " " + avg_times['nombre'].str[0] + "."
+                    avg_times['Etiqueta'] = avg_times['segundos'].apply(fmt_mm_ss)
                     
                     # Colores
                     def get_color(cod):
                         if rol == "N" and str(cod) == str(mi_id): return "#E30613" # Rojo Usuario
                         return "#666666" # Gris Rival
                     
-                    best_times['Color'] = best_times['codnadador'].apply(get_color)
-                    best_times = best_times.sort_values('segundos', ascending=True) # Ranking (menor es mejor)
+                    avg_times['Color'] = avg_times['codnadador'].apply(get_color)
+                    avg_times = avg_times.sort_values('segundos', ascending=True) # Ranking (menor tiempo promedio es mejor)
                     
                     # 6. Graficar
                     fig = px.bar(
-                        best_times, 
+                        avg_times, 
                         x='Atleta', 
                         y='segundos', 
                         text='Etiqueta', 
@@ -267,27 +268,27 @@ if target_categoria and target_genero:
                     )
                     
                     # Ajuste de Ejes
-                    max_y = best_times['segundos'].max() * 1.15
+                    max_y = avg_times['segundos'].max() * 1.15
                     tick_vals = np.linspace(0, max_y, 5)
                     tick_text = [fmt_mm_ss(x) for x in tick_vals]
 
-                    fig.update_traces(textposition='auto', hovertemplate='⏱️ %{text}<extra></extra>')
+                    fig.update_traces(textposition='auto', hovertemplate='Promedio: %{text}<extra></extra>')
                     fig.update_layout(
                         height=320, 
                         template="plotly_dark", 
                         showlegend=False,
                         margin=dict(l=0, r=0, t=30, b=0),
-                        yaxis=dict(title="Tiempo", tickmode='array', tickvals=tick_vals, ticktext=tick_text, range=[0, max_y]),
+                        yaxis=dict(title="Tiempo Promedio", tickmode='array', tickvals=tick_vals, ticktext=tick_text, range=[0, max_y]),
                         xaxis_title=None
                     )
                     st.plotly_chart(fig, use_container_width=True)
                     
                     # Mensaje de posición
                     if rol == "N":
-                        mi_dato = best_times[best_times['codnadador'].astype(str) == str(mi_id)]
+                        mi_dato = avg_times[avg_times['codnadador'].astype(str) == str(mi_id)]
                         if not mi_dato.empty:
-                            rank = best_times.index.get_loc(mi_dato.index[0]) + 1
-                            st.success(f"🏅 Ranking: **#{rank}** de {len(best_times)} en {sel_dist} {sel_est}.")
+                            rank = avg_times.index.get_loc(mi_dato.index[0]) + 1
+                            st.success(f"🏅 Tu promedio te ubica **#{rank}** de {len(avg_times)} en {sel_dist} {sel_est}.")
                         else:
                             st.info("Aún no tienes un tiempo oficial registrado para esta prueba.")
                 else:
