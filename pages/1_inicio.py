@@ -75,7 +75,7 @@ def intentar_desbloqueo():
 
 # --- VISUALIZACIÓN ---
 
-# BANNER TÍTULO (SOLUCIÓN MODO CLARO)
+# BANNER TÍTULO
 st.markdown("""
     <style>
         .banner-box {
@@ -156,7 +156,7 @@ if db and st.session_state.user_id:
     st.write("") 
 
     # =================================================================
-    # 2. NUEVA SECCIÓN: MIS REGISTROS (CORREGIDO VISUALMENTE)
+    # 2. NUEVA SECCIÓN: MIS REGISTROS
     # =================================================================
     
     mis_regs = db['tiempos'][db['tiempos']['codnadador'] == user_id].copy()
@@ -164,7 +164,6 @@ if db and st.session_state.user_id:
     if not mis_regs.empty:
         st.markdown("<h5 style='text-align: center; color: #aaa; margin-bottom: 15px;'>🏊 MIS ESTILOS FRECUENTES</h5>", unsafe_allow_html=True)
         
-        # Merge para obtener nombre
         mis_regs = mis_regs.merge(db['estilos'], on='codestilo', how='left')
         
         col_desc = 'descripcion'
@@ -173,7 +172,6 @@ if db and st.session_state.user_id:
         
         conteo = mis_regs[col_desc].value_counts()
         
-        # --- USAMOS COLUMNAS NATIVAS DE STREAMLIT PARA EVITAR ERRORES VISUALES ---
         cols = st.columns(len(conteo))
         
         for (estilo, cantidad), col in zip(conteo.items(), cols):
@@ -217,20 +215,16 @@ if db and st.session_state.user_id:
     </div>
     """, unsafe_allow_html=True)
     
-    # 4. GRÁFICOS
+    # 4. GRÁFICOS (ORDEN INVERTIDO: CATEGORÍAS PRIMERO)
     df_n = db['nadadores'].copy()
     df_n['Anio'] = pd.to_datetime(df_n['fechanac'], errors='coerce').dt.year
     df_n['Categoria'] = df_n['Anio'].apply(calcular_categoria_grafico)
     
-    t_g, t_c = st.tabs(["Género", "Categorías Master"])
+    # --- CAMBIO DE ORDEN ---
+    t_c, t_g = st.tabs(["Categorías Master", "Género"])
     colors = alt.Scale(domain=['M', 'F'], range=['#1f77b4', '#FF69B4'])
     
-    with t_g:
-        base = alt.Chart(df_n).encode(theta=alt.Theta("count()", stack=True))
-        pie = base.mark_arc(outerRadius=80, innerRadius=50).encode(color=alt.Color("codgenero", scale=colors, legend=None))
-        text = base.mark_text(radius=100).encode(text="count()", order=alt.Order("codgenero"), color=alt.value("white"))
-        st.altair_chart(pie + text, use_container_width=True)
-    with t_c:
+    with t_c: # Ahora es el primero
         orden = ["Juvenil", "PRE", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K+"]
         chart = alt.Chart(df_n).mark_bar(cornerRadius=3).encode(
             x=alt.X('Categoria', sort=orden, title=None), 
@@ -239,10 +233,17 @@ if db and st.session_state.user_id:
         ).properties(height=200)
         st.altair_chart(chart, use_container_width=True)
 
-# --- 5. HERRAMIENTAS ---
+    with t_g: # Ahora es el segundo
+        base = alt.Chart(df_n).encode(theta=alt.Theta("count()", stack=True))
+        pie = base.mark_arc(outerRadius=80, innerRadius=50).encode(color=alt.Color("codgenero", scale=colors, legend=None))
+        text = base.mark_text(radius=100).encode(text="count()", order=alt.Order("codgenero"), color=alt.value("white"))
+        st.altair_chart(pie + text, use_container_width=True)
+
+# --- 5. ZONA DE HERRAMIENTAS Y CANDADO (Solo Rol M o P) ---
 if st.session_state.role in ["M", "P"]:
     st.divider()
     
+    # Botones de navegación extra en el cuerpo
     c1, c2 = st.columns(2)
     with c1: 
         if st.button("🗃️ Base de Datos", use_container_width=True, key="btn_bd_home"): 
@@ -254,6 +255,7 @@ if st.session_state.role in ["M", "P"]:
     st.write("")
     if st.button("⏱️ Simulador de Postas", type="primary", use_container_width=True, key="btn_sim_home"): st.switch_page("pages/3_simulador.py")
 
+    # --- CANDADO DEL PROFE ---
     st.write(""); st.write("")
     col_space, col_lock = st.columns([8, 1])
     with col_lock:
