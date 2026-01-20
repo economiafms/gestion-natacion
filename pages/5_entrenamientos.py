@@ -21,7 +21,7 @@ if "form_reset_id" not in st.session_state:
 def reset_carga():
     st.session_state.form_reset_id += 1
 
-# Helper: Convierte tiempo MM:SS.CC a segundos para gráficos
+# Helper para gráficos
 def a_segundos(t_str):
     try:
         if not t_str or str(t_str).lower() in ['nan', 'none', '', '00:00.00']: return None
@@ -36,17 +36,35 @@ st.title("⏱️ Centro de Entrenamiento")
 st.markdown("""
 <style>
     .test-card { background-color: #262730; border: 1px solid #444; border-radius: 10px; padding: 15px; margin-bottom: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.3); }
-    .test-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #555; padding-bottom: 8px; margin-bottom: 8px; }
+    .test-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
     .test-style { font-size: 18px; font-weight: bold; color: white; text-transform: uppercase; }
     .test-dist { font-size: 14px; color: #4CAF50; font-weight: bold; }
     .final-time { font-family: monospace; font-size: 22px; font-weight: bold; color: #E30613; text-align: right; }
     
-    .splits-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin-top: 10px; padding-top: 8px; border-top: 1px dashed #444; }
+    /* Contenedor de parciales: sin bordes fijos por fuera para evitar que se vea vacío */
+    .splits-grid { 
+        display: grid; 
+        grid-template-columns: repeat(4, 1fr); 
+        gap: 5px; 
+        margin-top: 10px; 
+        padding-top: 8px; 
+        border-top: 1px dashed #555; 
+    }
     .split-item { background: rgba(255,255,255,0.05); padding: 5px; border-radius: 4px; text-align: center; }
     .split-label { font-size: 10px; color: #aaa; display: block; }
     .split-val { font-family: monospace; font-size: 14px; color: #eee; }
     
-    .obs-box { margin-top: 10px; font-size: 12px; color: #ddd; font-style: italic; background: rgba(227, 6, 19, 0.05); padding: 10px; border-radius: 4px; border-left: 3px solid #E30613;}
+    /* Observaciones modeladas por separado */
+    .obs-box { 
+        margin-top: 10px; 
+        font-size: 12px; 
+        color: #ddd; 
+        font-style: italic; 
+        background: rgba(227, 6, 19, 0.05); 
+        padding: 10px; 
+        border-radius: 4px; 
+        border-left: 3px solid #E30613;
+    }
     .section-title { color: #E30613; font-weight: bold; margin-top: 20px; margin-bottom: 10px; border-bottom: 1px solid #333; font-size: 14px; text-transform: uppercase; }
 </style>
 """, unsafe_allow_html=True)
@@ -109,15 +127,12 @@ with tab_cargar:
                         st.write(f"P{i}")
                         px1, px2, px3, px4 = st.columns(4)
                         px1.text_input(f"d{i}", value=f"{m_par}m", disabled=True, label_visibility="collapsed")
-                        p_m = px2.number_input("M", 0, 59, 0, key=f"pm_{i}")
-                        p_s = px3.number_input("S", 0, 59, 0, key=f"ps_{i}")
-                        p_c = px4.number_input("C", 0, 99, 0, key=f"pc_{i}")
+                        p_m, p_s, p_c = px2.number_input("M", 0, 59, 0, key=f"pm_{i}"), px3.number_input("S", 0, 59, 0, key=f"ps_{i}"), px4.number_input("C", 0, 99, 0, key=f"pc_{i}")
                         lp.append(f"{p_m:02d}:{p_s:02d}.{p_c:02d}" if (p_m+p_s+p_c)>0 else "")
                 
                 obs = st.text_area("Observaciones")
                 if st.form_submit_button("GUARDAR REGISTRO"):
-                    # Lógica de guardado directo (asumiendo que manejas el append a la hoja)
-                    # Aquí iría el conn.update...
+                    # Aquí iría el proceso de actualización de la base de datos (conn.update)
                     reset_carga(); st.rerun()
 
 # ==============================================================================
@@ -135,48 +150,45 @@ with tab_ver:
         if not df_h.empty:
             df_h = df_h.merge(db['estilos'], on='codestilo', how='left').merge(db['distancias'], left_on='coddistancia', right_on='coddistancia', how='left')
             
-            # FILTROS DINÁMICOS
             st.markdown("<div class='section-title'>🔍 Filtros de Búsqueda</div>", unsafe_allow_html=True)
-            f_col1, f_col2 = st.columns(2)
             est_opts = ["Todos"] + sorted(df_h['descripcion_x'].unique().tolist())
             dist_opts = ["Todos"] + sorted(df_h['descripcion_y'].unique().tolist())
             
-            f_est = f_col1.selectbox("Estilo", est_opts)
-            f_dist = f_col2.selectbox("Distancia", dist_opts)
+            c_f1, c_f2 = st.columns(2)
+            f_est = c_f1.selectbox("Estilo", est_opts)
+            f_dist = c_f2.selectbox("Distancia", dist_opts)
 
             df_filt = df_h.copy()
             if f_est != "Todos": df_filt = df_filt[df_filt['descripcion_x'] == f_est]
             if f_dist != "Todos": df_filt = df_filt[df_filt['descripcion_y'] == f_dist]
 
-            # GRÁFICA DE PROGRESO (Solo si hay filtros específicos y >= 2 registros)
-            if f_est != "Todos" and f_dist != "Todos":
-                if len(df_filt) >= 2:
-                    st.markdown("<div class='section-title'>📈 Progresión Histórica</div>", unsafe_allow_html=True)
-                    df_filt['seg'] = df_filt['tiempo_final'].apply(a_segundos)
-                    df_filt['fecha_dt'] = pd.to_datetime(df_filt['fecha'])
-                    fig_prog = px.line(df_filt.sort_values('fecha_dt'), x='fecha_dt', y='seg', markers=True, 
-                                       labels={'seg': 'Segundos', 'fecha_dt': 'Fecha'}, color_discrete_sequence=['#E30613'])
-                    fig_prog.update_layout(height=250, margin=dict(l=0, r=0, t=10, b=0), template="plotly_dark")
-                    st.plotly_chart(fig_prog, use_container_width=True)
+            if f_est != "Todos" and f_dist != "Todos" and len(df_filt) >= 2:
+                st.markdown("<div class='section-title'>📈 Progresión Histórica</div>", unsafe_allow_html=True)
+                df_filt['seg'] = df_filt['tiempo_final'].apply(a_segundos)
+                df_filt['fecha_dt'] = pd.to_datetime(df_filt['fecha'])
+                fig = px.line(df_filt.sort_values('fecha_dt'), x='fecha_dt', y='seg', markers=True, color_discrete_sequence=['#E30613'])
+                fig.update_layout(height=250, margin=dict(l=0, r=0, t=10, b=0), template="plotly_dark")
+                st.plotly_chart(fig, use_container_width=True)
 
-            # LISTADO DE CARDS
             st.markdown("<div class='section-title'>📋 Registros</div>", unsafe_allow_html=True)
             for _, r in df_filt.sort_values(['fecha', 'id_entrenamiento'], ascending=False).iterrows():
                 
-                # Validar parciales: Solo si no son vacíos/00:00.00
+                # --- MODELADO INDEPENDIENTE DE PARCIALES ---
                 ps = [r.get(f'parcial_{i}') for i in range(1, 5)]
                 p_validos = [p for p in ps if p and str(p).lower() not in ['nan', 'none', '', '00:00.00']]
                 
                 splits_html = ""
                 if p_validos:
-                    grid = "".join([f"<div class='split-item'><span class='split-label'>P{i+1}</span><span class='split-val'>{p}</span></div>" for i, p in enumerate(p_validos)])
-                    splits_html = f"<div class='splits-grid'>{grid}</div>"
+                    items = "".join([f"<div class='split-item'><span class='split-label'>P{i+1}</span><span class='split-val'>{p}</span></div>" for i, p in enumerate(p_validos)])
+                    splits_html = f"<div class='splits-grid'>{items}</div>"
                 
-                # Validar observaciones: Solo si el texto es real
-                obs_raw = str(r['observaciones']).strip()
+                # --- MODELADO INDEPENDIENTE DE OBSERVACIONES ---
+                obs_raw = str(r.get('observaciones', '')).strip()
                 obs_html = ""
                 if obs_raw and obs_raw.lower() not in ['nan', 'none', '']:
                     obs_html = f"<div class='obs-box'>📝 {obs_raw}</div>"
+                
+                f_fmt = datetime.strptime(str(r['fecha']), '%Y-%m-%d').strftime('%d/%m/%Y')
                 
                 st.markdown(f"""
                 <div class="test-card">
@@ -184,7 +196,7 @@ with tab_ver:
                         <div>
                             <div class="test-style">{r.get('descripcion_x', '-')}</div>
                             <div class="test-dist">{r.get('descripcion_y', '-')}</div>
-                            <div class="test-date">📅 {datetime.strptime(str(r['fecha']), '%Y-%m-%d').strftime('%d/%m/%Y')}</div>
+                            <div class="test-date">📅 {f_fmt}</div>
                         </div>
                         <div class="final-time">{r['tiempo_final']}</div>
                     </div>
@@ -192,13 +204,10 @@ with tab_ver:
                     {obs_html}
                 </div>""", unsafe_allow_html=True)
 
-                # Gráfico individual de parciales (Rojo Newell's)
-                if p_validos:
-                    if st.checkbox(f"Analizar tramos", key=f"chk_{r['id_entrenamiento']}"):
-                        p_seg = [a_segundos(p) for p in p_validos]
-                        fig_bar = px.bar(x=[f"P{i+1}" for i in range(len(p_seg))], y=p_seg, 
-                                         labels={'x': 'Tramo', 'y': 'Segundos'}, color_discrete_sequence=['#E30613'])
-                        fig_bar.update_layout(height=200, margin=dict(l=0, r=0, t=10, b=0), showlegend=False, template="plotly_dark")
-                        st.plotly_chart(fig_bar, use_container_width=True)
+                if p_validos and st.checkbox(f"Analizar tramos", key=f"chk_{r['id_entrenamiento']}"):
+                    p_seg = [a_segundos(p) for p in p_validos]
+                    fig_bar = px.bar(x=[f"P{i+1}" for i in range(len(p_seg))], y=p_seg, color_discrete_sequence=['#E30613'])
+                    fig_bar.update_layout(height=200, template="plotly_dark", showlegend=False)
+                    st.plotly_chart(fig_bar, use_container_width=True)
         else:
             st.info("No hay registros para este nadador.")
