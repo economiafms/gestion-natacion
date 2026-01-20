@@ -19,130 +19,83 @@ mi_nombre = st.session_state.user_name
 
 st.title("📊 Base de Datos del Club")
 
-# --- CSS PERSONALIZADO (REPARADO) ---
+# --- CSS A PRUEBA DE FALLOS (GRID LAYOUT) ---
 st.markdown("""
 <style>
-    /* RESET BÁSICO PARA EVITAR ROMPIMIENTOS */
-    div[data-testid="stMarkdownContainer"] p {
-        margin: 0; /* Elimina margen default de parrafos en tarjetas */
+    /* TARJETA BASE */
+    .mobile-card {
+        background-color: #262730 !important;
+        border: 1px solid #444 !important;
+        border-radius: 8px !important;
+        margin-bottom: 12px !important;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.4) !important;
+        overflow: hidden; /* Mantiene todo adentro */
     }
 
-    /* TARJETA PADRÓN */
-    .padron-card {
-        background-color: #262730;
-        border: 1px solid #444;
-        border-radius: 12px;
-        padding: 15px;
-        margin-bottom: 8px;
-        display: flex; align-items: center; justify-content: space-between;
-        box-shadow: 0 3px 6px rgba(0,0,0,0.3);
+    /* ENCABEZADO CENTRADO */
+    .card-header-center {
+        background-color: rgba(255, 255, 255, 0.08);
+        text-align: center;
+        font-weight: bold;
+        color: white !important;
+        font-size: 16px;
+        padding: 8px 5px;
+        border-bottom: 1px solid #555;
+        text-transform: uppercase;
     }
-    .p-col-left { flex: 2; text-align: left; border-right: 1px solid #555; padding-right: 10px; }
-    .p-col-center { flex: 2; text-align: center; padding: 0 10px; }
-    .p-col-right { flex: 1; text-align: right; padding-left: 10px; border-left: 1px solid #555; }
-    .p-name { font-weight: bold; font-size: 18px; color: white; margin-bottom: 5px; }
-    .p-meta { font-size: 13px; color: #ccc; }
-    .p-medals { font-size: 16px; display: flex; justify-content: center; gap: 10px; margin-top: 5px;}
-    .p-total { font-size: 28px; color: #FFD700; font-weight: bold; line-height: 1; }
-    .p-cat { font-size: 18px; color: #4CAF50; font-weight: bold; margin-top: 5px; }
 
-    /* FICHA HEADER */
+    /* CUERPO GRID (IZQUIERDA / DERECHA) */
+    .card-body-grid {
+        display: grid;
+        grid-template-columns: 1fr auto; /* Izq ocupa todo, Der se ajusta al contenido */
+        gap: 15px;
+        padding: 12px 15px;
+        align-items: center;
+    }
+
+    /* TEXTOS IZQUIERDA */
+    .card-left-text {
+        font-size: 14px;
+        color: #e0e0e0 !important;
+        line-height: 1.4;
+    }
+    .card-date { font-weight: bold; color: #fff !important; }
+    .card-sub { font-size: 13px; color: #aaa !important; margin-top: 2px; }
+
+    /* TEXTOS DERECHA (TIEMPO) */
+    .card-right-box {
+        text-align: right;
+        min-width: 80px;
+    }
+    .card-time {
+        font-family: monospace, sans-serif;
+        font-weight: bold;
+        font-size: 20px;
+        color: #4CAF50 !important;
+        display: block;
+    }
+    .card-pos {
+        font-size: 14px;
+        color: #ccc !important;
+        margin-top: 4px;
+        display: block;
+    }
+
+    /* ESTILOS FICHA */
     .ficha-header {
         background: linear-gradient(135deg, #8B0000 0%, #3E0000 100%);
         padding: 20px; border-radius: 10px; color: white; margin-bottom: 20px;
-        border: 1px solid #550000; box-shadow: 0 4px 6px rgba(0,0,0,0.4);
+        border: 1px solid #550000;
     }
-    .ficha-name { font-size: 24px; font-weight: bold; border-bottom: 1px solid rgba(255,255,255,0.3); padding-bottom: 10px; margin-bottom: 10px; }
     .ficha-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 14px; }
     .ficha-medals { background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; text-align: center; margin-top: 15px; font-size: 18px; }
-
-    /* ESTILOS CARD CENTRADA (ROBUSTOS) */
-    .mobile-card { 
-        background-color: #262730; 
-        border: 1px solid #444; 
-        border-radius: 10px; 
-        margin-bottom: 12px; 
-        box-shadow: 0 2px 5px rgba(0,0,0,0.3); 
-        overflow: hidden; /* Evita que el contenido se salga */
-        width: 100%;
-    }
     
-    .card-header-center {
-        background-color: rgba(255, 255, 255, 0.05);
-        text-align: center;
-        font-weight: bold;
-        color: white;
-        font-size: 16px;
-        padding: 8px 0;
-        border-bottom: 1px solid #444;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        width: 100%;
+    /* ESTILOS PADRON */
+    .padron-card {
+        background-color: #262730; border: 1px solid #444; border-radius: 12px;
+        padding: 15px; margin-bottom: 5px;
+        display: flex; align-items: center; justify-content: space-between;
     }
-
-    .card-body {
-        padding: 12px 15px;
-        display: flex;
-        flex-direction: row;
-        justify-content: space-between;
-        align-items: center;
-        gap: 10px;
-    }
-
-    .card-info-left {
-        flex: 1; /* Ocupa el espacio disponible */
-        min-width: 0; /* Permite que el texto se corte si es muy largo */
-    }
-
-    .card-date {
-        font-size: 14px; 
-        color: #ddd; 
-        font-weight: bold; 
-        margin-bottom: 4px;
-    }
-    
-    .card-sede {
-        font-size: 14px; 
-        color: #aaa;
-        white-space: nowrap; 
-        overflow: hidden; 
-        text-overflow: ellipsis; /* Puntos suspensivos si es muy largo */
-    }
-
-    .card-time-box {
-        text-align: right;
-        min-width: 100px; /* Asegura ancho fijo para el tiempo */
-    }
-    
-    .card-time-val {
-        font-family: monospace; 
-        font-weight: bold; 
-        color: #4CAF50; 
-        font-size: 20px;
-        line-height: 1;
-    }
-    
-    .card-badge {
-        font-size: 14px;
-        color: #ddd;
-        margin-top: 4px;
-    }
-
-    .swimmer-grid { 
-        display: grid; 
-        grid-template-columns: 1fr 1fr; 
-        gap: 8px; 
-        font-size: 13px; 
-        color: #eee; 
-        padding: 10px 15px; 
-        border-top: 1px solid #444;
-        background: rgba(0,0,0,0.1);
-    }
-    .swimmer-item { background: rgba(255,255,255,0.05); padding: 4px 8px; border-radius: 4px; }
-    
-    /* PB Styles */
-    .pb-style-header { color: #e53935; font-weight: bold; font-size: 16px; margin-top: 15px; margin-bottom: 5px; text-transform: uppercase; border-bottom: 1px solid #444; }
-    .pb-row { background-color: #2b2c35; padding: 10px 15px; margin-bottom: 5px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid #B71C1C; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -239,6 +192,10 @@ else: df_full['sede'] = '-'
 
 if 'medida' not in df_full.columns: df_full['medida'] = '-'
 
+# Llenar nulos para evitar errores visuales
+df_full['sede'] = df_full['sede'].fillna('-')
+df_full['medida'] = df_full['medida'].fillna('-')
+
 # Lógica Medallero
 df_t_c = data['tiempos'].copy(); df_r_c = data['relevos'].copy()
 df_t_c['posicion'] = pd.to_numeric(df_t_c['posicion'], errors='coerce').fillna(0).astype(int)
@@ -307,12 +264,12 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
         pbs = mis_t.loc[mis_t.groupby(['Estilo', 'Distancia'])['segundos'].idxmin()].sort_values(['Estilo', 'segundos'])
         
         for estilo in pbs['Estilo'].unique():
-            st.markdown(f"<div class='pb-style-header'>{estilo}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='color:#e53935; font-weight:bold; font-size:16px; margin:15px 0 5px; text-transform:uppercase; border-bottom:1px solid #444;'>{estilo}</div>", unsafe_allow_html=True)
             for _, r in pbs[pbs['Estilo'] == estilo].iterrows():
                 st.markdown(f"""
-                <div class="pb-row">
-                    <span class="pb-dist">{r['Distancia']}</span>
-                    <span class="pb-time">{r['tiempo']}</span>
+                <div style='background-color:#2b2c35; padding:10px 15px; margin-bottom:5px; border-radius:6px; display:flex; justify-content:space-between; align-items:center; border-left:4px solid #B71C1C;'>
+                    <span style='font-size:15px; color:#eee;'>{r['Distancia']}</span>
+                    <span style='font-size:18px; font-weight:bold; font-family:monospace; color:#fff;'>{r['tiempo']}</span>
                 </div>""", unsafe_allow_html=True)
         st.divider()
 
@@ -332,25 +289,19 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
             
             df_graph = mis_t[(mis_t['Estilo'] == g_est) & (mis_t['Distancia'] == g_dist)].sort_values('fecha')
             
-            # Promedio
             promedio_seg = df_graph['segundos'].mean()
             tiempo_promedio = seg_a_tiempo(promedio_seg)
             st.markdown(f"<div style='font-size:16px; margin-bottom:10px;'>⏱️ Tiempo Promedio Histórico: <b>{tiempo_promedio}</b></div>", unsafe_allow_html=True)
 
-            # Tooltip
             df_graph['fecha_dt'] = pd.to_datetime(df_graph['fecha'])
             if anio_nacimiento_nadador > 0:
                 df_graph['cat_hist'] = df_graph['fecha_dt'].apply(lambda x: asignar_cat(x.year - anio_nacimiento_nadador))
             else: df_graph['cat_hist'] = "-"
 
-            # Plot
             df_graph['TimeObj'] = pd.to_datetime('2024-01-01') + pd.to_timedelta(df_graph['segundos'], unit='s')
             
             fig = px.line(df_graph, x='fecha', y='TimeObj', markers=True, template="plotly_dark",
-                          hover_data={
-                              'fecha': False, 'TimeObj': False,
-                              'sede': True, 'Distancia': True, 'cat_hist': True, 'tiempo': True
-                          })
+                          hover_data={'fecha': False, 'TimeObj': False, 'sede': True, 'Distancia': True, 'cat_hist': True, 'tiempo': True})
             
             fig.update_traces(line_color='#E53935', name="Registro",
                               hovertemplate="<b>%{customdata[3]}</b><br>📅 %{x|%d/%m/%Y}<br>📍 %{customdata[0]}<br>🏷️ %{customdata[2]}")
@@ -362,7 +313,7 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
             st.info("Necesitas al menos 2 carreras en la misma prueba para ver la evolución.")
         st.divider()
 
-    # --- HISTORIAL COMPLETO (NUEVA CARD ROBUSTA) ---
+    # --- HISTORIAL COMPLETO (CARD GRID) ---
     st.subheader("📜 Historial Completo")
     with st.expander("Filtrar Historial"):
         h1, h2 = st.columns(2)
@@ -384,8 +335,8 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
             else: medal_str = "-"
         except: medal_str = "-"
 
-        sede_txt = r.get('sede', '-')
-        medida_txt = r.get('medida', '-')
+        sede_txt = str(r['sede'])
+        medida_txt = str(r['medida'])
         
         try:
             anio_carrera = pd.to_datetime(r['fecha']).year
@@ -393,29 +344,27 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
             cat_torneo = asignar_cat(edad_en_carrera)
         except: cat_torneo = "-"
 
-        # CARD HTML ESTRUCTURADA
+        # CARD HTML GRID - ESTRUCTURA SOLIDA
         st.markdown(f"""
         <div class="mobile-card">
             <div class="card-header-center">{r['Estilo']} {r['Distancia']}</div>
             
-            <div class="card-body">
-                
-                <div class="card-info-left">
+            <div class="card-body-grid">
+                <div class="card-left-text">
                     <div class="card-date">📅 {r['fecha']}</div>
-                    <div class="card-sede">📍 {sede_txt} ({medida_txt})</div>
+                    <div style="margin-top:4px;">📍 {sede_txt} ({medida_txt})</div>
                 </div>
                 
-                <div class="card-time-box">
-                    <div class="card-time-val">{r['tiempo']}</div>
-                    <div class="card-badge">
-                        {medal_str} <span style="color:#999; margin-left:3px;">({cat_torneo})</span>
-                    </div>
+                <div class="card-right-box">
+                    <span class="card-time">{r['tiempo']}</span>
+                    <span class="card-pos">
+                        {medal_str} <span style="font-size:12px; color:#888;">({cat_torneo})</span>
+                    </span>
                 </div>
-                
             </div>
         </div>""", unsafe_allow_html=True)
 
-    # 5. MIS RELEVOS (NUEVA CARD ROBUSTA)
+    # 5. MIS RELEVOS
     st.subheader("🏊‍♂️ Mis Relevos")
     mr_base = data['relevos'].copy()
     cond_rel = (mr_base['nadador_1'] == target_id) | (mr_base['nadador_2'] == target_id) | (mr_base['nadador_3'] == target_id) | (mr_base['nadador_4'] == target_id)
@@ -433,7 +382,10 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
         
         if 'club' in mis_relevos.columns: mis_relevos = mis_relevos.rename(columns={'club': 'sede'})
         else: mis_relevos['sede'] = '-'
-        if 'medida' not in mis_relevos.columns: mis_relevos['medida'] = '-'
+        
+        # Limpieza Nulos
+        mis_relevos['sede'] = mis_relevos['sede'].fillna('-')
+        mis_relevos['medida'] = mis_relevos['medida'].fillna('-')
 
         mis_relevos = mis_relevos.sort_values('fecha', ascending=False)
         
@@ -445,8 +397,7 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
                 nom = dict_id_nombre.get(nid, "??").split(',')[0]
                 t = str(r[f'tiempo_{k}']).strip()
                 if t and t not in ["00.00", "0", "None", "nan"]: nom += f" <b>({t})</b>"
-                border_style = "border: 1px solid #E91E63;" if nid == target_id else ""
-                html_grid += f"<div class='swimmer-item' style='{border_style}'>{k}. {nom}</div>"
+                html_grid += f"<div style='background:rgba(255,255,255,0.05); padding:4px 8px; border-radius:4px;'>{k}. {nom}</div>"
 
             try: p_rel = int(r['posicion'])
             except: p_rel = 0
@@ -456,25 +407,26 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
             elif p_rel > 0: pos_icon = f"Pos: {p_rel}"
             else: pos_icon = ""
 
-            sede_r = r.get('sede', '-')
-
             st.markdown(f"""
-            <div class="mobile-card" style="border-left: 4px solid #E91E63;">
+            <div class="mobile-card" style="border-left: 4px solid #E91E63 !important;">
                 <div class="card-header-center">{r['Estilo']} {r['Distancia']}</div>
                 
-                <div class="card-body">
-                    <div class="card-info-left">
+                <div class="card-body-grid">
+                    <div class="card-left-text">
                         <div class="card-date">📅 {r['fecha']}</div>
-                        <div class="card-sede">📍 {sede_r} ({r['medida']})</div>
-                        <div style="font-size:13px; color:#888; margin-top:3px;">{grupo_txt} ({r['codgenero']})</div>
+                        <div style="margin-top:4px;">📍 {r['sede']} ({r['medida']})</div>
+                        <div class="card-sub">{grupo_txt} ({r['codgenero']})</div>
                     </div>
-                    <div class="card-time-box">
-                        <div class="card-time-val">{r['tiempo_final']}</div>
-                        <div class="card-badge">{pos_icon}</div>
+                    
+                    <div class="card-right-box">
+                        <span class="card-time">{r['tiempo_final']}</span>
+                        <span class="card-pos">{pos_icon}</span>
                     </div>
                 </div>
                 
-                <div class="swimmer-grid">{html_grid}</div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; font-size:13px; color:#eee; padding:10px 15px; border-top:1px solid #444; background:rgba(0,0,0,0.1);">
+                    {html_grid}
+                </div>
             </div>""", unsafe_allow_html=True)
     else: st.info("Sin relevos.")
 
@@ -522,7 +474,9 @@ def render_tab_relevos_general():
         
         if 'club' in mr_all.columns: mr_all = mr_all.rename(columns={'club': 'sede'})
         else: mr_all['sede'] = '-'
-        if 'medida' not in mr_all.columns: mr_all['medida'] = '-'
+        
+        mr_all['sede'] = mr_all['sede'].fillna('-')
+        mr_all['medida'] = mr_all['medida'].fillna('-')
 
         c1, c2 = st.columns(2)
         fg_est = c1.selectbox("Estilo", ["Todos"] + sorted(mr_all['Estilo'].unique().tolist()), key="fg_est")
@@ -539,7 +493,7 @@ def render_tab_relevos_general():
                 nom = dict_id_nombre.get(nid, "??").split(',')[0]
                 t = str(r[f'tiempo_{k}']).strip()
                 if t and t not in ["00.00", "0", "None", "nan"]: nom += f" <b>({t})</b>"
-                html_grid += f"<div class='swimmer-item'>{k}. {nom}</div>"
+                html_grid += f"<div style='background:rgba(255,255,255,0.05); padding:4px 8px; border-radius:4px;'>{k}. {nom}</div>"
 
             try: p_rel = int(r['posicion'])
             except: p_rel = 0
@@ -549,25 +503,26 @@ def render_tab_relevos_general():
             elif p_rel > 0: pos_icon = f"Pos: {p_rel}"
             else: pos_icon = ""
 
-            sede_r = r.get('sede', '-')
-
-            # CARD RELEVOS GENERAL CENTRADA
             st.markdown(f"""
-            <div class="mobile-card" style="border-left: 4px solid #9C27B0;">
+            <div class="mobile-card" style="border-left: 4px solid #9C27B0 !important;">
                 <div class="card-header-center">{r['Estilo']} {r['Distancia']}</div>
                 
-                <div class="card-body">
-                    <div class="card-info-left">
+                <div class="card-body-grid">
+                    <div class="card-left-text">
                         <div class="card-date">📅 {r['fecha']}</div>
-                        <div class="card-sede">📍 {sede_r} ({r['medida']})</div>
-                        <div style="font-size:13px; color:#888; margin-top:3px;">{grupo_txt} ({r['codgenero']})</div>
+                        <div style="margin-top:4px;">📍 {r['sede']} ({r['medida']})</div>
+                        <div class="card-sub">{grupo_txt} ({r['codgenero']})</div>
                     </div>
-                    <div class="card-time-box">
-                        <div class="card-time-val">{r['tiempo_final']}</div>
-                        <div class="card-badge">{pos_icon}</div>
+                    
+                    <div class="card-right-box">
+                        <span class="card-time">{r['tiempo_final']}</span>
+                        <span class="card-pos">{pos_icon}</span>
                     </div>
                 </div>
-                <div class="swimmer-grid">{html_grid}</div>
+                
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; font-size:13px; color:#eee; padding:10px 15px; border-top:1px solid #444; background:rgba(0,0,0,0.1);">
+                    {html_grid}
+                </div>
             </div>""", unsafe_allow_html=True)
 
 # ==============================================================================
