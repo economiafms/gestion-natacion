@@ -4,6 +4,7 @@ import pandas as pd
 from datetime import datetime, date
 import plotly.express as px
 import time
+import numpy as np
 
 # --- 1. CONFIGURACIÓN ---
 st.set_page_config(page_title="Entrenamientos", layout="centered")
@@ -16,13 +17,14 @@ rol = st.session_state.role
 mi_id = st.session_state.user_id 
 mi_nombre = st.session_state.user_name
 
-# Control de estado para limpieza de formulario
+# Control de estado
 if "form_reset_id" not in st.session_state:
     st.session_state.form_reset_id = 0
 
 def reset_carga():
     st.session_state.form_reset_id += 1
 
+# Helpers de Tiempo
 def a_segundos(t_str):
     try:
         if not t_str or str(t_str).lower() in ['nan', 'none', '', '00:00.00']: return None
@@ -31,12 +33,20 @@ def a_segundos(t_str):
         return int(m) * 60 + int(s) + int(c) / 100
     except: return None
 
+def fmt_mm_ss(seconds):
+    """Convierte segundos (float) a string MM:SS.CC para ejes"""
+    if seconds is None or np.isnan(seconds): return ""
+    m = int(seconds // 60)
+    s = int(seconds % 60)
+    c = int((seconds - int(seconds)) * 100)
+    return f"{m:02d}:{s:02d}.{c:02d}"
+
 st.title("⏱️ Centro de Entrenamiento")
 
 # --- CSS PERSONALIZADO ---
 st.markdown("""
 <style>
-    /* Estilo de Tarjeta (Historial) */
+    /* Estilo de Tarjeta */
     .test-card { 
         background-color: #262730; 
         border: 1px solid #444; 
@@ -81,7 +91,7 @@ st.markdown("""
     .split-label { font-size: 10px; color: #aaa; display: block; }
     .split-val { font-family: monospace; font-size: 14px; color: #eee; }
     
-    /* Caja de Configuración Amigable */
+    /* Configuración */
     .config-box { 
         background-color: #1e1e1e; 
         padding: 15px; 
@@ -128,7 +138,7 @@ tab_ver, tab_cargar = st.tabs(["📂 Historial", "📝 Cargar Test"])
 with tab_cargar:
     with st.container(key=f"carga_container_{st.session_state.form_reset_id}"):
         
-        # --- PASO 1: DEFINIR PRUEBA ---
+        # --- PASO 1 ---
         st.subheader("1. Definir Prueba")
         c1, c2 = st.columns([1, 2])
         f_val = c1.date_input("Fecha", date.today(), format="DD/MM/YYYY")
@@ -147,7 +157,7 @@ with tab_cargar:
             id_dt = db['distancias'][db['distancias']['descripcion'] == dist_t_val].iloc[0]['coddistancia']
             fecha_str = f_val.strftime('%Y-%m-%d')
             
-            # Validación de duplicados (Paso 1)
+            # Validación duplicados
             df_ent = db['entrenamientos']
             duplicado = False
             if not df_ent.empty:
@@ -163,11 +173,8 @@ with tab_cargar:
                 st.error(f"⛔ Ya existe un registro de {est_val} {dist_t_val} para esta fecha.")
             else:
                 mostrar_paso_2 = True
-                
-                # --- CONFIGURACIÓN AMIGABLE ---
                 m_tot = int(dist_t_val.split(" ")[0])
                 m_par = 100 if m_tot == 400 else (50 if m_tot == 200 else (25 if m_tot == 100 else 0))
-                
                 msg_par = f"Se habilitarán tomas de parciales cada <b>{m_par} mts</b>." if m_par > 0 else "Distancia corta o relevo: Sin toma de parciales."
                 
                 st.markdown(f"""
@@ -182,7 +189,7 @@ with tab_cargar:
                 if m_par > 0:
                     quiere_p = st.toggle("¿Cargar tiempos parciales?", value=True)
 
-        # --- PASO 2: REGISTRAR TIEMPOS ---
+        # --- PASO 2 ---
         if mostrar_paso_2:
             st.divider()
             st.subheader("2. Registrar Tiempos")
@@ -252,7 +259,6 @@ with tab_cargar:
                                     }])
                                     
                                     conn.update(worksheet="Entrenamientos", data=pd.concat([db['entrenamientos'], row], ignore_index=True))
-                                    
                                     st.success("✅ Guardado con éxito.")
                                     time.sleep(1)
                                     reset_carga()
@@ -262,7 +268,7 @@ with tab_cargar:
                                     st.error(f"Error técnico: {e}")
 
 # ==============================================================================
-#  HISTORIAL Y ANÁLISIS
+#  HISTORIAL
 # ==============================================================================
 with tab_ver:
     target_id = mi_id if rol == "N" else None
@@ -276,53 +282,63 @@ with tab_ver:
         if not df_h.empty:
             df_h = df_h.merge(db['estilos'], on='codestilo', how='left').merge(db['distancias'], left_on='coddistancia', right_on='coddistancia', how='left')
             
-            # --- LÓGICA DE FILTROS CASCADA (INTERDEPENDIENTES) ---
+            # --- FILTROS CASCADA ---
             st.markdown("<div class='section-title'>🔍 Filtros</div>", unsafe_allow_html=True)
             
-            # 1. Recuperar valores actuales de los filtros (si existen) para calcular opciones
             curr_est = st.session_state.get("f_estilo", "Todos")
             curr_dist = st.session_state.get("f_distancia", "Todos")
             
-            # 2. Calcular opciones válidas para Estilo (basado en la Distancia seleccionada)
             if curr_dist != "Todos":
                 valid_styles = sorted(df_h[df_h['descripcion_y'] == curr_dist]['descripcion_x'].unique().tolist())
             else:
                 valid_styles = sorted(df_h['descripcion_x'].unique().tolist())
                 
-            # 3. Calcular opciones válidas para Distancia (basado en el Estilo seleccionado)
             if curr_est != "Todos":
                 valid_dists = sorted(df_h[df_h['descripcion_x'] == curr_est]['descripcion_y'].unique().tolist())
             else:
                 valid_dists = sorted(df_h['descripcion_y'].unique().tolist())
             
-            # 4. Renderizar Selectboxes
             c_f1, c_f2 = st.columns(2)
             f_est = c_f1.selectbox("Estilo", ["Todos"] + valid_styles, key="f_estilo")
             f_dist = c_f2.selectbox("Distancia", ["Todos"] + valid_dists, key="f_distancia")
 
-            # 5. Aplicar Filtros al Dataframe
             df_filt = df_h.copy()
             if f_est != "Todos": df_filt = df_filt[df_filt['descripcion_x'] == f_est]
             if f_dist != "Todos": df_filt = df_filt[df_filt['descripcion_y'] == f_dist]
 
-            # Gráfico Progresión
+            # --- GRÁFICO EVOLUCIÓN (FORMATEADO) ---
             if f_est != "Todos" and f_dist != "Todos" and len(df_filt) >= 2:
                 st.markdown("<div class='section-title'>📈 Evolución</div>", unsafe_allow_html=True)
                 df_filt['seg'] = df_filt['tiempo_final'].apply(a_segundos)
                 df_filt['fecha_dt'] = pd.to_datetime(df_filt['fecha'])
+                
+                # Crear ticks personalizados para eje Y
+                min_s, max_s = df_filt['seg'].min(), df_filt['seg'].max()
+                tick_vals = np.linspace(min_s, max_s, 5) if max_s > min_s else [min_s]
+                tick_text = [fmt_mm_ss(v) for v in tick_vals]
+
                 fig = px.line(df_filt.sort_values('fecha_dt'), x='fecha_dt', y='seg', markers=True, 
-                              color_discrete_sequence=['#E30613'])
-                fig.update_layout(height=250, margin=dict(l=0, r=0, t=10, b=0), template="plotly_dark", 
-                                  yaxis_title="Segundos", xaxis_title="")
+                              color_discrete_sequence=['#E30613'], custom_data=['tiempo_final'])
+                
+                # Tooltip: Fecha y Tiempo
+                fig.update_traces(hovertemplate='📅 %{x|%d/%m/%Y}<br>⏱️ %{customdata[0]}<extra></extra>')
+                
+                # Eje Y: Formato MM:SS.MS
+                fig.update_layout(
+                    height=250, 
+                    margin=dict(l=0, r=0, t=10, b=0), 
+                    template="plotly_dark", 
+                    yaxis=dict(title="Tiempo", tickmode='array', tickvals=tick_vals, ticktext=tick_text),
+                    xaxis_title=""
+                )
                 st.plotly_chart(fig, use_container_width=True)
 
-            # Listado
+            # --- LISTADO ---
             st.markdown("<div class='section-title'>📋 Registros</div>", unsafe_allow_html=True)
             for _, r in df_filt.sort_values(['fecha', 'id_entrenamiento'], ascending=False).iterrows():
                 
                 f_fmt = datetime.strptime(str(r['fecha']), '%Y-%m-%d').strftime('%d/%m/%Y')
                 
-                # Parciales
                 ps = [r.get(f'parcial_{i}') for i in range(1, 5)]
                 p_validos = [p for p in ps if p and str(p).lower() not in ['nan', 'none', '', '00:00.00']]
                 
@@ -331,7 +347,6 @@ with tab_ver:
                     grid_items = "".join([f"<div class='split-item'><span class='split-label'>P{i+1}</span><span class='split-val'>{p}</span></div>" for i, p in enumerate(p_validos)])
                     splits_html_block = f"""<div class='splits-container'><div class='splits-grid'>{grid_items}</div></div>"""
                 
-                # Tarjeta (Sin observaciones)
                 card_html = f"""
                 <div class="test-card">
                     <div class="test-header">
@@ -348,10 +363,34 @@ with tab_ver:
 
                 if p_validos and st.checkbox(f"Analizar tramos", key=f"chk_{r['id_entrenamiento']}"):
                     p_seg = [a_segundos(p) for p in p_validos]
-                    fig_bar = px.bar(x=[f"P{i+1}" for i in range(len(p_seg))], y=p_seg, 
-                                     labels={'x': 'Parcial', 'y': 'Segundos'},
+                    p_labels = [fmt_mm_ss(s) for s in p_seg]
+                    
+                    df_bar = pd.DataFrame({
+                        'Tramo': [f"P{i+1}" for i in range(len(p_seg))],
+                        'Segundos': p_seg,
+                        'Etiqueta': p_labels
+                    })
+                    
+                    # Gráfico de Barras con etiquetas
+                    fig_bar = px.bar(df_bar, x='Tramo', y='Segundos', text='Etiqueta',
                                      color_discrete_sequence=['#E30613'])
-                    fig_bar.update_layout(height=200, template="plotly_dark", showlegend=False, margin=dict(l=0, r=0, t=10, b=0))
+                    
+                    # Tooltip solo Tiempo Parcial
+                    fig_bar.update_traces(hovertemplate='⏱️ %{text}<extra></extra>', textposition='auto')
+                    
+                    # Eje Y formateado
+                    min_b, max_b = min(p_seg), max(p_seg)
+                    tick_vals_b = np.linspace(min_b, max_b, 5) if max_b > min_b else [min_b]
+                    tick_text_b = [fmt_mm_ss(v) for v in tick_vals_b]
+
+                    fig_bar.update_layout(
+                        height=200, 
+                        template="plotly_dark", 
+                        showlegend=False, 
+                        margin=dict(l=0, r=0, t=10, b=0),
+                        yaxis=dict(title="Tiempo", tickmode='array', tickvals=tick_vals_b, ticktext=tick_text_b),
+                        xaxis_title="Parcial"
+                    )
                     st.plotly_chart(fig_bar, use_container_width=True)
         else:
             st.info("No hay registros.")
