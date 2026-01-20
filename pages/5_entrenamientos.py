@@ -48,9 +48,6 @@ st.markdown("""
     .split-label { font-size: 10px; color: #aaa; display: block; }
     .split-val { font-family: monospace; font-size: 14px; color: #eee; }
     
-    /* Observaciones */
-    .obs-box { margin-top: 10px; font-size: 13px; color: #ddd; font-style: italic; background: rgba(227, 6, 19, 0.1); padding: 10px; border-radius: 4px; border-left: 3px solid #E30613; }
-    
     .section-title { color: #E30613; font-weight: bold; margin-top: 20px; margin-bottom: 10px; border-bottom: 1px solid #333; font-size: 14px; text-transform: uppercase; }
 </style>
 """, unsafe_allow_html=True)
@@ -191,7 +188,7 @@ with tab_ver:
             st.markdown("<div class='section-title'>📋 Registros</div>", unsafe_allow_html=True)
             for _, r in df_filt.sort_values(['fecha', 'id_entrenamiento'], ascending=False).iterrows():
                 
-                # --- LÓGICA DE VISUALIZACIÓN CONDICIONAL ---
+                f_fmt = datetime.strptime(str(r['fecha']), '%Y-%m-%d').strftime('%d/%m/%Y')
                 
                 # 1. Parciales
                 ps = [r.get(f'parcial_{i}') for i in range(1, 5)]
@@ -202,15 +199,7 @@ with tab_ver:
                     grid_items = "".join([f"<div class='split-item'><span class='split-label'>P{i+1}</span><span class='split-val'>{p}</span></div>" for i, p in enumerate(p_validos)])
                     splits_html_block = f"""<div class='splits-container'><div class='splits-grid'>{grid_items}</div></div>"""
                 
-                # 2. Observaciones
-                obs_raw = str(r.get('observaciones', '')).strip()
-                obs_html_block = ""
-                if obs_raw and obs_raw.lower() not in ['nan', 'none', '']:
-                    obs_html_block = f"""<div class='obs-box'>📝 {obs_raw}</div>"""
-                
-                f_fmt = datetime.strptime(str(r['fecha']), '%Y-%m-%d').strftime('%d/%m/%Y')
-                
-                # 3. Renderizado
+                # Renderizado SIN Observaciones
                 card_html = f"""
                 <div class="test-card">
                     <div class="test-header">
@@ -220,7 +209,6 @@ with tab_ver:
                         </div>
                         <div class="final-time">{r['tiempo_final']}</div>
                     </div>
-                    {obs_html_block}
                     {splits_html_block}
                 </div>
                 """
@@ -229,7 +217,7 @@ with tab_ver:
                 if p_validos and st.checkbox(f"Analizar tramos", key=f"chk_{r['id_entrenamiento']}"):
                     p_seg = [a_segundos(p) for p in p_validos]
                     fig_bar = px.bar(x=[f"P{i+1}" for i in range(len(p_seg))], y=p_seg, 
-                                     labels={'x': 'Parcial', 'y': 'Segundos'},
+                                     labels={'x': 'Parcial', 'y': 'Tiempo (s)'},
                                      color_discrete_sequence=['#E30613'])
                     fig_bar.update_layout(height=200, template="plotly_dark", showlegend=False, margin=dict(l=0, r=0, t=10, b=0))
                     st.plotly_chart(fig_bar, use_container_width=True)
