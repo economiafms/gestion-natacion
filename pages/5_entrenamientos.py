@@ -18,15 +18,15 @@ mi_nombre = st.session_state.user_name
 if "form_key" not in st.session_state:
     st.session_state.form_key = 0
 
-def reset_form():
+def reset_todo():
     st.session_state.form_key += 1
 
 st.title("⏱️ Centro de Entrenamiento")
 
-# --- CSS PERSONALIZADO ---
+# --- CSS ---
 st.markdown("""
 <style>
-    .test-card { background-color: #262730; border: 1px solid #444; border-radius: 10px; padding: 15px; margin-bottom: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.3); }
+    .test-card { background-color: #262730; border: 1px solid #444; border-radius: 10px; padding: 15px; margin-bottom: 12px; }
     .test-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #555; padding-bottom: 8px; margin-bottom: 8px; }
     .test-style { font-size: 18px; font-weight: bold; color: white; text-transform: uppercase; }
     .test-dist { font-size: 14px; color: #4CAF50; font-weight: bold; }
@@ -37,7 +37,7 @@ st.markdown("""
     .split-val { font-family: monospace; font-size: 14px; color: #eee; }
     .time-sep { text-align: center; font-size: 18px; font-weight: bold; margin-top: 32px; color: #666; }
     .config-box { background: #1e1e1e; padding: 15px; border-radius: 10px; border-left: 5px solid #E30613; margin-bottom: 20px; }
-    .section-title { color: #E30613; font-weight: bold; margin-top: 15px; margin-bottom: 5px; border-bottom: 1px solid #333; }
+    .section-title { color: #E30613; font-weight: bold; margin-top: 15px; margin-bottom: 5px; border-bottom: 1px solid #333; font-size: 14px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -66,119 +66,123 @@ mi_nom_comp = f"{nad_row.iloc[0]['apellido'].upper()}, {nad_row.iloc[0]['nombre'
 lista_nombres = sorted((df_nad['apellido'].astype(str).str.upper() + ", " + df_nad['nombre'].astype(str)).unique().tolist())
 list_dist_total = [d for d in data['distancias']['descripcion'].unique() if "25" not in d and "4x" not in d.lower()]
 
-def tiempo_str(m, s, c): return f"{int(m):02d}:{int(s):02d}.{int(c):02d}"
+def tiempo_a_segundos(m, s, c):
+    return (int(m) * 60) + int(s) + (int(c) / 100)
+
+def tiempo_str(m, s, c): 
+    return f"{int(m):02d}:{int(s):02d}.{int(c):02d}"
 
 tab_ver, tab_cargar = st.tabs(["📂 Historial", "📝 Cargar Test"])
 
 # ==============================================================================
-#  SECCIÓN DE CARGA
+#  CARGA DE TEST
 # ==============================================================================
 with tab_cargar:
-    with st.container(key=f"carga_cont_{st.session_state.form_key}"):
-        st.subheader("1️⃣ Definir Prueba")
+    # Contenedor dinámico para reseteo completo
+    with st.container(key=f"container_test_{st.session_state.form_key}"):
+        st.subheader("1. Definir Prueba")
         
-        col1, col2 = st.columns([1, 2])
-        f_val = col1.date_input("Fecha", date.today(), format="DD/MM/YYYY")
+        c1, c2 = st.columns([1, 2])
+        f_val = c1.date_input("Fecha", date.today(), format="DD/MM/YYYY")
         
         if rol == "N":
-            n_in = col2.selectbox("Nadador", [mi_nom_comp], disabled=True)
+            n_in = c2.selectbox("Nadador", [mi_nom_comp], disabled=True)
             id_nad_final = mi_id
         else:
-            n_in = col2.selectbox("Nadador", lista_nombres, index=None, placeholder="Seleccionar...")
+            n_in = c2.selectbox("Nadador", lista_nombres, index=None, placeholder="Seleccionar...")
             id_nad_final = df_nad[(df_nad['apellido'].str.upper() + ", " + df_nad['nombre']) == n_in].iloc[0]['codnadador'] if n_in else None
 
-        col3, col4 = st.columns(2)
-        est_val = col3.selectbox("Estilo", data['estilos']['descripcion'].unique(), index=None)
-        dist_t_val = col4.selectbox("Distancia TOTAL", list_dist_total, index=None)
+        c3, c4 = st.columns(2)
+        est_val = c3.selectbox("Estilo", data['estilos']['descripcion'].unique(), index=None)
+        dist_t_val = c4.selectbox("Distancia TOTAL", list_dist_total, index=None)
 
         if n_in and est_val and dist_t_val:
             id_est = data['estilos'][data['estilos']['descripcion'] == est_val].iloc[0]['codestilo']
             id_dt = data['distancias'][data['distancias']['descripcion'] == dist_t_val].iloc[0]['coddistancia']
             fecha_s = f_val.strftime('%Y-%m-%d')
             
-            # --- VALIDACIÓN ROBUSTA (Corrección del error "Ya existe") ---
+            # Validación duplicados
             df_ent = data['entrenamientos'].copy()
-            existe_db = False
+            existe = False
             if not df_ent.empty:
-                # Forzar conversión a str para evitar errores de comparación
-                existe_db = not df_ent[
-                    (df_ent['codnadador'].astype(str) == str(id_nad_final)) & 
-                    (df_ent['fecha'].astype(str) == str(fecha_s)) & 
-                    (df_ent['codestilo'].astype(str) == str(id_est)) &
-                    (df_ent['coddistancia'].astype(str) == str(id_dt))
-                ].empty
+                existe = not df_ent[(df_ent['codnadador'].astype(str) == str(id_nad_final)) & 
+                                    (df_ent['fecha'].astype(str) == str(fecha_s)) & 
+                                    (df_ent['codestilo'].astype(str) == str(id_est)) &
+                                    (df_ent['coddistancia'].astype(str) == str(id_dt))].empty
             
-            # Validar también contra la cola de carga actual
-            existe_cola = any(x for x in st.session_state.cola_tests if 
-                              str(x['codnadador']) == str(id_nad_final) and 
-                              str(x['fecha']) == str(fecha_s) and 
-                              str(x['codestilo']) == str(id_est) and
-                              str(x['coddistancia']) == str(id_dt))
-            
-            if existe_db or existe_cola:
-                st.error("🚫 Ya existe un registro para este nadador el mismo día con este estilo y distancia.")
+            if existe:
+                st.error("Ya existe este registro en la base de datos.")
             else:
+                # Regla de parciales
                 m_tot = int(dist_t_val.split(" ")[0])
                 m_par = 100 if m_tot == 400 else (50 if m_tot == 200 else (25 if m_tot == 100 else 0))
                 
+                quiere_parciales = False
                 if m_par > 0:
                     st.markdown(f"<div class='config-box'><b>Configuración:</b> {dist_t_val} {est_val}.<br>Parciales cada {m_par} mts.</div>", unsafe_allow_html=True)
-                    quiere_parciales = st.toggle("¿Deseas cargar parciales?", value=True)
+                    quiere_parciales = st.toggle("¿Cargar tiempos parciales?", value=True)
                 else:
                     st.markdown(f"<div class='config-box'><b>Configuración:</b> {dist_t_val} {est_val}.<br>Regla automática: Sin parciales.</div>", unsafe_allow_html=True)
-                    quiere_parciales = False
 
                 st.divider()
-                st.subheader("2️⃣ Registrar Tiempos")
-                with st.form("f_registro", clear_on_submit=True):
-                    # --- SEPARACIÓN VISUAL: TIEMPO FINAL ---
-                    st.markdown("<div class='section-title'>🏁 TIEMPO FINAL</div>", unsafe_allow_html=True)
-                    tf1, tf_s1, tf2, tf_s2, tf3 = st.columns([1, 0.2, 1, 0.2, 1])
-                    tm_m = tf1.number_input("Min", 0, 59, 0)
-                    tm_s = tf2.number_input("Seg", 0, 59, 0)
-                    tm_c = tf3.number_input("Cent", 0, 99, 0)
+                st.subheader("2. Registrar Tiempos")
+                with st.form("f_registro_tiempos", clear_on_submit=True):
+                    st.markdown("<div class='section-title'>TIEMPO FINAL</div>", unsafe_allow_html=True)
+                    tf1, ts1, tf2, ts2, tf3 = st.columns([1, 0.2, 1, 0.2, 1])
+                    m_f = tf1.number_input("Min", 0, 59, 0, format="%02d")
+                    s_f = tf2.number_input("Seg", 0, 59, 0, format="%02d")
+                    c_f = tf3.number_input("Cent", 0, 99, 0, format="%02d")
 
-                    tps = ["", "", "", ""]
+                    lista_parciales_data = []
                     if quiere_parciales:
-                        st.write("") # Espaciador
-                        # --- SEPARACIÓN VISUAL: PARCIALES ---
-                        st.markdown(f"<div class='section-title'>📊 PARCIALES ({m_par} mts)</div>", unsafe_allow_html=True)
+                        st.markdown(f"<div class='section-title'>PARCIALES ({m_par} mts)</div>", unsafe_allow_html=True)
                         for i in range(1, 5):
-                            st.write(f"**Parcial {i}**")
-                            c1, c2, c3 = st.columns(3)
-                            pm = c1.number_input("M", 0, 59, 0, key=f"m_{i}")
-                            ps = c2.number_input("S", 0, 59, 0, key=f"s_{i}")
-                            pc = c3.number_input("C", 0, 99, 0, key=f"c_{i}")
-                            if (pm+ps+pc) > 0: tps[i-1] = tiempo_str(pm, ps, pc)
+                            st.write(f"Parcial {i}")
+                            px1, px2, px3 = st.columns(3)
+                            pm = px1.number_input("M", 0, 59, 0, key=f"m_{i}", format="%02d")
+                            ps = px2.number_input("S", 0, 59, 0, key=f"s_{i}", format="%02d")
+                            pc = px3.number_input("C", 0, 99, 0, key=f"c_{i}", format="%02d")
+                            lista_parciales_data.append((pm, ps, pc))
 
                     st.write("")
                     obs = st.text_area("Observaciones")
 
-                    if st.form_submit_button("📥 AGREGAR A COLA", use_container_width=True):
-                        if (tm_m + tm_s + tm_c) == 0:
+                    if st.form_submit_button("AGREGAR A COLA", use_container_width=True):
+                        seg_final = tiempo_a_segundos(m_f, s_f, c_f)
+                        
+                        if seg_final == 0:
                             st.error("El tiempo final es obligatorio.")
                         else:
-                            id_dp = data['distancias'][data['distancias']['descripcion'].str.startswith(str(m_par))].iloc[0]['coddistancia'] if quiere_parciales else ""
+                            # VALIDACIÓN DE COHERENCIA
+                            error_coherencia = False
+                            if quiere_parciales:
+                                suma_parciales = sum([tiempo_a_segundos(p[0], p[1], p[2]) for p in lista_parciales_data])
+                                if suma_parciales > 0 and abs(suma_parciales - seg_final) > 0.5:
+                                    st.error(f"Incoherencia de tiempos: La suma de parciales ({suma_parciales:.2f}s) no coincide con el final ({seg_final:.2f}s).")
+                                    error_coherencia = True
                             
-                            # ID incremental seguro
-                            base_id = pd.to_numeric(df_ent['id_entrenamiento'], errors='coerce').max() if not df_ent.empty else 0
-                            if pd.isna(base_id): base_id = 0
-                            
-                            new_id = int(base_id) + len(st.session_state.cola_tests) + 1
-                            
-                            st.session_state.cola_tests.append({
-                                "id_entrenamiento": int(new_id), "fecha": fecha_s,
-                                "codnadador": int(id_nad_final), "codestilo": id_est,
-                                "coddistancia": id_dt, "coddistancia_parcial": id_dp,
-                                "tiempo_final": tiempo_str(tm_m, tm_s, tm_c),
-                                "parcial_1": tps[0], "parcial_2": tps[1], "parcial_3": tps[2], "parcial_4": tps[3],
-                                "observaciones": obs
-                            })
-                            reset_form()
-                            st.success("✅ Añadido a la cola.")
-                            st.rerun()
+                            if not error_coherencia:
+                                id_dp = data['distancias'][data['distancias']['descripcion'].str.startswith(str(m_par))].iloc[0]['coddistancia'] if quiere_parciales else ""
+                                base_id = pd.to_numeric(df_ent['id_entrenamiento'], errors='coerce').max() if not df_ent.empty else 0
+                                new_id = int(base_id if not pd.isna(base_id) else 0) + len(st.session_state.cola_tests) + 1
+                                
+                                st.session_state.cola_tests.append({
+                                    "id_entrenamiento": int(new_id), "fecha": fecha_s,
+                                    "codnadador": int(id_nad_final), "codestilo": id_est,
+                                    "coddistancia": id_dt, "coddistancia_parcial": id_dp,
+                                    "tiempo_final": tiempo_str(m_f, s_f, c_f),
+                                    "parcial_1": tiempo_str(*lista_parciales_data[0]) if len(lista_parciales_data)>0 and sum(lista_parciales_data[0])>0 else "",
+                                    "parcial_2": tiempo_str(*lista_parciales_data[1]) if len(lista_parciales_data)>1 and sum(lista_parciales_data[1])>0 else "",
+                                    "parcial_3": tiempo_str(*lista_parciales_data[2]) if len(lista_parciales_data)>2 and sum(lista_parciales_data[2])>0 else "",
+                                    "parcial_4": tiempo_str(*lista_parciales_data[3]) if len(lista_parciales_data)>3 and sum(lista_parciales_data[3])>0 else "",
+                                    "observaciones": obs
+                                })
+                                reset_todo()
+                                st.rerun()
 
-# --- HISTORIAL Y SUBIDA ---
+# ==============================================================================
+#  HISTORIAL Y SINCRONIZACIÓN
+# ==============================================================================
 with tab_ver:
     t_id = mi_id if rol == "N" else None
     if rol in ["M", "P"]:
