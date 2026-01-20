@@ -96,7 +96,7 @@ with c1: f_estilo = st.selectbox("Estilo", lista_estilos, index=idx_estilo)
 with c2: f_distancia = st.selectbox("Distancia", lista_distancias, index=idx_distancia)
 with c3: f_genero = st.selectbox("Género", lista_generos)
 
-# Aplicar filtros
+# Aplicar filtros básicos
 if 'Estilo' in df.columns and 'Distancia' in df.columns:
     df_filtrado = df[
         (df['Estilo'] == f_estilo) & 
@@ -108,7 +108,15 @@ else:
 if f_genero != "Todos":
     df_filtrado = df_filtrado[df_filtrado['codgenero'] == f_genero]
 
-df_ranking = df_filtrado.sort_values('Segundos').head(50).reset_index(drop=True)
+# --- LÓGICA DE RANKING (MEJORES MARCAS ÚNICAS) ---
+# 1. Ordenamos por tiempo (el más rápido primero)
+df_filtrado = df_filtrado.sort_values('Segundos', ascending=True)
+
+# 2. Eliminamos duplicados por nadador, quedándonos solo con el primero (su mejor tiempo)
+df_filtrado = df_filtrado.drop_duplicates(subset=['codnadador'], keep='first')
+
+# 3. Tomamos los primeros 50
+df_ranking = df_filtrado.head(50).reset_index(drop=True)
 
 # --- 6. VISUALIZACIÓN ---
 st.divider()
@@ -128,7 +136,6 @@ else:
         else:
             bg_color, text_color, icono = "#262730", "white", f"#{pos}"
 
-        # Usamos .get() para mayor seguridad, aunque la limpieza previa lo garantiza
         medida_val = str(row.get('medida', '-'))
         sede_val = str(row.get('sede', 'Sede desconocida'))
         
