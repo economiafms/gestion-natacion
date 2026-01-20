@@ -36,21 +36,54 @@ st.title("⏱️ Centro de Entrenamiento")
 # --- CSS PERSONALIZADO ---
 st.markdown("""
 <style>
-    .test-card { background-color: #262730; border: 1px solid #444; border-radius: 10px; padding: 15px; margin-bottom: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.3); border-left: 5px solid #E30613; }
-    .test-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; border-bottom: 1px solid #444; padding-bottom: 8px; }
+    /* Estilo de Tarjeta (Historial) */
+    .test-card { 
+        background-color: #262730; 
+        border: 1px solid #444; 
+        border-radius: 10px; 
+        padding: 15px; 
+        margin-bottom: 12px; 
+        box-shadow: 0 4px 6px rgba(0,0,0,0.3); 
+        border-left: 5px solid #E30613; 
+    }
+    .test-header { 
+        display: flex; 
+        justify-content: space-between; 
+        align-items: flex-start; 
+        margin-bottom: 8px; 
+        border-bottom: 1px solid #444; 
+        padding-bottom: 8px; 
+    }
     .test-style { font-size: 18px; font-weight: bold; color: white; text-transform: uppercase; }
     .test-dist { font-size: 14px; color: #aaa; font-weight: bold; }
     .test-date { font-size: 12px; color: #888; margin-left: 5px; }
-    .final-time { font-family: monospace; font-size: 24px; font-weight: bold; color: #E30613; text-align: right; background: rgba(0,0,0,0.2); padding: 2px 8px; border-radius: 4px; }
+    .final-time { 
+        font-family: 'Courier New', monospace; 
+        font-size: 24px; 
+        font-weight: bold; 
+        color: #E30613; 
+        text-align: right; 
+        background: rgba(0,0,0,0.2); 
+        padding: 2px 8px; 
+        border-radius: 4px; 
+    }
     
     /* Contenedor de parciales */
-    .splits-container { margin-top: 10px; padding: 10px; background: #1e1e1e; border-radius: 6px; border: 1px solid #333; }
+    .splits-container { 
+        margin-top: 10px; 
+        padding: 10px; 
+        background: #1e1e1e; 
+        border-radius: 6px; 
+        border: 1px solid #333; 
+    }
     .splits-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
     .split-item { text-align: center; background: rgba(255,255,255,0.05); padding: 5px; border-radius: 4px; }
     .split-label { font-size: 10px; color: #aaa; display: block; }
     .split-val { font-family: monospace; font-size: 14px; color: #eee; }
     
+    /* Títulos y Configuración */
     .section-title { color: #E30613; font-weight: bold; margin-top: 20px; margin-bottom: 10px; border-bottom: 1px solid #333; font-size: 14px; text-transform: uppercase; }
+    .config-box { background: #1e1e1e; padding: 10px; border-radius: 6px; border: 1px solid #444; margin-bottom: 15px; color: #ddd; font-size: 14px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -79,11 +112,13 @@ list_dist_total = [d for d in db['distancias']['descripcion'].unique() if "25" n
 tab_ver, tab_cargar = st.tabs(["📂 Historial", "📝 Cargar Test"])
 
 # ==============================================================================
-#  CARGA DE TEST
+#  CARGA DE TEST (Validaciones Restauradas)
 # ==============================================================================
 with tab_cargar:
-    # Usamos un key dinámico para forzar el redibujado completo al reiniciar
+    # Contenedor principal que se resetea por ID
     with st.container(key=f"carga_container_{st.session_state.form_reset_id}"):
+        
+        # --- PASO 1: DEFINIR PRUEBA ---
         st.subheader("1. Definir Prueba")
         c1, c2 = st.columns([1, 2])
         f_val = c1.date_input("Fecha", date.today(), format="DD/MM/YYYY")
@@ -95,17 +130,52 @@ with tab_cargar:
         est_val = c3.selectbox("Estilo", db['estilos']['descripcion'].unique(), index=None)
         dist_t_val = c4.selectbox("Distancia TOTAL", list_dist_total, index=None)
 
+        # Lógica de Validación (Paso 1)
+        mostrar_paso_2 = False
         if n_in and est_val and dist_t_val:
+            # Obtener IDs
+            id_est = db['estilos'][db['estilos']['descripcion'] == est_val].iloc[0]['codestilo']
+            id_dt = db['distancias'][db['distancias']['descripcion'] == dist_t_val].iloc[0]['coddistancia']
+            
+            # Verificar duplicado en DB
+            df_ent = db['entrenamientos']
+            fecha_str = f_val.strftime('%Y-%m-%d')
+            
+            duplicado = False
+            if not df_ent.empty:
+                existe = df_ent[
+                    (df_ent['codnadador'].astype(str) == str(id_nad_target)) & 
+                    (df_ent['fecha'].astype(str) == fecha_str) & 
+                    (df_ent['codestilo'].astype(str) == str(id_est)) &
+                    (df_ent['coddistancia'].astype(str) == str(id_dt))
+                ]
+                if not existe.empty:
+                    duplicado = True
+            
+            if duplicado:
+                st.error(f"⛔ Ya existe un registro de {est_val} {dist_t_val} para esta fecha. Modifica la fecha o la prueba.")
+            else:
+                mostrar_paso_2 = True
+
+        # --- PASO 2: REGISTRAR TIEMPOS (Solo si pasa validación) ---
+        if mostrar_paso_2:
+            st.divider()
+            st.subheader("2. Registrar Tiempos")
+            
             m_tot = int(dist_t_val.split(" ")[0])
             m_par = 100 if m_tot == 400 else (50 if m_tot == 200 else (25 if m_tot == 100 else 0))
+            
+            # Info de configuración
+            msg_parciales = f"Se habilitarán parciales cada {m_par} mts." if m_par > 0 else "Sin parciales automáticos."
+            st.markdown(f"<div class='config-box'>✅ <b>Configuración válida:</b> {dist_t_val} {est_val}.<br>{msg_parciales}</div>", unsafe_allow_html=True)
+            
             quiere_p = st.toggle("¿Cargar tiempos parciales?", value=True) if m_par > 0 else False
             
-            st.divider()
-            
-            # Formulario de carga de tiempos
+            # Formulario
             with st.form("form_reg", clear_on_submit=True):
                 st.markdown("<div class='section-title'>TIEMPO FINAL</div>", unsafe_allow_html=True)
-                st.text_input("Ref", value=dist_t_val, disabled=True, label_visibility="collapsed")
+                # Input visual bloqueado
+                st.text_input("Distancia", value=dist_t_val, disabled=True, label_visibility="collapsed")
                 
                 tf1, tf2, tf3 = st.columns(3)
                 mf = tf1.number_input("Min", 0, 59, 0)
@@ -114,19 +184,18 @@ with tab_cargar:
                 
                 lp = []
                 if quiere_p:
-                    st.markdown(f"<div class='section-title'>PARCIALES ({m_par}m)</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div class='section-title'>PARCIALES ({m_par} mts)</div>", unsafe_allow_html=True)
                     for i in range(1, 5):
                         st.write(f"Parcial {i}")
-                        # Ajuste de columnas para alineación perfecta
+                        # Columnas ajustadas para alinear Distancia con Inputs
                         px1, px2, px3, px4 = st.columns([1.2, 1, 1, 1])
-                        px1.text_input(f"d{i}", value=f"{m_par} mts", disabled=True, label_visibility="collapsed", key=f"d_dis_{i}")
+                        px1.text_input(f"d{i}", value=f"{m_par} mts", disabled=True, label_visibility="collapsed", key=f"d_show_{i}")
                         pm = px2.number_input("M", 0, 59, 0, key=f"pm_{i}", label_visibility="collapsed")
                         ps = px3.number_input("S", 0, 59, 0, key=f"ps_{i}", label_visibility="collapsed")
                         pc = px4.number_input("C", 0, 99, 0, key=f"pc_{i}", label_visibility="collapsed")
                         lp.append(f"{pm:02d}:{ps:02d}.{pc:02d}" if (pm+ps+pc)>0 else "")
                 
-                # Sin observaciones (eliminadas según pedido)
-                
+                # Botón de envío
                 submitted = st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True)
                 
                 if submitted:
@@ -134,49 +203,51 @@ with tab_cargar:
                     if s_final == 0:
                         st.error("⚠️ El tiempo final es obligatorio.")
                     else:
-                        # Validación de coherencia (No bloqueante, solo aviso)
-                        s_parciales = 0
+                        # Validación de coherencia (Advertencia)
                         if quiere_p:
+                            s_parciales = 0
                             for p_str in lp:
                                 sec = a_segundos(p_str)
                                 if sec: s_parciales += sec
                             
                             if s_parciales > 0 and abs(s_parciales - s_final) > 0.5:
-                                st.warning(f"⚠️ Atención: La suma de parciales ({s_parciales:.2f}s) difiere del final ({s_final:.2f}s). Se guardará igual.")
+                                st.warning(f"⚠️ Nota: Suma de parciales ({s_parciales:.2f}s) difiere del final ({s_final:.2f}s). Se guardará igual.")
                         
-                        try:
-                            max_id = pd.to_numeric(db['entrenamientos']['id_entrenamiento'], errors='coerce').max() if not db['entrenamientos'].empty else 0
-                            new_id = int(0 if pd.isna(max_id) else max_id) + 1
-                            
-                            id_dp = ""
-                            if quiere_p:
-                                 id_dp = db['distancias'][db['distancias']['descripcion'].str.startswith(str(m_par))].iloc[0]['coddistancia']
+                        # Guardado
+                        with st.spinner("Guardando..."):
+                            try:
+                                max_id = pd.to_numeric(db['entrenamientos']['id_entrenamiento'], errors='coerce').max() if not db['entrenamientos'].empty else 0
+                                new_id = int(0 if pd.isna(max_id) else max_id) + 1
+                                
+                                id_dp = ""
+                                if quiere_p:
+                                     id_dp = db['distancias'][db['distancias']['descripcion'].str.startswith(str(m_par))].iloc[0]['coddistancia']
 
-                            row = pd.DataFrame([{
-                                "id_entrenamiento": new_id, 
-                                "fecha": f_val.strftime('%Y-%m-%d'), 
-                                "codnadador": int(id_nad_target), 
-                                "codestilo": db['estilos'][db['estilos']['descripcion'] == est_val].iloc[0]['codestilo'],
-                                "coddistancia": db['distancias'][db['distancias']['descripcion'] == dist_t_val].iloc[0]['coddistancia'],
-                                "coddistancia_parcial": id_dp,
-                                "tiempo_final": f"{mf:02d}:{sf:02d}.{cf:02d}",
-                                "parcial_1": lp[0] if len(lp)>0 else "", 
-                                "parcial_2": lp[1] if len(lp)>1 else "",
-                                "parcial_3": lp[2] if len(lp)>2 else "", 
-                                "parcial_4": lp[3] if len(lp)>3 else "",
-                                "observaciones": ""
-                            }])
-                            
-                            conn.update(worksheet="Entrenamientos", data=pd.concat([db['entrenamientos'], row], ignore_index=True))
-                            
-                            st.success("✅ Guardado con éxito.")
-                            time.sleep(1)
-                            reset_carga() # Incrementa el ID para limpiar el formulario al recargar
-                            st.cache_data.clear()
-                            st.rerun()
-                            
-                        except Exception as e:
-                            st.error(f"Error técnico: {e}")
+                                row = pd.DataFrame([{
+                                    "id_entrenamiento": new_id, 
+                                    "fecha": fecha_str, 
+                                    "codnadador": int(id_nad_target), 
+                                    "codestilo": id_est,
+                                    "coddistancia": id_dt,
+                                    "coddistancia_parcial": id_dp,
+                                    "tiempo_final": f"{mf:02d}:{sf:02d}.{cf:02d}",
+                                    "parcial_1": lp[0] if len(lp)>0 else "", 
+                                    "parcial_2": lp[1] if len(lp)>1 else "",
+                                    "parcial_3": lp[2] if len(lp)>2 else "", 
+                                    "parcial_4": lp[3] if len(lp)>3 else "",
+                                    "observaciones": ""
+                                }])
+                                
+                                conn.update(worksheet="Entrenamientos", data=pd.concat([db['entrenamientos'], row], ignore_index=True))
+                                
+                                st.success("✅ Guardado con éxito.")
+                                time.sleep(1)
+                                reset_carga() # Limpia Paso 1 y 2
+                                st.cache_data.clear()
+                                st.rerun()
+                                
+                            except Exception as e:
+                                st.error(f"Error técnico: {e}")
 
 # ==============================================================================
 #  HISTORIAL
@@ -250,7 +321,7 @@ with tab_ver:
                 if p_validos and st.checkbox(f"Analizar tramos", key=f"chk_{r['id_entrenamiento']}"):
                     p_seg = [a_segundos(p) for p in p_validos]
                     fig_bar = px.bar(x=[f"P{i+1}" for i in range(len(p_seg))], y=p_seg, 
-                                     labels={'x': 'Parcial', 'y': 'Tiempo (s)'},
+                                     labels={'x': 'Parcial', 'y': 'Segundos'},
                                      color_discrete_sequence=['#E30613'])
                     fig_bar.update_layout(height=200, template="plotly_dark", showlegend=False, margin=dict(l=0, r=0, t=10, b=0))
                     st.plotly_chart(fig_bar, use_container_width=True)
