@@ -6,17 +6,18 @@ from datetime import datetime, date
 # --- 1. CONFIGURACIÓN E INTERFAZ ---
 st.set_page_config(page_title="Carga - Natación", layout="wide", initial_sidebar_state="collapsed")
 
-# --- SEGURIDAD (AGREGADO) ---
-# 1. Si no está logueado, fuera.
+# ==========================================
+#  SEGURIDAD
+# ==========================================
 if "role" not in st.session_state or not st.session_state.role:
     st.switch_page("index.py")
 
-# 2. Si no desbloqueó el candado de profesor, bloqueo.
 if not st.session_state.get("admin_unlocked", False):
-    st.error("⛔ Acceso Denegado: Esta sección es exclusiva para Profesores.")
+    st.error("⛔ Acceso Denegado: Requiere permisos de administrador desbloqueados.")
     if st.button("Volver al Inicio"):
         st.switch_page("pages/1_inicio.py")
     st.stop()
+# ==========================================
 
 st.title("📥 Panel de Carga de Datos")
 
@@ -74,11 +75,13 @@ sep_dot = "<div style='text-align: center; font-size: 20px; font-weight: bold; m
 total = len(st.session_state.cola_tiempos) + len(st.session_state.cola_nadadores) + len(st.session_state.cola_relevos)
 
 if total > 0:
-    st.info(f"📢 Tienes **{total}** registros en cola.")
-    col_s1, col_s2 = st.columns(2)
-    if col_s1.button("☁️ SUBIR A GOOGLE SHEETS", type="primary", use_container_width=True):
+    st.markdown("### ☁️ Sincronización Pendiente")
+    st.info(f"Tienes **{total} registros** listos para subir a la base de datos.")
+    
+    col_s1, col_s2 = st.columns([1, 1])
+    if col_s1.button("🚀 SUBIR TODO A GOOGLE SHEETS", type="primary", use_container_width=True):
         try:
-            with st.spinner("Subiendo datos..."):
+            with st.spinner("Sincronizando con la nube..."):
                 if st.session_state.cola_nadadores:
                     conn.update(worksheet="Nadadores", data=pd.concat([data['nadadores'], pd.DataFrame(st.session_state.cola_nadadores)], ignore_index=True))
                     st.session_state.cola_nadadores = []
@@ -88,29 +91,30 @@ if total > 0:
                 if st.session_state.cola_relevos:
                     conn.update(worksheet="Relevos", data=pd.concat([data['relevos'], pd.DataFrame(st.session_state.cola_relevos)], ignore_index=True))
                     st.session_state.cola_relevos = []
-                st.success("✅ ¡Sincronización completada!")
+                st.success("✅ ¡Base de Datos Actualizada!")
                 refrescar_datos()
         except Exception as e: st.error(str(e))
     
-    if col_s2.button("🗑️ Descartar Cambios", use_container_width=True):
+    if col_s2.button("🗑️ Borrar Cola (Descartar)", use_container_width=True):
         st.session_state.cola_tiempos, st.session_state.cola_nadadores, st.session_state.cola_relevos = [], [], []
         st.rerun()
+    st.divider()
 
 # ==========================================
 # 5. MENÚ DE NAVEGACIÓN
 # ==========================================
-seccion_activa = st.radio("📍 Sección:", 
+seccion_activa = st.radio("📍 Seleccionar Tipo de Carga:", 
                           ["👤 Nadadores", "⏱️ Individuales", "🏊‍♂️ Relevos"], 
                           horizontal=True, 
                           label_visibility="collapsed",
                           key="navegacion_principal")
-st.divider()
 
 # --- SECCIÓN 1: NADADORES ---
 if seccion_activa == "👤 Nadadores":
+    st.subheader("👤 Alta de Nuevo Nadador")
     with st.container(border=True):
-        st.subheader("Nuevo Nadador")
         with st.form("f_nad", clear_on_submit=True):
+            st.markdown("**Datos Personales**")
             c1, c2 = st.columns(2)
             n_nom = c1.text_input("Nombre")
             n_ape = c2.text_input("Apellido")
@@ -124,8 +128,10 @@ if seccion_activa == "👤 Nadadores":
                                   max_value=date(hoy.year - 18, 12, 31),
                                   format="DD/MM/YYYY")
             
-            n_dni = st.text_input("DNI")
-            n_socio = st.text_input("Nro Socio")
+            st.markdown("**Datos Administrativos**")
+            ca, cb = st.columns(2)
+            n_dni = ca.text_input("DNI")
+            n_socio = cb.text_input("Nro Socio")
 
             st.write("") 
             if st.form_submit_button("Guardar Nadador", use_container_width=True):
@@ -150,9 +156,10 @@ if seccion_activa == "👤 Nadadores":
 
 # --- SECCIÓN 2: TIEMPOS INDIVIDUALES ---
 elif seccion_activa == "⏱️ Individuales":
+    st.subheader("⏱️ Carga de Tiempo Individual")
     with st.container(border=True):
-        st.subheader("Carga Individual")
         with st.form("f_ind", clear_on_submit=True):
+            st.markdown("**Detalles de la Prueba**")
             t_nad = st.selectbox("Nadador", lista_nombres, index=None, placeholder="Buscar apellido...")
             
             c1, c2 = st.columns(2)
@@ -161,8 +168,7 @@ elif seccion_activa == "⏱️ Individuales":
             
             t_pil = st.selectbox("Sede / Pileta", lista_piletas, index=None, placeholder="Seleccionar sede...") 
             
-            st.divider()
-            st.write("**Tiempo Realizado**")
+            st.markdown("**Resultado**")
             cm, cs1, cs, cs2, cc = st.columns([1, 0.2, 1, 0.2, 1])
             with cm: vm = st.number_input("Min", 0, 59, 0, format="%02d")
             with cs1: st.markdown(sep, unsafe_allow_html=True)
@@ -195,8 +201,10 @@ elif seccion_activa == "⏱️ Individuales":
                             'codpileta': df_pil[df_pil['Detalle'] == t_pil]['codpileta'].values[0],
                             'codestilo': id_est,
                             'coddistancia': id_dis,
-                            'tiempo': f"{vm:02d}:{vs:02d}.{vc:02d}", 'fecha': fecha_str, 'posicion': int(v_pos),
-                            'club': 'NOB'
+                            'tiempo': f"{vm:02d}:{vs:02d}.{vc:02d}", 
+                            'fecha': fecha_str, 
+                            'posicion': int(v_pos)
+                            # ELIMINADO: 'club': 'NOB' ya no se usa
                         })
                         set_tiempos_existentes.add(hash_nuevo)
                         st.success("✅ Tiempo añadido a la cola.")
@@ -205,8 +213,8 @@ elif seccion_activa == "⏱️ Individuales":
 
 # --- SECCIÓN 3: RELEVOS ---
 elif seccion_activa == "🏊‍♂️ Relevos":
+    st.subheader("🏊‍♂️ Configuración de Relevo")
     with st.container(border=True):
-        st.subheader("Configuración del Relevo")
         r_gen = st.selectbox("Género del Equipo", ["M", "F", "X"], index=None, placeholder="Seleccionar género primero...")
         
         ld = []
@@ -221,14 +229,14 @@ elif seccion_activa == "🏊‍♂️ Relevos":
 
     with st.container(border=True):
         with st.form("f_rel", clear_on_submit=True):
+            st.markdown("**Datos Generales**")
             c1, c2, c3 = st.columns(3)
             r_pil = c1.selectbox("Sede", lista_piletas, index=None, placeholder="Sede...")
             r_est = c2.selectbox("Estilo", data['estilos']['descripcion'].unique(), index=None, placeholder="Estilo...")
             r_dis = c3.selectbox("Distancia", lista_dist_4x50, index=None, placeholder="Solo 4x50")
             r_reg = st.selectbox("Reglamento", lista_reglamentos, index=None, placeholder="Reglamento...")
 
-            st.divider()
-            st.write("👥 **Integrantes**")
+            st.markdown("**Integrantes y Parciales**")
             
             r_n, r_p = [], []
             for i in range(1, 5):
@@ -238,8 +246,7 @@ elif seccion_activa == "🏊‍♂️ Relevos":
                 with cb:
                     r_p.append(st.text_input(f"P{i}", placeholder="00.00", key=f"rp_{i}"))
             
-            st.divider()
-            st.write("⏱️ **Tiempo Final**")
+            st.markdown("**Resultado Final**")
             rm, rs1, rs, rs2, rc = st.columns([1, 0.2, 1, 0.2, 1])
             with rm: rvm = st.number_input("Min", 0, 59, 0, key="rmr", format="%02d")
             with rs1: st.markdown(sep, unsafe_allow_html=True)
