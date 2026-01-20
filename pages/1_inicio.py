@@ -186,7 +186,7 @@ if db and st.session_state.user_id:
     
     st.divider()
 
-    # 3. BOTONERA PRINCIPAL (AGREGADO ENTRENAMIENTOS)
+    # 3. BOTONERA PRINCIPAL (REORGANIZADA)
     c1, c2 = st.columns(2)
     with c1: 
         if st.button("🗃️ Base de Datos", use_container_width=True, key="btn_bd_home"): 
@@ -195,12 +195,16 @@ if db and st.session_state.user_id:
     with c2: 
         if st.button("🏆 Ver Ranking", use_container_width=True, key="btn_rk_home"): st.switch_page("pages/4_ranking.py")
     
-    # Segunda fila
+    # Segunda fila (Entrenamientos + Categoría)
     c3, c4 = st.columns(2)
     with c3:
         if st.button("⏱️ Entrenamientos", type="primary", use_container_width=True, key="btn_train_home"): st.switch_page("pages/5_entrenamientos.py")
     with c4:
-        if st.button("🏊‍♂️ Simulador Postas", use_container_width=True, key="btn_sim_home"): st.switch_page("pages/3_simulador.py")
+        # AGREGADO: Botón Mi Categoría
+        if st.button("🏅 Mi Categoría", type="primary", use_container_width=True, key="btn_cat_home"): st.switch_page("pages/6_mi_categoria.py")
+
+    # Tercera fila (Simulador - Ancho completo)
+    if st.button("🏊‍♂️ Simulador Postas", use_container_width=True, key="btn_sim_home"): st.switch_page("pages/3_simulador.py")
 
     st.write("")
 
