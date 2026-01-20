@@ -19,12 +19,13 @@ if not st.session_state.get("admin_unlocked", False):
     st.stop()
 # ==========================================
 
-st.title("📥 Panel de Carga de Datos")
+st.title("📥 Panel de Carga y Gestión")
 
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 # --- 2. INICIALIZAR COLAS EN SESSION STATE ---
 if "cola_nadadores" not in st.session_state: st.session_state.cola_nadadores = []
+if "cola_users" not in st.session_state: st.session_state.cola_users = [] # Nueva cola para usuarios
 if "cola_tiempos" not in st.session_state: st.session_state.cola_tiempos = []
 if "cola_relevos" not in st.session_state: st.session_state.cola_relevos = []
 
@@ -32,12 +33,13 @@ def refrescar_datos():
     st.cache_data.clear()
     st.rerun()
 
-# --- 3. CARGA DE METADATOS Y HASHES ---
+# --- 3. CARGA DE METADATOS ---
 @st.cache_data(ttl="1h")
 def cargar_referencias():
     try:
         return {
             "nadadores": conn.read(worksheet="Nadadores"),
+            "users": conn.read(worksheet="User"), # Cargamos la tabla User
             "tiempos": conn.read(worksheet="Tiempos"),
             "relevos": conn.read(worksheet="Relevos"),
             "estilos": conn.read(worksheet="Estilos"),
@@ -50,10 +52,13 @@ def cargar_referencias():
 data = cargar_referencias()
 if not data: st.stop()
 
-# Pre-procesamiento para validaciones
+# Pre-procesamiento
 df_nad = data['nadadores'].copy()
 df_nad['Nombre Completo'] = df_nad['apellido'].astype(str).str.strip().str.upper() + ", " + df_nad['nombre'].astype(str).str.strip().str.upper()
 set_nadadores_existentes = set(df_nad['Nombre Completo'].unique())
+
+# Validación de socios existentes (para no duplicar usuarios)
+set_socios_existentes = set(data['users']['nrosocio'].astype(str).unique())
 
 df_t = data['tiempos'].copy()
 df_t['hash_validacion'] = df_t['codnadador'].astype(str) + "_" + df_t['codestilo'].astype(str) + "_" + df_t['coddistancia'].astype(str) + "_" + df_t['fecha'].astype(str)
@@ -61,57 +66,71 @@ set_tiempos_existentes = set(df_t['hash_validacion'].unique())
 
 lista_nombres = sorted(df_nad['Nombre Completo'].unique())
 df_pil = data['piletas'].copy()
-df_pil['Detalle'] = df_pil['club'].astype(str) + " (" + df_pil['medida'].astype(str) + ")"
+# Manejo seguro de columnas piletas
+col_club_pil = 'club' if 'club' in df_pil.columns else df_pil.columns[1] # fallback
+df_pil['Detalle'] = df_pil[col_club_pil].astype(str) + " (" + df_pil['medida'].astype(str) + ")"
 lista_piletas = df_pil['Detalle'].unique()
 lista_reglamentos = data['cat_relevos']['tipo_reglamento'].unique().tolist() if not data['cat_relevos'].empty else ["FED"]
 
-# Estilos visuales
 sep = "<div style='text-align: center; font-size: 20px; font-weight: bold; margin-top: 30px;'>:</div>"
 sep_dot = "<div style='text-align: center; font-size: 20px; font-weight: bold; margin-top: 30px;'>.</div>"
 
 # ==========================================
 # 4. PANEL DE SINCRONIZACIÓN
 # ==========================================
-total = len(st.session_state.cola_tiempos) + len(st.session_state.cola_nadadores) + len(st.session_state.cola_relevos)
+total = len(st.session_state.cola_tiempos) + len(st.session_state.cola_nadadores) + len(st.session_state.cola_relevos) + len(st.session_state.cola_users)
 
 if total > 0:
     st.markdown("### ☁️ Sincronización Pendiente")
-    st.info(f"Tienes **{total} registros** listos para subir a la base de datos.")
+    st.info(f"Tienes **{total} registros** listos para subir (incluyendo usuarios nuevos).")
     
     col_s1, col_s2 = st.columns([1, 1])
     if col_s1.button("🚀 SUBIR TODO A GOOGLE SHEETS", type="primary", use_container_width=True):
         try:
             with st.spinner("Sincronizando con la nube..."):
+                # Subir Nadadores
                 if st.session_state.cola_nadadores:
                     conn.update(worksheet="Nadadores", data=pd.concat([data['nadadores'], pd.DataFrame(st.session_state.cola_nadadores)], ignore_index=True))
                     st.session_state.cola_nadadores = []
+                
+                # Subir Usuarios (Login)
+                if st.session_state.cola_users:
+                    # Asegurar que las columnas coincidan
+                    df_new_users = pd.DataFrame(st.session_state.cola_users)
+                    conn.update(worksheet="User", data=pd.concat([data['users'], df_new_users], ignore_index=True))
+                    st.session_state.cola_users = []
+
+                # Subir Tiempos
                 if st.session_state.cola_tiempos:
                     conn.update(worksheet="Tiempos", data=pd.concat([data['tiempos'], pd.DataFrame(st.session_state.cola_tiempos)], ignore_index=True))
                     st.session_state.cola_tiempos = []
+                
+                # Subir Relevos
                 if st.session_state.cola_relevos:
                     conn.update(worksheet="Relevos", data=pd.concat([data['relevos'], pd.DataFrame(st.session_state.cola_relevos)], ignore_index=True))
                     st.session_state.cola_relevos = []
+                
                 st.success("✅ ¡Base de Datos Actualizada!")
                 refrescar_datos()
-        except Exception as e: st.error(str(e))
+        except Exception as e: st.error(f"Error: {str(e)}")
     
     if col_s2.button("🗑️ Borrar Cola (Descartar)", use_container_width=True):
-        st.session_state.cola_tiempos, st.session_state.cola_nadadores, st.session_state.cola_relevos = [], [], []
+        st.session_state.cola_tiempos, st.session_state.cola_nadadores, st.session_state.cola_relevos, st.session_state.cola_users = [], [], [], []
         st.rerun()
     st.divider()
 
 # ==========================================
 # 5. MENÚ DE NAVEGACIÓN
 # ==========================================
-seccion_activa = st.radio("📍 Seleccionar Tipo de Carga:", 
-                          ["👤 Nadadores", "⏱️ Individuales", "🏊‍♂️ Relevos"], 
+seccion_activa = st.radio("📍 Seleccionar Herramienta:", 
+                          ["👤 Nuevo Nadador", "⏱️ Individuales", "🏊‍♂️ Relevos", "🔑 Gestión Permisos"], 
                           horizontal=True, 
                           label_visibility="collapsed",
                           key="navegacion_principal")
 
-# --- SECCIÓN 1: NADADORES ---
-if seccion_activa == "👤 Nadadores":
-    st.subheader("👤 Alta de Nuevo Nadador")
+# --- SECCIÓN 1: NADADORES (CON USUARIO) ---
+if seccion_activa == "👤 Nuevo Nadador":
+    st.subheader("👤 Alta de Nuevo Nadador y Usuario")
     with st.container(border=True):
         with st.form("f_nad", clear_on_submit=True):
             st.markdown("**Datos Personales**")
@@ -128,19 +147,28 @@ if seccion_activa == "👤 Nadadores":
                                   max_value=date(hoy.year - 18, 12, 31),
                                   format="DD/MM/YYYY")
             
-            st.markdown("**Datos Administrativos**")
-            ca, cb = st.columns(2)
+            st.markdown("**Datos de Sistema (Obligatorio)**")
+            ca, cb, cc = st.columns(3)
             n_dni = ca.text_input("DNI")
-            n_socio = cb.text_input("Nro Socio")
+            n_socio = cb.text_input("Nro Socio (Login)")
+            
+            # Selector de Perfil
+            n_perfil_sel = cc.selectbox("Perfil de Acceso", ["N - Nadador (Normal)", "M - Maestro (Admin)"])
+            n_perfil = "M" if "Maestro" in str(n_perfil_sel) else "N"
 
             st.write("") 
-            if st.form_submit_button("Guardar Nadador", use_container_width=True):
-                if n_nom and n_ape and n_gen and n_socio:
+            if st.form_submit_button("Guardar Ficha", use_container_width=True):
+                if n_nom and n_ape and n_gen and n_socio and n_dni:
                     nombre_completo_nuevo = f"{n_ape.strip().upper()}, {n_nom.strip().upper()}"
-                    
+                    socio_str = str(n_socio).strip()
+
+                    # Validaciones
                     if nombre_completo_nuevo in set_nadadores_existentes:
-                        st.error(f"⛔ Error: **{nombre_completo_nuevo}** ya existe.")
+                        st.error(f"⛔ Error: El nadador **{nombre_completo_nuevo}** ya existe.")
+                    elif socio_str in set_socios_existentes:
+                        st.error(f"⛔ Error: El Nro de Socio **{socio_str}** ya está registrado en el sistema.")
                     else:
+                        # 1. Agregar a Cola Nadadores
                         base_id = data['nadadores']['codnadador'].max() if not data['nadadores'].empty else 0
                         cola_id = pd.DataFrame(st.session_state.cola_nadadores)['codnadador'].max() if st.session_state.cola_nadadores else 0
                         st.session_state.cola_nadadores.append({
@@ -149,10 +177,18 @@ if seccion_activa == "👤 Nadadores":
                             'fechanac': n_fec.strftime('%Y-%m-%d'), 'codgenero': n_gen,
                             'dni': n_dni, 'nrosocio': n_socio
                         })
+                        
+                        # 2. Agregar a Cola Users
+                        st.session_state.cola_users.append({
+                            'nrosocio': n_socio,
+                            'perfil': n_perfil
+                        })
+
                         set_nadadores_existentes.add(nombre_completo_nuevo)
-                        st.success(f"Nadador {n_nom} añadido a la cola.")
+                        set_socios_existentes.add(socio_str)
+                        st.success(f"✅ Ficha creada para {n_nom}. Perfil: {n_perfil}. (Pendiente de subir)")
                         st.rerun()
-                else: st.warning("Completa todos los datos.")
+                else: st.warning("Completa todos los campos obligatorios.")
 
 # --- SECCIÓN 2: TIEMPOS INDIVIDUALES ---
 elif seccion_activa == "⏱️ Individuales":
@@ -195,16 +231,17 @@ elif seccion_activa == "⏱️ Individuales":
                     else:
                         base_id = data['tiempos']['id_registro'].max() if not data['tiempos'].empty else 0
                         cola_id = pd.DataFrame(st.session_state.cola_tiempos)['id_registro'].max() if st.session_state.cola_tiempos else 0
+                        
+                        # Extraer ID Pileta
+                        id_pil = df_pil[df_pil['Detalle'] == t_pil]['codpileta'].values[0]
+
                         st.session_state.cola_tiempos.append({
                             'id_registro': int(max(base_id, cola_id) + 1),
                             'codnadador': id_nad, 
-                            'codpileta': df_pil[df_pil['Detalle'] == t_pil]['codpileta'].values[0],
+                            'codpileta': id_pil,
                             'codestilo': id_est,
                             'coddistancia': id_dis,
-                            'tiempo': f"{vm:02d}:{vs:02d}.{vc:02d}", 
-                            'fecha': fecha_str, 
-                            'posicion': int(v_pos)
-                            # ELIMINADO: 'club': 'NOB' ya no se usa
+                            'tiempo': f"{vm:02d}:{vs:02d}.{vc:02d}", 'fecha': fecha_str, 'posicion': int(v_pos)
                         })
                         set_tiempos_existentes.add(hash_nuevo)
                         st.success("✅ Tiempo añadido a la cola.")
@@ -267,10 +304,11 @@ elif seccion_activa == "🏊‍♂️ Relevos":
                         base_id = data['relevos']['id_relevo'].max() if not data['relevos'].empty else 0
                         cola_id = pd.DataFrame(st.session_state.cola_relevos)['id_relevo'].max() if st.session_state.cola_relevos else 0
                         ids_n = [df_nad[df_nad['Nombre Completo'] == n]['codnadador'].values[0] for n in r_n]
-                        
+                        id_pil_rel = df_pil[df_pil['Detalle'] == r_pil]['codpileta'].values[0]
+
                         st.session_state.cola_relevos.append({
                             'id_relevo': int(max(base_id, cola_id) + 1),
-                            'codpileta': df_pil[df_pil['Detalle'] == r_pil]['codpileta'].values[0],
+                            'codpileta': id_pil_rel,
                             'codestilo': data['estilos'][data['estilos']['descripcion'] == r_est]['codestilo'].values[0],
                             'coddistancia': data['distancias'][data['distancias']['descripcion'] == r_dis]['coddistancia'].values[0],
                             'codgenero': r_gen, 'nadador_1': ids_n[0], 'tiempo_1': r_p[0], 'nadador_2': ids_n[1], 'tiempo_2': r_p[1],
@@ -281,3 +319,51 @@ elif seccion_activa == "🏊‍♂️ Relevos":
                         st.rerun()
                 else:
                     st.error("Faltan datos obligatorios.")
+
+# --- SECCIÓN 4: GESTIÓN DE PERMISOS (HERRAMIENTA) ---
+elif seccion_activa == "🔑 Gestión Permisos":
+    st.subheader("🛠️ Modificar Perfil de Usuario")
+    
+    # Unir nadadores con usuarios para ver nombres
+    df_users = data['users'].copy()
+    df_nad_info = df_nad[['nrosocio', 'Nombre Completo', 'dni']].copy()
+    # Asegurar tipos para el merge
+    df_users['nrosocio'] = df_users['nrosocio'].astype(str)
+    df_nad_info['nrosocio'] = df_nad_info['nrosocio'].astype(str)
+    
+    df_merged = df_nad_info.merge(df_users, on='nrosocio', how='inner')
+    
+    with st.container(border=True):
+        st.info("Busque un socio para cambiar su nivel de acceso (N = Nadador, M = Maestro).")
+        
+        # Selector de socio por nombre
+        lista_socios_display = sorted([f"{row['Nombre Completo']} (Socio: {row['nrosocio']})" for _, row in df_merged.iterrows()])
+        
+        sel_socio = st.selectbox("Buscar Nadador/Usuario:", lista_socios_display, index=None, placeholder="Escriba nombre...")
+        
+        if sel_socio:
+            nro_socio_sel = sel_socio.split("Socio: ")[1].replace(")", "")
+            
+            # Obtener datos actuales
+            row_actual = df_users[df_users['nrosocio'] == nro_socio_sel].iloc[0]
+            perfil_actual = row_actual['perfil']
+            
+            st.divider()
+            c1, c2 = st.columns(2)
+            c1.metric("Perfil Actual", "Maestro (Admin)" if perfil_actual == "M" else "Nadador (Normal)")
+            
+            nuevo_perfil_sel = c2.radio("Nuevo Perfil:", ["N - Nadador", "M - Maestro"], horizontal=True)
+            nuevo_perfil_code = "M" if "Maestro" in nuevo_perfil_sel else "N"
+            
+            if st.button("💾 Actualizar Permisos", type="primary"):
+                if nuevo_perfil_code != perfil_actual:
+                    try:
+                        # Actualización directa
+                        df_users.loc[df_users['nrosocio'] == nro_socio_sel, 'perfil'] = nuevo_perfil_code
+                        conn.update(worksheet="User", data=df_users)
+                        st.success(f"✅ Perfil actualizado a '{nuevo_perfil_code}' para el socio {nro_socio_sel}.")
+                        refrescar_datos()
+                    except Exception as e:
+                        st.error(f"Error al actualizar: {e}")
+                else:
+                    st.info("El perfil seleccionado es el mismo que el actual.")
