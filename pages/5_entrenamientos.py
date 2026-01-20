@@ -14,12 +14,12 @@ rol = st.session_state.role
 mi_id = st.session_state.user_id 
 mi_nombre = st.session_state.user_name
 
-# --- GESTIÓN DE RESETEO ---
-if "form_key" not in st.session_state:
-    st.session_state.form_key = 0
+# --- GESTIÓN DE ESTADO PARA REINICIO ---
+if "form_iteration" not in st.session_state:
+    st.session_state.form_iteration = 0
 
-def reset_todo():
-    st.session_state.form_key += 1
+def limpiar_formulario():
+    st.session_state.form_iteration += 1
 
 st.title("⏱️ Centro de Entrenamiento")
 
@@ -56,15 +56,15 @@ def cargar_entrenamientos():
         }
     except: return None
 
-data = cargar_entrenamientos()
-if not data: st.stop()
+db_data = cargar_entrenamientos()
+if not db_data: st.stop()
 
 # --- PROCESAMIENTO ---
-df_nad = data['nadadores'].copy()
+df_nad = db_data['nadadores'].copy()
 nad_row = df_nad[df_nad['codnadador'].astype(str) == str(mi_id)]
 mi_nom_comp = f"{nad_row.iloc[0]['apellido'].upper()}, {nad_row.iloc[0]['nombre']}" if not nad_row.empty else mi_nombre
 lista_nombres = sorted((df_nad['apellido'].astype(str).str.upper() + ", " + df_nad['nombre'].astype(str)).unique().tolist())
-list_dist_total = [d for d in data['distancias']['descripcion'].unique() if "25" not in d and "4x" not in d.lower()]
+list_dist_total = [d for d in db_data['distancias']['descripcion'].unique() if "25" not in d and "4x" not in d.lower()]
 
 def tiempo_a_segundos(m, s, c):
     return (int(m) * 60) + int(s) + (int(c) / 100)
@@ -75,11 +75,11 @@ def tiempo_str(m, s, c):
 tab_ver, tab_cargar = st.tabs(["📂 Historial", "📝 Cargar Test"])
 
 # ==============================================================================
-#  CARGA DE TEST
+#  PESTAÑA CARGA (LÓGICA DE REINICIO TOTAL)
 # ==============================================================================
 with tab_cargar:
-    # Contenedor dinámico para reseteo completo
-    with st.container(key=f"container_test_{st.session_state.form_key}"):
+    # El key dinámico fuerza a Streamlit a renderizar desde cero tras limpiar_formulario()
+    with st.container(key=f"flow_{st.session_state.form_iteration}"):
         st.subheader("1. Definir Prueba")
         
         c1, c2 = st.columns([1, 2])
@@ -93,16 +93,16 @@ with tab_cargar:
             id_nad_final = df_nad[(df_nad['apellido'].str.upper() + ", " + df_nad['nombre']) == n_in].iloc[0]['codnadador'] if n_in else None
 
         c3, c4 = st.columns(2)
-        est_val = c3.selectbox("Estilo", data['estilos']['descripcion'].unique(), index=None)
+        est_val = c3.selectbox("Estilo", db_data['estilos']['descripcion'].unique(), index=None)
         dist_t_val = c4.selectbox("Distancia TOTAL", list_dist_total, index=None)
 
         if n_in and est_val and dist_t_val:
-            id_est = data['estilos'][data['estilos']['descripcion'] == est_val].iloc[0]['codestilo']
-            id_dt = data['distancias'][data['distancias']['descripcion'] == dist_t_val].iloc[0]['coddistancia']
+            id_est = db_data['estilos'][db_data['estilos']['descripcion'] == est_val].iloc[0]['codestilo']
+            id_dt = db_data['distancias'][db_data['distancias']['descripcion'] == dist_t_val].iloc[0]['coddistancia']
             fecha_s = f_val.strftime('%Y-%m-%d')
             
             # Validación duplicados
-            df_ent = data['entrenamientos'].copy()
+            df_ent = db_data['entrenamientos']
             existe = False
             if not df_ent.empty:
                 existe = not df_ent[(df_ent['codnadador'].astype(str) == str(id_nad_final)) & 
@@ -113,7 +113,6 @@ with tab_cargar:
             if existe:
                 st.error("Ya existe este registro en la base de datos.")
             else:
-                # Regla de parciales
                 m_tot = int(dist_t_val.split(" ")[0])
                 m_par = 100 if m_tot == 400 else (50 if m_tot == 200 else (25 if m_tot == 100 else 0))
                 
@@ -126,14 +125,16 @@ with tab_cargar:
 
                 st.divider()
                 st.subheader("2. Registrar Tiempos")
-                with st.form("f_registro_tiempos", clear_on_submit=True):
+                
+                # Formulario para registrar tiempos
+                with st.form("f_tiempos"):
                     st.markdown("<div class='section-title'>TIEMPO FINAL</div>", unsafe_allow_html=True)
                     tf1, ts1, tf2, ts2, tf3 = st.columns([1, 0.2, 1, 0.2, 1])
                     m_f = tf1.number_input("Min", 0, 59, 0, format="%02d")
                     s_f = tf2.number_input("Seg", 0, 59, 0, format="%02d")
                     c_f = tf3.number_input("Cent", 0, 99, 0, format="%02d")
 
-                    lista_parciales_data = []
+                    lista_parciales_inputs = []
                     if quiere_parciales:
                         st.markdown(f"<div class='section-title'>PARCIALES ({m_par} mts)</div>", unsafe_allow_html=True)
                         for i in range(1, 5):
@@ -142,27 +143,32 @@ with tab_cargar:
                             pm = px1.number_input("M", 0, 59, 0, key=f"m_{i}", format="%02d")
                             ps = px2.number_input("S", 0, 59, 0, key=f"s_{i}", format="%02d")
                             pc = px3.number_input("C", 0, 99, 0, key=f"c_{i}", format="%02d")
-                            lista_parciales_data.append((pm, ps, pc))
+                            lista_parciales_inputs.append((pm, ps, pc))
 
                     st.write("")
                     obs = st.text_area("Observaciones")
 
-                    if st.form_submit_button("AGREGAR A COLA", use_container_width=True):
+                    btn_guardar = st.form_submit_button("AGREGAR A COLA", use_container_width=True)
+
+                    if btn_guardar:
                         seg_final = tiempo_a_segundos(m_f, s_f, c_f)
                         
                         if seg_final == 0:
                             st.error("El tiempo final es obligatorio.")
                         else:
-                            # VALIDACIÓN DE COHERENCIA
-                            error_coherencia = False
+                            # VALIDACIÓN DE COHERENCIA (Muestra aviso sin borrar datos)
+                            incoherente = False
                             if quiere_parciales:
-                                suma_parciales = sum([tiempo_a_segundos(p[0], p[1], p[2]) for p in lista_parciales_data])
+                                suma_parciales = sum([tiempo_a_segundos(p[0], p[1], p[2]) for p in lista_parciales_inputs])
                                 if suma_parciales > 0 and abs(suma_parciales - seg_final) > 0.5:
-                                    st.error(f"Incoherencia de tiempos: La suma de parciales ({suma_parciales:.2f}s) no coincide con el final ({seg_final:.2f}s).")
-                                    error_coherencia = True
+                                    st.warning(f"⚠️ Advertencia: La suma de parciales ({suma_parciales:.2f}s) difiere del final ({seg_final:.2f}s). Por favor verifica los datos.")
+                                    incoherente = True # Marcamos pero no bloqueamos si prefieres que solo sea aviso, 
+                                                       # o si quieres bloquear cámbialo a st.error y stop.
                             
-                            if not error_coherencia:
-                                id_dp = data['distancias'][data['distancias']['descripcion'].str.startswith(str(m_par))].iloc[0]['coddistancia'] if quiere_parciales else ""
+                            # Si quieres que la incoherencia sea un BLOQUEO, mantén el "if not incoherente". 
+                            # Si quieres que solo avise pero deje guardar, quita esa validación.
+                            if not incoherente:
+                                id_dp = db_data['distancias'][db_data['distancias']['descripcion'].str.startswith(str(m_par))].iloc[0]['coddistancia'] if quiere_parciales else ""
                                 base_id = pd.to_numeric(df_ent['id_entrenamiento'], errors='coerce').max() if not df_ent.empty else 0
                                 new_id = int(base_id if not pd.isna(base_id) else 0) + len(st.session_state.cola_tests) + 1
                                 
@@ -171,13 +177,14 @@ with tab_cargar:
                                     "codnadador": int(id_nad_final), "codestilo": id_est,
                                     "coddistancia": id_dt, "coddistancia_parcial": id_dp,
                                     "tiempo_final": tiempo_str(m_f, s_f, c_f),
-                                    "parcial_1": tiempo_str(*lista_parciales_data[0]) if len(lista_parciales_data)>0 and sum(lista_parciales_data[0])>0 else "",
-                                    "parcial_2": tiempo_str(*lista_parciales_data[1]) if len(lista_parciales_data)>1 and sum(lista_parciales_data[1])>0 else "",
-                                    "parcial_3": tiempo_str(*lista_parciales_data[2]) if len(lista_parciales_data)>2 and sum(lista_parciales_data[2])>0 else "",
-                                    "parcial_4": tiempo_str(*lista_parciales_data[3]) if len(lista_parciales_data)>3 and sum(lista_parciales_data[3])>0 else "",
+                                    "parcial_1": tiempo_str(*lista_parciales_inputs[0]) if len(lista_parciales_inputs)>0 and sum(lista_parciales_inputs[0])>0 else "",
+                                    "parcial_2": tiempo_str(*lista_parciales_inputs[1]) if len(lista_parciales_inputs)>1 and sum(lista_parciales_inputs[1])>0 else "",
+                                    "parcial_3": tiempo_str(*lista_parciales_inputs[2]) if len(lista_parciales_inputs)>2 and sum(lista_parciales_inputs[2])>0 else "",
+                                    "parcial_4": tiempo_str(*lista_parciales_inputs[3]) if len(lista_parciales_inputs)>3 and sum(lista_parciales_inputs[3])>0 else "",
                                     "observaciones": obs
                                 })
-                                reset_todo()
+                                # REINICIO TOTAL TRAS CARGA EXITOSA
+                                limpiar_formulario()
                                 st.rerun()
 
 # ==============================================================================
@@ -190,9 +197,9 @@ with tab_ver:
         if s_n: t_id = df_nad[(df_nad['apellido'].str.upper() + ", " + df_nad['nombre']) == s_n].iloc[0]['codnadador']
     
     if t_id:
-        df_h = data['entrenamientos'][data['entrenamientos']['codnadador'].astype(str) == str(t_id)].copy()
+        df_h = db_data['entrenamientos'][db_data['entrenamientos']['codnadador'].astype(str) == str(t_id)].copy()
         if not df_h.empty:
-            df_h = df_h.merge(data['estilos'], on='codestilo', how='left').merge(data['distancias'], left_on='coddistancia', right_on='coddistancia', how='left').merge(data['distancias'], left_on='coddistancia_parcial', right_on='coddistancia', how='left', suffixes=('_tot', '_par'))
+            df_h = df_h.merge(db_data['estilos'], on='codestilo', how='left').merge(db_data['distancias'], left_on='coddistancia', right_on='coddistancia', how='left').merge(db_data['distancias'], left_on='coddistancia_parcial', right_on='coddistancia', how='left', suffixes=('_tot', '_par'))
             for _, r in df_h.sort_values('fecha', ascending=False).iterrows():
                 ps = [r.get(f'parcial_{i}') for i in range(1,5)]
                 splits = "".join([f"<div class='split-item'><span class='split-label'>P{i+1}</span><span class='split-val'>{p}</span></div>" for i, p in enumerate(ps) if p and str(p) not in ['nan','']])
@@ -202,11 +209,13 @@ with tab_ver:
 if st.session_state.cola_tests:
     st.divider()
     st.info(f"📋 {len(st.session_state.cola_tests)} tests en cola.")
-    c1, c2 = st.columns(2)
-    if c1.button("🚀 SUBIR TODO", type="primary", use_container_width=True):
-        df_f = pd.concat([data['entrenamientos'], pd.DataFrame(st.session_state.cola_tests)], ignore_index=True)
+    c_s1, c_s2 = st.columns(2)
+    if c_s1.button("🚀 SUBIR TODO", type="primary", use_container_width=True):
+        df_f = pd.concat([db_data['entrenamientos'], pd.DataFrame(st.session_state.cola_tests)], ignore_index=True)
         conn.update(worksheet="Entrenamientos", data=df_f)
-        st.session_state.cola_tests = []; st.cache_data.clear()
+        st.session_state.cola_tests = []
+        st.cache_data.clear()
         st.success("✅ Sincronizado."); st.rerun()
-    if c2.button("🗑️ VACIAR COLA", use_container_width=True):
-        st.session_state.cola_tests = []; st.rerun()
+    if c_s2.button("🗑️ VACIAR COLA", use_container_width=True):
+        st.session_state.cola_tests = []
+        st.rerun()
