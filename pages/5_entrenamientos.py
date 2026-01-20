@@ -37,6 +37,7 @@ st.markdown("""
     .split-val { font-family: monospace; font-size: 14px; color: #eee; }
     .time-sep { text-align: center; font-size: 18px; font-weight: bold; margin-top: 32px; color: #666; }
     .config-box { background: #1e1e1e; padding: 15px; border-radius: 10px; border-left: 5px solid #E30613; margin-bottom: 20px; }
+    .section-title { color: #E30613; font-weight: bold; margin-top: 15px; margin-bottom: 5px; border-bottom: 1px solid #333; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -70,10 +71,9 @@ def tiempo_str(m, s, c): return f"{int(m):02d}:{int(s):02d}.{int(c):02d}"
 tab_ver, tab_cargar = st.tabs(["📂 Historial", "📝 Cargar Test"])
 
 # ==============================================================================
-#  SECCIÓN DE CARGA (Con Reseteo Dinámico)
+#  SECCIÓN DE CARGA
 # ==============================================================================
 with tab_cargar:
-    # Usamos el form_key para que todo este bloque se reinicie
     with st.container(key=f"carga_cont_{st.session_state.form_key}"):
         st.subheader("1️⃣ Definir Prueba")
         
@@ -96,17 +96,27 @@ with tab_cargar:
             id_dt = data['distancias'][data['distancias']['descripcion'] == dist_t_val].iloc[0]['coddistancia']
             fecha_s = f_val.strftime('%Y-%m-%d')
             
-            # Validación
+            # --- VALIDACIÓN ROBUSTA (Corrección del error "Ya existe") ---
             df_ent = data['entrenamientos'].copy()
             existe_db = False
             if not df_ent.empty:
-                existe_db = not df_ent[(df_ent['codnadador'].astype(str) == str(id_nad_final)) & 
-                                      (df_ent['fecha'].astype(str) == str(fecha_s)) & 
-                                      (df_ent['codestilo'].astype(str) == str(id_est)) &
-                                      (df_ent['coddistancia'].astype(str) == str(id_dt))].empty
+                # Forzar conversión a str para evitar errores de comparación
+                existe_db = not df_ent[
+                    (df_ent['codnadador'].astype(str) == str(id_nad_final)) & 
+                    (df_ent['fecha'].astype(str) == str(fecha_s)) & 
+                    (df_ent['codestilo'].astype(str) == str(id_est)) &
+                    (df_ent['coddistancia'].astype(str) == str(id_dt))
+                ].empty
             
-            if existe_db:
-                st.error("🚫 Ya existe este registro en la base de datos.")
+            # Validar también contra la cola de carga actual
+            existe_cola = any(x for x in st.session_state.cola_tests if 
+                              str(x['codnadador']) == str(id_nad_final) and 
+                              str(x['fecha']) == str(fecha_s) and 
+                              str(x['codestilo']) == str(id_est) and
+                              str(x['coddistancia']) == str(id_dt))
+            
+            if existe_db or existe_cola:
+                st.error("🚫 Ya existe un registro para este nadador el mismo día con este estilo y distancia.")
             else:
                 m_tot = int(dist_t_val.split(" ")[0])
                 m_par = 100 if m_tot == 400 else (50 if m_tot == 200 else (25 if m_tot == 100 else 0))
@@ -121,6 +131,8 @@ with tab_cargar:
                 st.divider()
                 st.subheader("2️⃣ Registrar Tiempos")
                 with st.form("f_registro", clear_on_submit=True):
+                    # --- SEPARACIÓN VISUAL: TIEMPO FINAL ---
+                    st.markdown("<div class='section-title'>🏁 TIEMPO FINAL</div>", unsafe_allow_html=True)
                     tf1, tf_s1, tf2, tf_s2, tf3 = st.columns([1, 0.2, 1, 0.2, 1])
                     tm_m = tf1.number_input("Min", 0, 59, 0)
                     tm_s = tf2.number_input("Seg", 0, 59, 0)
@@ -128,23 +140,31 @@ with tab_cargar:
 
                     tps = ["", "", "", ""]
                     if quiere_parciales:
+                        st.write("") # Espaciador
+                        # --- SEPARACIÓN VISUAL: PARCIALES ---
+                        st.markdown(f"<div class='section-title'>📊 PARCIALES ({m_par} mts)</div>", unsafe_allow_html=True)
                         for i in range(1, 5):
-                            st.write(f"Parcial {i} ({m_par}m)")
+                            st.write(f"**Parcial {i}**")
                             c1, c2, c3 = st.columns(3)
                             pm = c1.number_input("M", 0, 59, 0, key=f"m_{i}")
                             ps = c2.number_input("S", 0, 59, 0, key=f"s_{i}")
                             pc = c3.number_input("C", 0, 99, 0, key=f"c_{i}")
                             if (pm+ps+pc) > 0: tps[i-1] = tiempo_str(pm, ps, pc)
 
+                    st.write("")
                     obs = st.text_area("Observaciones")
 
                     if st.form_submit_button("📥 AGREGAR A COLA", use_container_width=True):
                         if (tm_m + tm_s + tm_c) == 0:
-                            st.error("Falta el tiempo final.")
+                            st.error("El tiempo final es obligatorio.")
                         else:
                             id_dp = data['distancias'][data['distancias']['descripcion'].str.startswith(str(m_par))].iloc[0]['coddistancia'] if quiere_parciales else ""
+                            
+                            # ID incremental seguro
                             base_id = pd.to_numeric(df_ent['id_entrenamiento'], errors='coerce').max() if not df_ent.empty else 0
-                            new_id = int(base_id if not pd.isna(base_id) else 0) + len(st.session_state.cola_tests) + 1
+                            if pd.isna(base_id): base_id = 0
+                            
+                            new_id = int(base_id) + len(st.session_state.cola_tests) + 1
                             
                             st.session_state.cola_tests.append({
                                 "id_entrenamiento": int(new_id), "fecha": fecha_s,
@@ -154,7 +174,8 @@ with tab_cargar:
                                 "parcial_1": tps[0], "parcial_2": tps[1], "parcial_3": tps[2], "parcial_4": tps[3],
                                 "observaciones": obs
                             })
-                            reset_form() # Incrementa la clave para limpiar el Paso 1
+                            reset_form()
+                            st.success("✅ Añadido a la cola.")
                             st.rerun()
 
 # --- HISTORIAL Y SUBIDA ---
