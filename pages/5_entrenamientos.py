@@ -81,9 +81,20 @@ st.markdown("""
     .split-label { font-size: 10px; color: #aaa; display: block; }
     .split-val { font-family: monospace; font-size: 14px; color: #eee; }
     
-    /* Títulos y Configuración */
+    /* Caja de Configuración Amigable */
+    .config-box { 
+        background-color: #1e1e1e; 
+        padding: 15px; 
+        border-radius: 8px; 
+        border-left: 4px solid #E30613; 
+        margin-top: 10px;
+        margin-bottom: 15px; 
+        color: #eee;
+        font-size: 14px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    
     .section-title { color: #E30613; font-weight: bold; margin-top: 20px; margin-bottom: 10px; border-bottom: 1px solid #333; font-size: 14px; text-transform: uppercase; }
-    .config-box { background: #1e1e1e; padding: 10px; border-radius: 6px; border: 1px solid #444; margin-bottom: 15px; color: #ddd; font-size: 14px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -112,10 +123,9 @@ list_dist_total = [d for d in db['distancias']['descripcion'].unique() if "25" n
 tab_ver, tab_cargar = st.tabs(["📂 Historial", "📝 Cargar Test"])
 
 # ==============================================================================
-#  CARGA DE TEST (Validaciones Restauradas)
+#  CARGA DE TEST
 # ==============================================================================
 with tab_cargar:
-    # Contenedor principal que se resetea por ID
     with st.container(key=f"carga_container_{st.session_state.form_reset_id}"):
         
         # --- PASO 1: DEFINIR PRUEBA ---
@@ -130,17 +140,15 @@ with tab_cargar:
         est_val = c3.selectbox("Estilo", db['estilos']['descripcion'].unique(), index=None)
         dist_t_val = c4.selectbox("Distancia TOTAL", list_dist_total, index=None)
 
-        # Lógica de Validación (Paso 1)
         mostrar_paso_2 = False
+        
         if n_in and est_val and dist_t_val:
-            # Obtener IDs
             id_est = db['estilos'][db['estilos']['descripcion'] == est_val].iloc[0]['codestilo']
             id_dt = db['distancias'][db['distancias']['descripcion'] == dist_t_val].iloc[0]['coddistancia']
-            
-            # Verificar duplicado en DB
-            df_ent = db['entrenamientos']
             fecha_str = f_val.strftime('%Y-%m-%d')
             
+            # Validación de duplicados (Paso 1)
+            df_ent = db['entrenamientos']
             duplicado = False
             if not df_ent.empty:
                 existe = df_ent[
@@ -149,32 +157,39 @@ with tab_cargar:
                     (df_ent['codestilo'].astype(str) == str(id_est)) &
                     (df_ent['coddistancia'].astype(str) == str(id_dt))
                 ]
-                if not existe.empty:
-                    duplicado = True
+                if not existe.empty: duplicado = True
             
             if duplicado:
-                st.error(f"⛔ Ya existe un registro de {est_val} {dist_t_val} para esta fecha. Modifica la fecha o la prueba.")
+                st.error(f"⛔ Ya existe un registro de {est_val} {dist_t_val} para esta fecha.")
             else:
                 mostrar_paso_2 = True
+                
+                # --- CONFIGURACIÓN AMIGABLE (FUERA DEL FORMULARIO) ---
+                m_tot = int(dist_t_val.split(" ")[0])
+                m_par = 100 if m_tot == 400 else (50 if m_tot == 200 else (25 if m_tot == 100 else 0))
+                
+                msg_par = f"Se habilitarán tomas de parciales cada <b>{m_par} mts</b>." if m_par > 0 else "Distancia corta o relevo: Sin toma de parciales."
+                
+                st.markdown(f"""
+                <div class="config-box">
+                    <strong>CONFIGURACIÓN ACTIVA:</strong><br>
+                    Test de {dist_t_val} Estilo {est_val}.<br>
+                    {msg_par}
+                </div>
+                """, unsafe_allow_html=True)
+                
+                # Toggle independiente (solo si aplica)
+                quiere_p = False
+                if m_par > 0:
+                    quiere_p = st.toggle("¿Cargar tiempos parciales?", value=True)
 
-        # --- PASO 2: REGISTRAR TIEMPOS (Solo si pasa validación) ---
+        # --- PASO 2: REGISTRAR TIEMPOS ---
         if mostrar_paso_2:
             st.divider()
             st.subheader("2. Registrar Tiempos")
             
-            m_tot = int(dist_t_val.split(" ")[0])
-            m_par = 100 if m_tot == 400 else (50 if m_tot == 200 else (25 if m_tot == 100 else 0))
-            
-            # Info de configuración
-            msg_parciales = f"Se habilitarán parciales cada {m_par} mts." if m_par > 0 else "Sin parciales automáticos."
-            st.markdown(f"<div class='config-box'>✅ <b>Configuración válida:</b> {dist_t_val} {est_val}.<br>{msg_parciales}</div>", unsafe_allow_html=True)
-            
-            quiere_p = st.toggle("¿Cargar tiempos parciales?", value=True) if m_par > 0 else False
-            
-            # Formulario
             with st.form("form_reg", clear_on_submit=True):
                 st.markdown("<div class='section-title'>TIEMPO FINAL</div>", unsafe_allow_html=True)
-                # Input visual bloqueado
                 st.text_input("Distancia", value=dist_t_val, disabled=True, label_visibility="collapsed")
                 
                 tf1, tf2, tf3 = st.columns(3)
@@ -187,15 +202,13 @@ with tab_cargar:
                     st.markdown(f"<div class='section-title'>PARCIALES ({m_par} mts)</div>", unsafe_allow_html=True)
                     for i in range(1, 5):
                         st.write(f"Parcial {i}")
-                        # Columnas ajustadas para alinear Distancia con Inputs
                         px1, px2, px3, px4 = st.columns([1.2, 1, 1, 1])
-                        px1.text_input(f"d{i}", value=f"{m_par} mts", disabled=True, label_visibility="collapsed", key=f"d_show_{i}")
+                        px1.text_input(f"d{i}", value=f"{m_par} mts", disabled=True, label_visibility="collapsed", key=f"d_vis_{i}")
                         pm = px2.number_input("M", 0, 59, 0, key=f"pm_{i}", label_visibility="collapsed")
                         ps = px3.number_input("S", 0, 59, 0, key=f"ps_{i}", label_visibility="collapsed")
                         pc = px4.number_input("C", 0, 99, 0, key=f"pc_{i}", label_visibility="collapsed")
                         lp.append(f"{pm:02d}:{ps:02d}.{pc:02d}" if (pm+ps+pc)>0 else "")
                 
-                # Botón de envío
                 submitted = st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True)
                 
                 if submitted:
@@ -203,7 +216,6 @@ with tab_cargar:
                     if s_final == 0:
                         st.error("⚠️ El tiempo final es obligatorio.")
                     else:
-                        # Validación de coherencia (Advertencia)
                         if quiere_p:
                             s_parciales = 0
                             for p_str in lp:
@@ -211,9 +223,8 @@ with tab_cargar:
                                 if sec: s_parciales += sec
                             
                             if s_parciales > 0 and abs(s_parciales - s_final) > 0.5:
-                                st.warning(f"⚠️ Nota: Suma de parciales ({s_parciales:.2f}s) difiere del final ({s_final:.2f}s). Se guardará igual.")
+                                st.warning(f"⚠️ Nota: La suma de parciales ({s_parciales:.2f}s) difiere del tiempo final ({s_final:.2f}s). Se guardará de todas formas.")
                         
-                        # Guardado
                         with st.spinner("Guardando..."):
                             try:
                                 max_id = pd.to_numeric(db['entrenamientos']['id_entrenamiento'], errors='coerce').max() if not db['entrenamientos'].empty else 0
@@ -242,7 +253,7 @@ with tab_cargar:
                                 
                                 st.success("✅ Guardado con éxito.")
                                 time.sleep(1)
-                                reset_carga() # Limpia Paso 1 y 2
+                                reset_carga()
                                 st.cache_data.clear()
                                 st.rerun()
                                 
@@ -294,7 +305,7 @@ with tab_ver:
                 
                 f_fmt = datetime.strptime(str(r['fecha']), '%Y-%m-%d').strftime('%d/%m/%Y')
                 
-                # Procesar Parciales
+                # Parciales
                 ps = [r.get(f'parcial_{i}') for i in range(1, 5)]
                 p_validos = [p for p in ps if p and str(p).lower() not in ['nan', 'none', '', '00:00.00']]
                 
@@ -303,7 +314,7 @@ with tab_ver:
                     grid_items = "".join([f"<div class='split-item'><span class='split-label'>P{i+1}</span><span class='split-val'>{p}</span></div>" for i, p in enumerate(p_validos)])
                     splits_html_block = f"""<div class='splits-container'><div class='splits-grid'>{grid_items}</div></div>"""
                 
-                # Tarjeta (Sin observaciones)
+                # Renderizado Simple (Sin observaciones)
                 card_html = f"""
                 <div class="test-card">
                     <div class="test-header">
