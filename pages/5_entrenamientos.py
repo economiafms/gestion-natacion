@@ -2,6 +2,7 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime, date
+import plotly.express as px
 
 # --- 1. CONFIGURACIÓN ---
 st.set_page_config(page_title="Entrenamientos", layout="centered")
@@ -14,30 +15,38 @@ rol = st.session_state.role
 mi_id = st.session_state.user_id 
 mi_nombre = st.session_state.user_name
 
-# --- GESTIÓN DE REINICIO TOTAL ---
 if "form_reset_id" not in st.session_state:
     st.session_state.form_reset_id = 0
 
 def reset_carga():
     st.session_state.form_reset_id += 1
 
+# Helper para convertir MM:SS.CC a segundos totales para gráficos
+def a_segundos_totales(tiempo_str):
+    try:
+        if not tiempo_str or str(tiempo_str) == 'nan' or tiempo_str == "": return None
+        m, rest = tiempo_str.split(':')
+        s, c = rest.split('.')
+        return int(m) * 60 + int(s) + int(c) / 100
+    except: return None
+
 st.title("⏱️ Centro de Entrenamiento")
 
 # --- CSS PERSONALIZADO ---
 st.markdown("""
 <style>
-    .test-card { background-color: #262730; border: 1px solid #444; border-radius: 10px; padding: 15px; margin-bottom: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.3); }
+    .test-card { background-color: #262730; border: 1px solid #444; border-radius: 10px; padding: 15px; margin-bottom: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.3); }
     .test-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #555; padding-bottom: 8px; margin-bottom: 8px; }
-    .test-style { font-size: 18px; font-weight: bold; color: white; text-transform: uppercase; }
-    .test-dist { font-size: 14px; color: #4CAF50; font-weight: bold; }
-    .final-time { font-family: monospace; font-size: 22px; font-weight: bold; color: #FFD700; text-align: right; }
-    .splits-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin-top: 10px; padding-top: 8px; border-top: 1px dashed #444; }
+    .test-style { font-size: 16px; font-weight: bold; color: white; text-transform: uppercase; }
+    .test-dist { font-size: 13px; color: #4CAF50; font-weight: bold; }
+    .final-time { font-family: monospace; font-size: 20px; font-weight: bold; color: #FFD700; text-align: right; }
+    .splits-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(60px, 1fr)); gap: 5px; margin-top: 10px; padding-top: 8px; border-top: 1px dashed #444; }
     .split-item { background: rgba(255,255,255,0.05); padding: 5px; border-radius: 4px; text-align: center; }
-    .split-label { font-size: 10px; color: #aaa; display: block; }
-    .split-val { font-family: monospace; font-size: 14px; color: #eee; }
-    .time-sep { text-align: center; font-size: 18px; font-weight: bold; margin-top: 32px; color: #666; }
-    .config-box { background: #1e1e1e; padding: 15px; border-radius: 10px; border-left: 5px solid #E30613; margin-bottom: 20px; }
+    .split-label { font-size: 9px; color: #aaa; display: block; }
+    .split-val { font-family: monospace; font-size: 12px; color: #eee; }
+    .obs-box { margin-top: 8px; font-size: 12px; color: #bbb; font-style: italic; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 4px; border-left: 3px solid #444;}
     .section-title { color: #E30613; font-weight: bold; margin-top: 15px; margin-bottom: 5px; border-bottom: 1px solid #333; font-size: 14px; text-transform: uppercase; }
+    .chart-container { background: #1e1e1e; padding: 15px; border-radius: 10px; margin-bottom: 20px; border: 1px solid #333; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -75,7 +84,6 @@ tab_ver, tab_cargar = st.tabs(["📂 Historial de Tests", "📝 Cargar Test"])
 with tab_cargar:
     with st.container(key=f"carga_container_{st.session_state.form_reset_id}"):
         st.subheader("1. Definir Prueba")
-        
         c1, c2 = st.columns([1, 2])
         f_val = c1.date_input("Fecha", date.today(), format="DD/MM/YYYY")
         
@@ -95,122 +103,137 @@ with tab_cargar:
             id_dt = db_data['distancias'][db_data['distancias']['descripcion'] == dist_t_val].iloc[0]['coddistancia']
             fecha_s = f_val.strftime('%Y-%m-%d')
             
-            # Validación duplicados
             df_ent = db_data['entrenamientos']
-            existe = False
-            if not df_ent.empty:
-                existe = not df_ent[(df_ent['codnadador'].astype(str) == str(id_nad_final)) & 
-                                    (df_ent['fecha'].astype(str) == str(fecha_s)) & 
-                                    (df_ent['codestilo'].astype(str) == str(id_est)) &
-                                    (df_ent['coddistancia'].astype(str) == str(id_dt))].empty
+            existe = not df_ent[(df_ent['codnadador'].astype(str) == str(id_nad_final)) & 
+                                (df_ent['fecha'].astype(str) == str(fecha_s)) & 
+                                (df_ent['codestilo'].astype(str) == str(id_est)) &
+                                (df_ent['coddistancia'].astype(str) == str(id_dt))].empty if not df_ent.empty else False
             
             if existe:
                 st.error("🚫 Ya existe un registro para esta configuración en la fecha seleccionada.")
             else:
                 m_tot = int(dist_t_val.split(" ")[0])
                 m_par = 100 if m_tot == 400 else (50 if m_tot == 200 else (25 if m_tot == 100 else 0))
-                
-                quiere_p = False
-                if m_par > 0:
-                    st.markdown(f"<div class='config-box'><b>Configuración:</b> {dist_t_val} {est_val}.<br>Parciales cada {m_par} mts.</div>", unsafe_allow_html=True)
-                    quiere_p = st.toggle("¿Cargar tiempos parciales?", value=True)
-                else:
-                    st.markdown(f"<div class='config-box'><b>Configuración:</b> {dist_t_val} {est_val}.<br>Regla automática: Sin parciales.</div>", unsafe_allow_html=True)
+                quiere_p = st.toggle("¿Cargar parciales?", value=True) if m_par > 0 else False
 
                 st.divider()
                 st.subheader("2. Registrar Tiempos")
-                
                 with st.form("form_registro_def"):
-                    # SECCIÓN TIEMPO FINAL CON DISTANCIA BLOQUEADA
                     st.markdown("<div class='section-title'>TIEMPO FINAL</div>", unsafe_allow_html=True)
-                    st.text_input("Distancia de referencia", value=dist_t_val, disabled=True, label_visibility="collapsed")
-                    
+                    st.text_input("Prueba", value=dist_t_val, disabled=True, label_visibility="collapsed")
                     tf1, ts1, tf2, ts2, tf3 = st.columns([1, 0.2, 1, 0.2, 1])
-                    mf = tf1.number_input("Min", 0, 59, 0, format="%02d")
-                    sf = tf2.number_input("Seg", 0, 59, 0, format="%02d")
-                    cf = tf3.number_input("Cent", 0, 99, 0, format="%02d")
+                    mf, sf, cf = tf1.number_input("Min", 0, 59, 0), tf2.number_input("Seg", 0, 59, 0), tf3.number_input("Cent", 0, 99, 0)
 
-                    lista_parciales = []
+                    lp = []
                     if quiere_p:
                         st.markdown(f"<div class='section-title'>PARCIALES ({m_par} mts)</div>", unsafe_allow_html=True)
                         for i in range(1, 5):
                             st.write(f"Parcial {i}")
                             px1, px2, px3, px4 = st.columns([1, 1, 1, 1])
                             px1.text_input(f"D_{i}", value=f"{m_par} mts", disabled=True, label_visibility="collapsed")
-                            pm = px2.number_input("M", 0, 59, 0, key=f"pm_{i}", format="%02d", label_visibility="collapsed")
-                            ps = px3.number_input("S", 0, 59, 0, key=f"ps_{i}", format="%02d", label_visibility="collapsed")
-                            pc = px4.number_input("C", 0, 99, 0, key=f"pc_{i}", format="%02d", label_visibility="collapsed")
-                            lista_parciales.append((pm, ps, pc))
+                            pm, ps, pc = px2.number_input("M", 0, 59, 0, key=f"pm_{i}"), px3.number_input("S", 0, 59, 0, key=f"ps_{i}"), px4.number_input("C", 0, 99, 0, key=f"pc_{i}")
+                            lp.append((pm, ps, pc))
 
-                    st.write("")
                     obs = st.text_area("Observaciones")
-
                     if st.form_submit_button("GUARDAR Y REINICIAR", use_container_width=True):
-                        s_final = to_sec(mf, sf, cf)
-                        if s_final == 0:
-                            st.error("El tiempo final es obligatorio.")
+                        s_f = to_sec(mf, sf, cf)
+                        if s_f == 0: st.error("El tiempo final es obligatorio.")
                         else:
-                            # Validación Coherencia Bloqueante
                             valido = True
                             if quiere_p:
-                                s_par = sum([to_sec(p[0], p[1], p[2]) for p in lista_parciales])
-                                if s_par > 0 and abs(s_par - s_final) > 0.5:
-                                    st.error(f"❌ Error: La suma de parciales ({s_par:.2f}s) no coincide con el final ({s_final:.2f}s).")
+                                s_par = sum([to_sec(p[0], p[1], p[2]) for p in lp])
+                                if s_par > 0 and abs(s_par - s_f) > 0.5:
+                                    st.error(f"❌ Error: La suma de parciales ({s_par:.2f}s) no coincide con el final ({s_f:.2f}s).")
                                     valido = False
-                            
                             if valido:
                                 try:
                                     max_id = pd.to_numeric(df_ent['id_entrenamiento'], errors='coerce').max() if not df_ent.empty else 0
                                     new_id = int(0 if pd.isna(max_id) else max_id) + 1
                                     id_dp = db_data['distancias'][db_data['distancias']['descripcion'].str.startswith(str(m_par))].iloc[0]['coddistancia'] if quiere_p else ""
-                                    
                                     reg = pd.DataFrame([{
-                                        "id_entrenamiento": new_id, "fecha": fecha_s,
-                                        "codnadador": int(id_nad_final), "codestilo": id_est,
-                                        "coddistancia": id_dt, "coddistancia_parcial": id_dp,
+                                        "id_entrenamiento": new_id, "fecha": fecha_s, "codnadador": int(id_nad_final), "codestilo": id_est, "coddistancia": id_dt, "coddistancia_parcial": id_dp,
                                         "tiempo_final": to_str(mf, sf, cf),
-                                        "parcial_1": to_str(*lista_parciales[0]) if len(lista_parciales)>0 and sum(lista_parciales[0])>0 else "",
-                                        "parcial_2": to_str(*lista_parciales[1]) if len(lista_parciales)>1 and sum(lista_parciales[1])>0 else "",
-                                        "parcial_3": to_str(*lista_parciales[2]) if len(lista_parciales)>2 and sum(lista_parciales[2])>0 else "",
-                                        "parcial_4": to_str(*lista_parciales[3]) if len(lista_parciales)>3 and sum(lista_parciales[3])>0 else "",
+                                        "parcial_1": to_str(*lp[0]) if len(lp)>0 and sum(lp[0])>0 else "", "parcial_2": to_str(*lp[1]) if len(lp)>1 and sum(lp[1])>0 else "",
+                                        "parcial_3": to_str(*lp[2]) if len(lp)>2 and sum(lp[2])>0 else "", "parcial_4": to_str(*lp[3]) if len(lp)>3 and sum(lp[3])>0 else "",
                                         "observaciones": obs
                                     }])
-                                    
                                     conn.update(worksheet="Entrenamientos", data=pd.concat([df_ent, reg], ignore_index=True))
-                                    st.cache_data.clear()
-                                    reset_carga() # Reinicia Paso 1 y 2
-                                    st.success("✅ Guardado con éxito.")
-                                    st.rerun()
+                                    st.cache_data.clear(); reset_carga(); st.success("✅ Guardado con éxito."); st.rerun()
                                 except Exception as e: st.error(f"Error: {e}")
 
 # ==============================================================================
-#  HISTORIAL (ORIGINAL RESTAURADO)
+#  HISTORIAL Y ANÁLISIS
 # ==============================================================================
 with tab_ver:
     tid_h = mi_id if rol == "N" else None
     if rol in ["M", "P"]:
-        sn_h = st.selectbox("Historial de:", lista_nombres, index=None, key="hnad")
+        sn_h = st.selectbox("Consultar Historial de:", lista_nombres, index=None, key="hist_nad")
         if sn_h: tid_h = df_nad[(df_nad['apellido'].str.upper() + ", " + df_nad['nombre']) == sn_h].iloc[0]['codnadador']
     
     if tid_h:
         df_h = db_data['entrenamientos'][db_data['entrenamientos']['codnadador'].astype(str) == str(tid_h)].copy()
         if not df_h.empty:
-            df_h = df_h.merge(db_data['estilos'], on='codestilo', how='left').merge(db_data['distancias'], left_on='coddistancia', right_on='coddistancia', how='left').merge(db_data['distancias'], left_on='coddistancia_parcial', right_on='coddistancia', how='left', suffixes=('_tot', '_par'))
-            for _, r in df_h.sort_values(['fecha', 'id_entrenamiento'], ascending=False).iterrows():
+            df_h = df_h.merge(db_data['estilos'], on='codestilo', how='left').merge(db_data['distancias'], left_on='coddistancia', right_on='coddistancia', how='left')
+            df_h['fecha_dt'] = pd.to_datetime(df_h['fecha'])
+            df_h['segundos_final'] = df_h['tiempo_final'].apply(a_segundos_totales)
+
+            # --- SECCIÓN: ANÁLISIS DE PROGRESO ---
+            st.markdown("<div class='section-title'>📈 Análisis de Progreso</div>", unsafe_allow_html=True)
+            c_an1, c_an2 = st.columns(2)
+            est_filt = c_an1.selectbox("Filtrar Estilo", ["Todos"] + list(df_h['descripcion_x'].unique()), key="f_est")
+            dist_filt = c_an2.selectbox("Filtrar Distancia", ["Todas"] + list(df_h['descripcion_y'].unique()), key="f_dist")
+
+            df_plot = df_h.copy()
+            if est_filt != "Todos": df_plot = df_plot[df_plot['descripcion_x'] == est_filt]
+            if dist_filt != "Todas": df_plot = df_plot[df_plot['descripcion_y'] == dist_filt]
+
+            if not df_plot.empty:
+                fig = px.line(df_plot.sort_values('fecha_dt'), x='fecha_dt', y='segundos_final', 
+                              markers=True, title=f"Evolución de Tiempos ({est_filt} - {dist_filt})",
+                              labels={'segundos_final': 'Segundos', 'fecha_dt': 'Fecha'})
+                fig.update_layout(template="plotly_dark", height=300, margin=dict(l=20, r=20, t=40, b=20))
+                st.plotly_chart(fig, use_container_width=True)
+            else: st.warning("No hay datos suficientes para el gráfico con esos filtros.")
+
+            # --- SECCIÓN: LISTADO DE TESTS ---
+            st.markdown("<div class='section-title'>📋 Registros de Test</div>", unsafe_allow_html=True)
+            for idx, r in df_h.sort_values(['fecha', 'id_entrenamiento'], ascending=False).iterrows():
+                # Preparar parciales
                 ps = [r.get(f'parcial_{i}') for i in range(1,5)]
-                splits = "".join([f"<div class='split-item'><span class='split-label'>P{i+1}</span><span class='split-val'>{p}</span></div>" for i, p in enumerate(ps) if p and str(p) not in ['nan','']])
-                f_fmt = datetime.strptime(str(r['fecha']), '%Y-%m-%d').strftime('%d/%m/%Y')
+                parciales_validos = [p for p in ps if p and str(p) not in ['nan','None','']]
+                
+                # HTML dinámico: Solo mostrar si existen parciales
+                splits_html = ""
+                if parciales_validos:
+                    items = "".join([f"<div class='split-item'><span class='split-label'>P{i+1}</span><span class='split-val'>{p}</span></div>" for i, p in enumerate(parciales_validos)])
+                    splits_html = f"<div class='splits-grid'>{items}</div>"
+                
+                # HTML dinámico: Solo mostrar si existen observaciones
+                obs_html = f"<div class='obs-box'>📝 {r['observaciones']}</div>" if r['observaciones'] and str(r['observaciones']) not in ['nan','None',''] else ""
+                
+                f_fmt = r['fecha_dt'].strftime('%d/%m/%Y')
+                
                 st.markdown(f"""
                 <div class="test-card">
                     <div class="test-header">
                         <div>
-                            <div class="test-style">{r.get('descripcion', '-')}</div>
-                            <div class="test-dist">{r.get('descripcion_tot', '-')}</div>
+                            <div class="test-style">{r.get('descripcion_x', '-')}</div>
+                            <div class="test-dist">{r.get('descripcion_y', '-')}</div>
                             <div class="test-date">📅 {f_fmt}</div>
                         </div>
                         <div class="final-time">{r['tiempo_final']}</div>
                     </div>
-                    <div class="splits-grid">{splits}</div>
-                    <div class="obs-box">📝 {r['observaciones'] if str(r['observaciones']) not in ['nan','None',''] else 'Sin observaciones.'}</div>
+                    {splits_html}
+                    {obs_html}
                 </div>""", unsafe_allow_html=True)
+
+                # Gráfico de Progresión de Parciales (Opcional por Card)
+                if parciales_validos:
+                    if st.checkbox(f"Ver gráfico de parciales", key=f"chk_{r['id_entrenamiento']}"):
+                        p_secs = [a_segundos_totales(p) for p in parciales_validos]
+                        df_p = pd.DataFrame({'Parcial': [f"P{i+1}" for i in range(len(p_secs))], 'Segundos': p_secs})
+                        fig_p = px.bar(df_p, x='Parcial', y='Segundos', text='Segundos', color='Segundos',
+                                       color_continuous_scale='Reds', title="Progreso entre Parciales")
+                        fig_p.update_layout(template="plotly_dark", height=250, showlegend=False)
+                        st.plotly_chart(fig_p, use_container_width=True)
         else: st.info("No hay registros.")
