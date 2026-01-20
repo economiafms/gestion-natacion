@@ -208,7 +208,7 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
         <div class="ficha-grid">
             <div>📅 Nacimiento: <b>{nac_str}</b></div>
             <div>🎂 Edad (al 31/12): <b>{edad_actual} años</b></div>
-            <div>🏷️ Categoría Actual: <b>{cat_actual}</b></div>
+            <div>🏷️ Categoría: <b>{cat_actual}</b></div>
             <div>⚧️ Género: <b>{info['codgenero']}</b></div>
         </div>
         <div class="ficha-medals">
@@ -521,3 +521,4 @@ else:
             render_tab_ficha(id_actual, unique_key_suffix="_master")
             
     with tab3: render_tab_relevos_general()
+
