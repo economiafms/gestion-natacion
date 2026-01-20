@@ -29,7 +29,6 @@ st.markdown("""
     .test-dist { font-size: 14px; color: #4CAF50; font-weight: bold; margin-top: 2px; }
     .test-date { font-size: 12px; color: #aaa; margin-top: 4px; }
     .final-time { font-family: monospace; font-size: 22px; font-weight: bold; color: #FFD700; text-align: right; }
-    .final-label { font-size: 10px; color: #888; text-transform: uppercase; text-align: right; }
     .splits-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin-top: 10px; padding-top: 8px; border-top: 1px dashed #444; }
     .split-item { background: rgba(255,255,255,0.05); padding: 5px; border-radius: 4px; text-align: center; }
     .split-label { font-size: 10px; color: #aaa; display: block; }
@@ -59,24 +58,24 @@ data = cargar_entrenamientos()
 if not data: st.stop()
 
 df_nad = data['nadadores'].copy()
-# Buscamos el nombre exacto del nadador logueado usando el codnadador
+# Buscamos el nombre exacto del nadador logueado usando el codnadador para el perfil N
 nadador_logueado_row = df_nad[df_nad['codnadador'] == mi_id]
 mi_nombre_completo = f"{nadador_logueado_row.iloc[0]['apellido'].upper()}, {nadador_logueado_row.iloc[0]['nombre']}" if not nadador_logueado_row.empty else mi_nombre
 
 lista_nombres = sorted((df_nad['apellido'].astype(str).str.upper() + ", " + df_nad['nombre'].astype(str)).unique().tolist())
 
-# Filtros de Distancia
+# Filtros de Distancia solicitados
 dist_options = data['distancias']['descripcion'].unique().tolist()
 list_dist_total = [d for d in dist_options if "25" not in d and "4x" not in d.lower()]
-list_dist_parcial = [d for d in dist_options if any(x in d for x in ["25 ", "50 ", "100 "])]
+list_dist_parcial = [d for d in dist_options if d.startswith("25 ") or d.startswith("50 ") or d.startswith("100 ")]
 
 def tiempo_str(m, s, c): return f"{int(m):02d}:{int(s):02d}.{int(c):02d}"
 
 # ==============================================================================
-#  SINCRONIZACIÓN
+#  SINCRONIZACIÓN (Cola de Carga)
 # ==============================================================================
 if st.session_state.cola_tests:
-    st.info(f"📋 **{len(st.session_state.cola_tests)} tests** en cola para subir.")
+    st.info(f"📋 **{len(st.session_state.cola_tests)} tests** en cola para sincronizar.")
     c1, c2 = st.columns(2)
     if c1.button("🚀 SUBIR A GOOGLE SHEETS", type="primary", use_container_width=True):
         try:
@@ -90,14 +89,14 @@ if st.session_state.cola_tests:
         st.session_state.cola_tests = []; st.rerun()
 
 # ==============================================================================
-#  VISTAS
+#  PESTAÑAS
 # ==============================================================================
 tab_ver, tab_cargar = st.tabs(["📂 Historial", "📝 Cargar Test"])
 
 with tab_ver:
     target_id = mi_id if rol == "N" else None
     if rol in ["M", "P"]:
-        sel = st.selectbox("Buscar Nadador:", lista_nombres)
+        sel = st.selectbox("Consultar Historial de:", lista_nombres)
         if sel:
             target_id = df_nad[(df_nad['apellido'].str.upper() + ", " + df_nad['nombre']) == sel].iloc[0]['codnadador']
     
@@ -125,25 +124,25 @@ with tab_ver:
                     <div class="splits-grid">{splits}</div>
                     <div class="obs-box">📝 {r['observaciones']}</div>
                 </div>""", unsafe_allow_html=True)
-        else: st.info("Sin registros.")
+        else: st.info("Sin registros cargados.")
 
 with tab_cargar:
     with st.form("f_test", clear_on_submit=True):
         c1, c2 = st.columns([1, 2])
         f_val = c1.date_input("Fecha", date.today(), format="DD/MM/YYYY")
         
-        # Nadador bloqueado por codnadador si es perfil N
+        # Lógica de Nadador: Bloqueado para N, Libre para M/P
         if rol == "N":
             n_in = c2.selectbox("Nadador", [mi_nombre_completo], disabled=True)
         else:
-            n_in = c2.selectbox("Nadador", lista_nombres, index=None, placeholder="Seleccionar...")
+            n_in = c2.selectbox("Nadador", lista_nombres, index=None, placeholder="Seleccionar atleta...")
 
         c3, c4, c5 = st.columns(3)
         est_val = c3.selectbox("Estilo", data['estilos']['descripcion'].unique(), index=None)
         dist_t_val = c4.selectbox("Distancia TOTAL", list_dist_total, index=None)
         dist_p_val = c5.selectbox("Distancia PARCIAL", list_dist_parcial, index=None)
         
-        st.markdown("##### ⏱️ Tiempo Final")
+        st.markdown("##### ⏱️ Tiempo Final (MM:SS.CC)")
         tf1, tf_s1, tf2, tf_s2, tf3 = st.columns([1, 0.2, 1, 0.2, 1])
         tm_m = tf1.number_input("Min", 0, 59, 0, key="tfm", format="%02d")
         tf_s1.markdown("<div class='time-sep'>:</div>", unsafe_allow_html=True)
@@ -154,15 +153,16 @@ with tab_cargar:
         st.markdown("##### 📊 Parciales")
         label_p = dist_p_val if dist_p_val else "---"
         
+        # Función para generar filas de parciales verticales
         def input_parcial(idx, label):
             st.markdown(f"**Parcial {idx}**")
             col_d, col_m, col_s1, col_s, col_s2, col_c = st.columns([1.5, 1, 0.2, 1, 0.2, 1])
             col_d.text_input(f"Dist {idx}", value=label, disabled=True, key=f"pd{idx}", label_visibility="collapsed")
-            m = col_m.number_input("M", 0, 59, 0, key=f"p{idx}m", format="%02d", label_visibility="collapsed")
+            m = col_m.number_input("Min", 0, 59, 0, key=f"p{idx}m", format="%02d", label_visibility="collapsed")
             col_s1.markdown("<div style='margin-top:8px; text-align:center;'>:</div>", unsafe_allow_html=True)
-            s = col_s.number_input("S", 0, 59, 0, key=f"p{idx}s", format="%02d", label_visibility="collapsed")
+            s = col_s.number_input("Seg", 0, 59, 0, key=f"p{idx}s", format="%02d", label_visibility="collapsed")
             col_s2.markdown("<div style='margin-top:8px; text-align:center;'>.</div>", unsafe_allow_html=True)
-            c = col_c.number_input("C", 0, 99, 0, key=f"p{idx}c", format="%02d", label_visibility="collapsed")
+            c = col_c.number_input("Cent", 0, 99, 0, key=f"p{idx}c", format="%02d", label_visibility="collapsed")
             return tiempo_str(m, s, c) if (m+s+c) > 0 else ""
 
         tp1 = input_parcial(1, label_p)
@@ -170,19 +170,20 @@ with tab_cargar:
         tp3 = input_parcial(3, label_p)
         tp4 = input_parcial(4, label_p)
 
-        obs_val = st.text_area("Observaciones (Máx 400 car.)", max_chars=400, height=80)
+        obs_val = st.text_area("Observaciones (Máx 400 caracteres)", max_chars=400, height=80)
         
         if st.form_submit_button("📥 Agregar a la Cola", use_container_width=True):
             if (rol != "N" and not n_in) or not est_val or not dist_t_val:
-                st.error("⚠️ Faltan datos obligatorios.")
+                st.error("⚠️ Error: El Nadador, Estilo y Distancia Total son campos obligatorios.")
             else:
-                # Recuperar codnadador correcto
+                # Obtener codnadador correcto según selección o sesión
                 final_codnadador = mi_id if rol == "N" else df_nad[(df_nad['apellido'].str.upper() + ", " + df_nad['nombre']) == n_in].iloc[0]['codnadador']
                 
                 new_id = (data['entrenamientos']['id_entrenamiento'].max() if not data['entrenamientos'].empty else 0) + len(st.session_state.cola_tests) + 1
                 
                 st.session_state.cola_tests.append({
-                    "id_entrenamiento": int(new_id), "fecha": f_val.strftime('%Y-%m-%d'),
+                    "id_entrenamiento": int(new_id), 
+                    "fecha": f_val.strftime('%Y-%m-%d'),
                     "codnadador": int(final_codnadador), 
                     "codestilo": data['estilos'][data['estilos']['descripcion'] == est_val].iloc[0]['codestilo'],
                     "coddistancia": data['distancias'][data['distancias']['descripcion'] == dist_t_val].iloc[0]['coddistancia'],
@@ -191,4 +192,4 @@ with tab_cargar:
                     "parcial_1": tp1, "parcial_2": tp2, "parcial_3": tp3, "parcial_4": tp4,
                     "observaciones": obs_val
                 })
-                st.success("Test agregado."); st.rerun()
+                st.success("✅ Test agregado a la cola."); st.rerun()
