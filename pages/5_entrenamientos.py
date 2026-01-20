@@ -48,9 +48,6 @@ st.markdown("""
     .split-label { font-size: 10px; color: #aaa; display: block; }
     .split-val { font-family: monospace; font-size: 14px; color: #eee; }
     
-    /* Observaciones */
-    .obs-box { margin-top: 10px; font-size: 13px; color: #ddd; font-style: italic; background: rgba(227, 6, 19, 0.1); padding: 10px; border-radius: 4px; border-left: 3px solid #E30613; }
-    
     .section-title { color: #E30613; font-weight: bold; margin-top: 20px; margin-bottom: 10px; border-bottom: 1px solid #333; font-size: 14px; text-transform: uppercase; }
 </style>
 """, unsafe_allow_html=True)
@@ -123,11 +120,30 @@ with tab_cargar:
                 obs = st.text_area("Observaciones")
                 
                 if st.form_submit_button("GUARDAR REGISTRO"):
-                    # Lógica de guardado...
-                    # AQUÍ IRÍA EL conn.update(...)
-                    reset_carga()
-                    st.success("Guardado.")
-                    st.rerun()
+                    try:
+                        max_id = pd.to_numeric(db['entrenamientos']['id_entrenamiento'], errors='coerce').max() if not db['entrenamientos'].empty else 0
+                        new_id = int(0 if pd.isna(max_id) else max_id) + 1
+                        
+                        id_dp = ""
+                        if quiere_p:
+                             id_dp = db['distancias'][db['distancias']['descripcion'].str.startswith(str(m_par))].iloc[0]['coddistancia']
+
+                        row = pd.DataFrame([{
+                            "id_entrenamiento": new_id, "fecha": f_val.strftime('%Y-%m-%d'), 
+                            "codnadador": int(id_nad_target), "codestilo": db['estilos'][db['estilos']['descripcion'] == est_val].iloc[0]['codestilo'],
+                            "coddistancia": db['distancias'][db['distancias']['descripcion'] == dist_t_val].iloc[0]['coddistancia'],
+                            "coddistancia_parcial": id_dp,
+                            "tiempo_final": f"{mf:02d}:{sf:02d}.{cf:02d}",
+                            "parcial_1": lp[0] if len(lp)>0 else "", "parcial_2": lp[1] if len(lp)>1 else "",
+                            "parcial_3": lp[2] if len(lp)>2 else "", "parcial_4": lp[3] if len(lp)>3 else "",
+                            "observaciones": obs
+                        }])
+                        conn.update(worksheet="Entrenamientos", data=pd.concat([db['entrenamientos'], row], ignore_index=True))
+                        reset_carga()
+                        st.cache_data.clear()
+                        st.success("Guardado.")
+                        st.rerun()
+                    except Exception as e: st.error(f"Error: {e}")
 
 # ==============================================================================
 #  HISTORIAL Y ANÁLISIS
@@ -144,7 +160,7 @@ with tab_ver:
         if not df_h.empty:
             df_h = df_h.merge(db['estilos'], on='codestilo', how='left').merge(db['distancias'], left_on='coddistancia', right_on='coddistancia', how='left')
             
-            # FILTROS
+            # Filtros
             st.markdown("<div class='section-title'>🔍 Filtros</div>", unsafe_allow_html=True)
             est_opts = ["Todos"] + sorted(df_h['descripcion_x'].unique().tolist())
             dist_opts = ["Todos"] + sorted(df_h['descripcion_y'].unique().tolist())
@@ -157,20 +173,22 @@ with tab_ver:
             if f_est != "Todos": df_filt = df_filt[df_filt['descripcion_x'] == f_est]
             if f_dist != "Todos": df_filt = df_filt[df_filt['descripcion_y'] == f_dist]
 
-            # GRÁFICO PROGRESIÓN
+            # Gráfico de Progresión
             if f_est != "Todos" and f_dist != "Todos" and len(df_filt) >= 2:
                 st.markdown("<div class='section-title'>📈 Evolución</div>", unsafe_allow_html=True)
                 df_filt['seg'] = df_filt['tiempo_final'].apply(a_segundos)
                 df_filt['fecha_dt'] = pd.to_datetime(df_filt['fecha'])
-                fig = px.line(df_filt.sort_values('fecha_dt'), x='fecha_dt', y='seg', markers=True, color_discrete_sequence=['#E30613'])
-                fig.update_layout(height=250, margin=dict(l=0, r=0, t=10, b=0), template="plotly_dark", yaxis_title="Seg", xaxis_title="")
+                fig = px.line(df_filt.sort_values('fecha_dt'), x='fecha_dt', y='seg', markers=True, 
+                              color_discrete_sequence=['#E30613'])
+                fig.update_layout(height=250, margin=dict(l=0, r=0, t=10, b=0), template="plotly_dark", 
+                                  yaxis_title="Segundos", xaxis_title="")
                 st.plotly_chart(fig, use_container_width=True)
 
-            # LISTADO DE CARDS
+            # Listado
             st.markdown("<div class='section-title'>📋 Registros</div>", unsafe_allow_html=True)
             for _, r in df_filt.sort_values(['fecha', 'id_entrenamiento'], ascending=False).iterrows():
                 
-                # --- LÓGICA DE VISUALIZACIÓN CONDICIONAL ---
+                f_fmt = datetime.strptime(str(r['fecha']), '%Y-%m-%d').strftime('%d/%m/%Y')
                 
                 # 1. Parciales
                 ps = [r.get(f'parcial_{i}') for i in range(1, 5)]
@@ -181,15 +199,7 @@ with tab_ver:
                     grid_items = "".join([f"<div class='split-item'><span class='split-label'>P{i+1}</span><span class='split-val'>{p}</span></div>" for i, p in enumerate(p_validos)])
                     splits_html_block = f"""<div class='splits-container'><div class='splits-grid'>{grid_items}</div></div>"""
                 
-                # 2. Observaciones
-                obs_raw = str(r.get('observaciones', '')).strip()
-                obs_html_block = ""
-                if obs_raw and obs_raw.lower() not in ['nan', 'none', '']:
-                    obs_html_block = f"""<div class='obs-box'>📝 {obs_raw}</div>"""
-                
-                f_fmt = datetime.strptime(str(r['fecha']), '%Y-%m-%d').strftime('%d/%m/%Y')
-                
-                # 3. Renderizado
+                # Renderizado SIN Observaciones
                 card_html = f"""
                 <div class="test-card">
                     <div class="test-header">
@@ -200,7 +210,6 @@ with tab_ver:
                         <div class="final-time">{r['tiempo_final']}</div>
                     </div>
                     {splits_html_block}
-                    {obs_html_block}
                 </div>
                 """
                 st.markdown(card_html, unsafe_allow_html=True)
@@ -208,6 +217,7 @@ with tab_ver:
                 if p_validos and st.checkbox(f"Analizar tramos", key=f"chk_{r['id_entrenamiento']}"):
                     p_seg = [a_segundos(p) for p in p_validos]
                     fig_bar = px.bar(x=[f"P{i+1}" for i in range(len(p_seg))], y=p_seg, 
+                                     labels={'x': 'Parcial', 'y': 'Tiempo (s)'},
                                      color_discrete_sequence=['#E30613'])
                     fig_bar.update_layout(height=200, template="plotly_dark", showlegend=False, margin=dict(l=0, r=0, t=10, b=0))
                     st.plotly_chart(fig_bar, use_container_width=True)
