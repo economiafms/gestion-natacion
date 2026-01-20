@@ -27,7 +27,8 @@ def cargar_data():
             "nadadores": conn.read(worksheet="Nadadores"),
             "tiempos": conn.read(worksheet="Tiempos"),
             "relevos": conn.read(worksheet="Relevos"),
-            "categorias": conn.read(worksheet="Categorias")
+            "categorias": conn.read(worksheet="Categorias"),
+            "estilos": conn.read(worksheet="Estilos") # Agregado para nombres de estilos
         }
     except: return None
 
@@ -116,34 +117,84 @@ if db and st.session_state.user_id:
     except: edad = 0
     cat = calcular_cat_exacta(edad, db['categorias'])
     
-    df_t = db['tiempos'].copy(); df_r = db['relevos'].copy()
+    # --- PROCESAMIENTO DE DATOS ---
+    df_t = db['tiempos'].copy()
+    df_r = db['relevos'].copy()
+    
+    # Datos para Medallero (Global)
     df_t['posicion'] = pd.to_numeric(df_t['posicion'], errors='coerce').fillna(0).astype(int)
     df_r['posicion'] = pd.to_numeric(df_r['posicion'], errors='coerce').fillna(0).astype(int)
     
     mis_oros = len(df_t[(df_t['codnadador']==user_id)&(df_t['posicion']==1)]) + len(df_r[((df_r['nadador_1']==user_id)|(df_r['nadador_2']==user_id)|(df_r['nadador_3']==user_id)|(df_r['nadador_4']==user_id))&(df_r['posicion']==1)])
     mis_platas = len(df_t[(df_t['codnadador']==user_id)&(df_t['posicion']==2)]) + len(df_r[((df_r['nadador_1']==user_id)|(df_r['nadador_2']==user_id)|(df_r['nadador_3']==user_id)|(df_r['nadador_4']==user_id))&(df_r['posicion']==2)])
     mis_bronces = len(df_t[(df_t['codnadador']==user_id)&(df_t['posicion']==3)]) + len(df_r[((df_r['nadador_1']==user_id)|(df_r['nadador_2']==user_id)|(df_r['nadador_3']==user_id)|(df_r['nadador_4']==user_id))&(df_r['posicion']==3)])
-    mi_total = mis_oros + mis_platas + mis_bronces
+    
+    # Datos para Actividad Individual (Sin Relevos)
+    mis_registros = df_t[df_t['codnadador'] == user_id].copy()
+    total_individuales = len(mis_registros)
+    
+    html_estilos = ""
+    if total_individuales > 0:
+        # Unir con nombres de estilos
+        mis_registros = mis_registros.merge(db['estilos'], on='codestilo', how='left')
+        
+        # Corrección nombre columna descripcion
+        col_desc = 'descripcion'
+        if 'descripcion_x' in mis_registros.columns: col_desc = 'descripcion_x'
+        elif 'descripcion' in mis_registros.columns: col_desc = 'descripcion'
+        
+        # Contar y Ordenar
+        conteo_estilos = mis_registros[col_desc].value_counts()
+        
+        for estilo, cant in conteo_estilos.items():
+            html_estilos += f"""
+            <div style="display:flex; justify-content:space-between; font-size:13px; border-bottom:1px dashed #444; padding:2px 0;">
+                <span style="color:#ddd;">{estilo}</span>
+                <span style="color:#4CAF50; font-weight:bold;">{cant}</span>
+            </div>
+            """
+    else:
+        html_estilos = "<div style='color:#777; font-size:12px; font-style:italic;'>Sin registros individuales aún.</div>"
 
     st.write("### 👤 Tu Perfil")
     st.markdown(f"""
     <style>
-        .padron-card {{ background-color: #262730; border: 1px solid #444; border-radius: 12px; padding: 15px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 6px rgba(0,0,0,0.3); margin-bottom: 20px; }}
-        .p-total {{ font-size: 26px; color: #FFD700; font-weight: bold; }}
+        .padron-card {{ 
+            background-color: #262730; 
+            border: 1px solid #444; 
+            border-radius: 12px; 
+            padding: 15px; 
+            display: flex; 
+            align-items: stretch; /* Altura igual */
+            justify-content: space-between; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3); 
+            margin-bottom: 20px; 
+            gap: 15px;
+        }}
     </style>
+    
     <div class="padron-card">
-        <div style="flex: 2; border-right: 1px solid #555;">
-            <div style="font-weight: bold; font-size: 18px; color: white;">{me['nombre']} {me['apellido']}</div>
-            <div style="font-size: 13px; color: #ccc;">{edad} años • {me['codgenero']}</div>
+        <div style="flex: 1.2; border-right: 1px solid #555; padding-right: 10px; display: flex; flex-direction: column; justify-content: center;">
+            <div style="font-weight: bold; font-size: 18px; color: white; line-height:1.2;">{me['nombre']}<br>{me['apellido']}</div>
+            <div style="font-size: 13px; color: #ccc; margin-top:5px;">{edad} años • {me['codgenero']}</div>
+            <div style="font-size: 14px; color: #4CAF50; font-weight: bold; margin-top: 8px;">{cat}</div>
         </div>
-        <div style="flex: 2; text-align: center;">
-            <div style="display: flex; justify-content: center; gap: 8px; font-size: 16px;">
-                <span>🥇{mis_oros}</span> <span>🥈{mis_platas}</span> <span>🥉{mis_bronces}</span>
+        
+        <div style="flex: 1; text-align: center; border-right: 1px solid #555; padding-right: 10px; display: flex; flex-direction: column; justify-content: center;">
+            <div style="font-size:11px; color:#aaa; margin-bottom:5px; font-weight:bold;">PODIOS</div>
+            <div style="font-size: 16px;">🥇 {mis_oros}</div>
+            <div style="font-size: 16px;">🥈 {mis_platas}</div>
+            <div style="font-size: 16px;">🥉 {mis_bronces}</div>
+        </div>
+        
+        <div style="flex: 1.5; padding-left: 5px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                <span style="font-size:11px; color:#aaa; font-weight:bold;">REGISTROS</span>
+                <span style="font-size:12px; color:#fff; background:#444; padding:1px 6px; border-radius:10px;">Total: {total_individuales}</span>
             </div>
-        </div>
-        <div style="flex: 1; text-align: right; border-left: 1px solid #555; padding-left: 10px;">
-            <div class="p-total">★ {mi_total}</div>
-            <div style="font-size: 16px; color: #4CAF50; font-weight: bold;">{cat}</div>
+            <div style="max-height: 80px; overflow-y: auto; padding-right:5px;">
+                {html_estilos}
+            </div>
         </div>
     </div>
     """, unsafe_allow_html=True)
