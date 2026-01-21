@@ -7,14 +7,13 @@ import time
 st.set_page_config(page_title="Acceso NOB", layout="centered")
 
 # --- 2. GESTIÓN DE ESTADO ---
-# Inicializamos TODAS las variables críticas aquí para evitar errores
 if "role" not in st.session_state: st.session_state.role = None
 if "user_name" not in st.session_state: st.session_state.user_name = None
 if "user_id" not in st.session_state: st.session_state.user_id = None
 if "nro_socio" not in st.session_state: st.session_state.nro_socio = None
 if "admin_unlocked" not in st.session_state: st.session_state.admin_unlocked = False 
 if "ver_nadador_especifico" not in st.session_state: st.session_state.ver_nadador_especifico = None
-if "show_login_form" not in st.session_state: st.session_state.show_login_form = False # Agregado por seguridad
+if "show_login_form" not in st.session_state: st.session_state.show_login_form = False 
 
 # --- 3. CONEXIÓN ---
 conn = st.connection("gsheets", type=GSheetsConnection)
@@ -117,36 +116,39 @@ def login_screen():
     if st.button("INGRESAR", type="primary", use_container_width=True):
         validar_socio()
 
-# --- 6. PÁGINAS ---
+# --- 6. DEFINICIÓN DE PÁGINAS ---
 pg_inicio = st.Page("pages/1_inicio.py", title="Inicio", icon="🏠")
-pg_datos = st.Page("pages/2_visualizar_datos.py", title="Base de Datos", icon="🗃️")
+# CAMBIO AQUÍ: "Base de Datos" -> "Fichero"
+pg_datos = st.Page("pages/2_visualizar_datos.py", title="Fichero", icon="🗃️")
 pg_ranking = st.Page("pages/4_ranking.py", title="Ranking", icon="🏆")
 pg_simulador = st.Page("pages/3_simulador.py", title="Simulador", icon="⏱️")
+pg_entrenamientos = st.Page("pages/5_entrenamientos.py", title="Entrenamientos", icon="🏋️")
+pg_categoria = st.Page("pages/6_mi_categoria.py", title="Mi Categoría", icon="🏅")
 pg_carga = st.Page("pages/1_cargar_datos.py", title="Carga de Datos", icon="⚙️")
 pg_login_obj = st.Page(login_screen, title="Acceso", icon="🔒")
 
-# --- 7. RUTEO ---
+# --- 7. RUTEO Y MENÚ ---
 if not st.session_state.role:
     pg = st.navigation([pg_login_obj])
     pg.run()
 else:
-    # Menú
-    menu_pages = {"Principal": [pg_inicio, pg_datos]}
+    # --- MENÚ PRINCIPAL ---
+    menu_pages = {
+        "Principal": [pg_inicio, pg_datos, pg_entrenamientos, pg_categoria]
+    }
     
+    # --- MENÚ HERRAMIENTAS ---
     if st.session_state.role in ["M", "P"]:
         menu_pages["Herramientas"] = [pg_ranking, pg_simulador]
+        
         if st.session_state.admin_unlocked:
             menu_pages["Administración"] = [pg_carga]
             
     pg = st.navigation(menu_pages)
     
-    # --- SIDEBAR LIMPIO (Solo botón cerrar sesión) ---
     with st.sidebar:
-        # Espaciador para empujar el botón abajo si se desea, o simplemente directo
         st.write("") 
         if st.button("Cerrar Sesión", type="secondary", use_container_width=True):
             cerrar_sesion()
             
     pg.run()
-
-
