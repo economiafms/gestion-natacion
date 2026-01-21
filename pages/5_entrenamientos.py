@@ -120,30 +120,11 @@ def cargar_entrenamientos():
 db = cargar_entrenamientos()
 if not db: st.stop()
 
-# --- PROCESAMIENTO ROBUSTO DE DATOS ---
 df_nad = db['nadadores'].copy()
-df_ent = db['entrenamientos'].copy()
-df_est = db['estilos'].copy()
-df_dist = db['distancias'].copy()
-
-# Normalizar columnas (minúsculas y sin espacios)
-df_nad.columns = df_nad.columns.str.strip().str.lower()
-df_ent.columns = df_ent.columns.str.strip().str.lower()
-df_est.columns = df_est.columns.str.strip().str.lower()
-df_dist.columns = df_dist.columns.str.strip().str.lower()
-
-# Normalizar claves de cruce (IDs) para evitar errores por espacios ocultos
-for df in [df_ent, df_est, df_dist]:
-    if 'codestilo' in df.columns:
-        df['codestilo'] = df['codestilo'].astype(str).str.strip()
-    if 'coddistancia' in df.columns:
-        df['coddistancia'] = df['coddistancia'].astype(str).str.strip()
-
-# Preparar datos de usuario
 nad_info = df_nad[df_nad['codnadador'].astype(str) == str(mi_id)]
 mi_nom_comp = f"{nad_info.iloc[0]['apellido'].upper()}, {nad_info.iloc[0]['nombre']}" if not nad_info.empty else mi_nombre
 lista_noms = sorted((df_nad['apellido'].astype(str).str.upper() + ", " + df_nad['nombre'].astype(str)).unique().tolist())
-list_dist_total = [d for d in df_dist['descripcion'].unique() if "25" not in d and "4x" not in d.lower()]
+list_dist_total = [d for d in db['distancias']['descripcion'].unique() if "25" not in d and "4x" not in d.lower()]
 
 tab_ver, tab_cargar = st.tabs(["📂 Historial", "📝 Cargar Test"])
 
@@ -162,17 +143,18 @@ with tab_cargar:
         id_nad_target = mi_id if rol=="N" else (df_nad[(df_nad['apellido'].str.upper() + ", " + df_nad['nombre']) == n_in].iloc[0]['codnadador'] if n_in else None)
         
         c3, c4 = st.columns(2)
-        est_val = c3.selectbox("Estilo", df_est['descripcion'].unique(), index=None)
+        est_val = c3.selectbox("Estilo", db['estilos']['descripcion'].unique(), index=None)
         dist_t_val = c4.selectbox("Distancia TOTAL", list_dist_total, index=None)
 
         mostrar_paso_2 = False
         
         if n_in and est_val and dist_t_val:
-            id_est = df_est[df_est['descripcion'] == est_val].iloc[0]['codestilo']
-            id_dt = df_dist[df_dist['descripcion'] == dist_t_val].iloc[0]['coddistancia']
+            id_est = db['estilos'][db['estilos']['descripcion'] == est_val].iloc[0]['codestilo']
+            id_dt = db['distancias'][db['distancias']['descripcion'] == dist_t_val].iloc[0]['coddistancia']
             fecha_str = f_val.strftime('%Y-%m-%d')
             
             # Validación duplicados
+            df_ent = db['entrenamientos']
             duplicado = False
             if not df_ent.empty:
                 existe = df_ent[
@@ -246,7 +228,7 @@ with tab_cargar:
                                 try:
                                     max_id = pd.to_numeric(db['entrenamientos']['id_entrenamiento'], errors='coerce').max() if not db['entrenamientos'].empty else 0
                                     new_id = int(0 if pd.isna(max_id) else max_id) + 1
-                                    id_dp = df_dist[df_dist['descripcion'].str.startswith(str(m_par))].iloc[0]['coddistancia'] if quiere_p else ""
+                                    id_dp = db['distancias'][db['distancias']['descripcion'].str.startswith(str(m_par))].iloc[0]['coddistancia'] if quiere_p else ""
 
                                     row = pd.DataFrame([{
                                         "id_entrenamiento": new_id, "fecha": fecha_str, 
@@ -271,11 +253,10 @@ with tab_ver:
         if sel_n: target_id = df_nad[(df_nad['apellido'].str.upper() + ", " + df_nad['nombre']) == sel_n].iloc[0]['codnadador']
     
     if target_id:
-        df_h = df_ent[df_ent['codnadador'].astype(str) == str(target_id)].copy()
+        df_h = db['entrenamientos'][db['entrenamientos']['codnadador'].astype(str) == str(target_id)].copy()
         
         if not df_h.empty:
-            # Merge seguro usando las tablas normalizadas
-            df_h = df_h.merge(df_est, on='codestilo', how='left').merge(df_dist, on='coddistancia', how='left')
+            df_h = df_h.merge(db['estilos'], on='codestilo', how='left').merge(db['distancias'], left_on='coddistancia', right_on='coddistancia', how='left')
             
             # --- FILTROS DINÁMICOS ---
             st.markdown("<div class='section-title'>🔍 Filtros</div>", unsafe_allow_html=True)
@@ -297,29 +278,32 @@ with tab_ver:
             if f_est != "Todos": df_filt = df_filt[df_filt['descripcion_x'] == f_est]
             if f_dist != "Todos": df_filt = df_filt[df_filt['descripcion_y'] == f_dist]
 
-            # --- GRÁFICO RESUMEN ---
+            # --- NUEVO: GRÁFICO RESUMEN (Modificado: Etiquetas condicionales) ---
             if f_est == "Todos" and f_dist == "Todos" and not df_filt.empty:
                 st.markdown("<div class='section-title'>📊 Distribución por Estilos</div>", unsafe_allow_html=True)
                 
+                # Agrupar
                 conteo = df_filt.groupby(['descripcion_x', 'descripcion_y']).size().reset_index(name='Cantidad')
                 
-                # Etiqueta vacía si es 1, sino el número
+                # Lógica de etiqueta: mostrar número solo si > 1
                 conteo['Etiqueta'] = conteo['Cantidad'].apply(lambda x: str(x) if x > 1 else "")
                 
+                # Gráfico
                 fig_count = px.bar(
                     conteo, 
                     x='descripcion_x', 
                     y='Cantidad', 
                     color='descripcion_y',
-                    text='Etiqueta',
-                    color_discrete_sequence=px.colors.sequential.OrRd[::-1], # Rojos/Anaranjados
+                    text='Etiqueta', # Usamos la columna personalizada
+                    color_discrete_sequence=px.colors.sequential.OrRd[::-1],
                     labels={'descripcion_x': 'Estilo', 'descripcion_y': 'Distancia'}
                 )
                 
-                # Tooltip con Metros
+                # Ajustes: Texto grande, Tooltip detallado
                 fig_count.update_traces(
                     textposition='inside', 
                     textfont=dict(size=20, color='white'), 
+                    # Tooltip explícito con Metros
                     hovertemplate='<b>%{x}</b><br>Metros: %{legendgroup}<br>Cantidad: %{y}<extra></extra>'
                 )
                 
@@ -340,6 +324,7 @@ with tab_ver:
                 df_filt['seg'] = df_filt['tiempo_final'].apply(a_segundos)
                 df_filt['fecha_dt'] = pd.to_datetime(df_filt['fecha'])
                 
+                # Ejes personalizados
                 min_val, max_val = df_filt['seg'].min(), df_filt['seg'].max()
                 tick_vals = np.linspace(min_val, max_val, 5) if max_val > min_val else [min_val]
                 tick_text = [fmt_mm_ss(v) for v in tick_vals]
