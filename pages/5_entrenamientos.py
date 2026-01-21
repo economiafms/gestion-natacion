@@ -313,7 +313,6 @@ with tab_ver:
                     text='Etiqueta',
                     color_discrete_sequence=px.colors.sequential.OrRd[::-1], # Colores Anaranjados
                     labels={'descripcion_x': 'Estilo', 'descripcion_y': 'Distancia'},
-                    # Pasamos descripcion_y como custom_data para el tooltip
                     custom_data=['descripcion_y']
                 )
                 
@@ -321,7 +320,6 @@ with tab_ver:
                 fig_count.update_traces(
                     textposition='inside', 
                     textfont=dict(size=20, color='white'), 
-                    # customdata[0] es la distancia
                     hovertemplate='Metros: %{customdata[0]}<br>Cantidad: %{y}<extra></extra>'
                 )
                 
@@ -396,7 +394,8 @@ with tab_ver:
                     fig_bar = px.bar(df_bar, x='Tramo', y='Segundos', text='Etiqueta',
                                      color_discrete_sequence=['#E30613'])
                     
-                    fig_bar.update_traces(textposition='auto', hovertemplate='⏱️ %{text}<extra></extra>')
+                    # AUMENTO DE TAMAÑO DE TEXTO AQUÍ (size=18)
+                    fig_bar.update_traces(textposition='auto', textfont=dict(size=18), hovertemplate='⏱️ %{text}<extra></extra>')
                     
                     fig_bar.update_layout(
                         height=200, 
