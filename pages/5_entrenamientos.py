@@ -24,7 +24,9 @@ if "form_reset_id" not in st.session_state:
 def reset_carga():
     st.session_state.form_reset_id += 1
 
+# --- FUNCIONES AUXILIARES ---
 def a_segundos(t_str):
+    """Convierte MM:SS.CC a segundos (float)"""
     try:
         if not t_str or str(t_str).lower() in ['nan', 'none', '', '00:00.00']: return None
         m, rest = t_str.split(':')
@@ -33,11 +35,11 @@ def a_segundos(t_str):
     except: return None
 
 def fmt_mm_ss(seconds):
-    """Formatea segundos a MM:SS.CC para los ejes"""
+    """Genera etiquetas de eje Y en formato MM:SS.CC"""
     if seconds is None or np.isnan(seconds): return ""
     m = int(seconds // 60)
     s = int(seconds % 60)
-    c = int(round((seconds - int(seconds)) * 100))
+    c = int((seconds - int(seconds)) * 100)
     return f"{m:02d}:{s:02d}.{c:02d}"
 
 st.title("⏱️ Centro de Entrenamiento")
@@ -151,7 +153,7 @@ with tab_cargar:
             id_dt = db['distancias'][db['distancias']['descripcion'] == dist_t_val].iloc[0]['coddistancia']
             fecha_str = f_val.strftime('%Y-%m-%d')
             
-            # Validación
+            # Validación duplicados
             df_ent = db['entrenamientos']
             duplicado = False
             if not df_ent.empty:
@@ -256,20 +258,29 @@ with tab_ver:
         if not df_h.empty:
             df_h = df_h.merge(db['estilos'], on='codestilo', how='left').merge(db['distancias'], left_on='coddistancia', right_on='coddistancia', how='left')
             
-            # --- FILTROS ---
+            # --- FILTROS DINÁMICOS (Corregido) ---
             st.markdown("<div class='section-title'>🔍 Filtros</div>", unsafe_allow_html=True)
-            est_opts = ["Todos"] + sorted(df_h['descripcion_x'].unique().tolist())
-            dist_opts = ["Todos"] + sorted(df_h['descripcion_y'].unique().tolist())
             
+            # 1. Filtro Estilo
+            est_opts = ["Todos"] + sorted(df_h['descripcion_x'].unique().tolist())
             c_f1, c_f2 = st.columns(2)
             f_est = c_f1.selectbox("Estilo", est_opts)
-            f_dist = c_f2.selectbox("Distancia", dist_opts)
+            
+            # 2. Filtro Distancia (Dependiente del Estilo)
+            if f_est == "Todos":
+                # Si ve todos los estilos, ve todas las distancias disponibles del nadador
+                valid_dists = sorted(df_h['descripcion_y'].unique().tolist())
+            else:
+                # Si filtra un estilo, solo muestra distancias nadadas en ESE estilo
+                valid_dists = sorted(df_h[df_h['descripcion_x'] == f_est]['descripcion_y'].unique().tolist())
+                
+            f_dist = c_f2.selectbox("Distancia", ["Todos"] + valid_dists)
 
             df_filt = df_h.copy()
             if f_est != "Todos": df_filt = df_filt[df_filt['descripcion_x'] == f_est]
             if f_dist != "Todos": df_filt = df_filt[df_filt['descripcion_y'] == f_dist]
 
-            # --- GRÁFICO EVOLUCIÓN (FORMATEADO) ---
+            # --- GRÁFICO EVOLUCIÓN ---
             if f_est != "Todos" and f_dist != "Todos" and len(df_filt) >= 2:
                 st.markdown("<div class='section-title'>📈 Evolución</div>", unsafe_allow_html=True)
                 df_filt['seg'] = df_filt['tiempo_final'].apply(a_segundos)
