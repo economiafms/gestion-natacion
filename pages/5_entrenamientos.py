@@ -282,20 +282,27 @@ with tab_ver:
             if f_est == "Todos" and f_dist == "Todos" and not df_filt.empty:
                 st.markdown("<div class='section-title'>📊 Distribución por Estilos</div>", unsafe_allow_html=True)
                 
-                # Contar entrenamientos por estilo
-                conteo = df_filt['descripcion_x'].value_counts().reset_index()
-                conteo.columns = ['Estilo', 'Entrenamientos']
+                # Agrupar por Estilo y Distancia para diferenciar metros (Barras Apiladas)
+                conteo = df_filt.groupby(['descripcion_x', 'descripcion_y']).size().reset_index(name='Cantidad')
                 
-                fig_count = px.bar(conteo, x='Estilo', y='Entrenamientos', text='Entrenamientos',
-                                   color_discrete_sequence=['#E30613'])
+                # Gráfico apilado
+                fig_count = px.bar(
+                    conteo, 
+                    x='descripcion_x', 
+                    y='Cantidad', 
+                    color='descripcion_y', # Colores diferencian distancias
+                    text='Cantidad'
+                )
                 
-                fig_count.update_traces(textposition='auto', hovertemplate='<b>%{x}</b><br>Cantidad: %{y}<extra></extra>')
+                fig_count.update_traces(textposition='auto', hovertemplate='<b>%{x}</b><br>%{legendgroup}: %{y}<extra></extra>')
+                
                 fig_count.update_layout(
-                    height=280, 
+                    height=300, 
                     template="plotly_dark", 
-                    showlegend=False, 
+                    showlegend=True, 
+                    legend_title_text="Distancia",
                     margin=dict(l=0, r=0, t=30, b=0),
-                    yaxis_title="Cantidad", 
+                    yaxis=dict(showticklabels=False, title=None, showgrid=False), # Eje Y limpio (sin números)
                     xaxis_title=""
                 )
                 st.plotly_chart(fig_count, use_container_width=True)
