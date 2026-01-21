@@ -7,6 +7,7 @@ import time
 st.set_page_config(page_title="Acceso NOB", layout="centered")
 
 # --- 2. GESTIÓN DE ESTADO ---
+# Inicializamos TODAS las variables críticas aquí para evitar errores
 if "role" not in st.session_state: st.session_state.role = None
 if "user_name" not in st.session_state: st.session_state.user_name = None
 if "user_id" not in st.session_state: st.session_state.user_id = None
@@ -23,132 +24,136 @@ def cargar_tablas_login():
     try:
         return {
             "nadadores": conn.read(worksheet="Nadadores"),
-            "users": conn.read(worksheet="User")
+            "user": conn.read(worksheet="User")
         }
     except: return None
 
-# --- 4. FUNCIONES LOGIN / LOGOUT ---
-def limpiar_socio(valor):
-    if pd.isna(valor): return ""
-    return str(valor).split('.')[0].strip()
+# --- 4. FUNCIONES DE VALIDACIÓN ---
+def verificar_pin_admin():
+    # PIN hardcodeado para profes (puedes cambiarlo)
+    pin_ingresado = st.session_state.input_pin
+    if pin_ingresado == "1903":  
+        st.session_state.admin_unlocked = True
+        st.session_state.show_login_form = True # Mostrar formulario tras desbloquear
+        st.success("✅ Acceso de Entrenador desbloqueado.")
+    else:
+        st.error("❌ PIN Incorrecto")
 
 def validar_socio():
-    raw_input = st.session_state.input_socio
-    socio_limpio = raw_input.split("-")[0].strip()
-    
-    if not socio_limpio:
-        st.warning("Ingrese un número.")
+    db = cargar_tablas_login()
+    if not db:
+        st.error("Error de conexión.")
         return
 
-    db = cargar_tablas_login()
-    if db:
-        df_u = db['users'].copy()
-        df_n = db['nadadores'].copy()
-        
-        df_u['nrosocio_str'] = df_u['nrosocio'].apply(limpiar_socio)
-        df_n['nrosocio_str'] = df_n['nrosocio'].apply(limpiar_socio)
-        
-        usuario = df_u[df_u['nrosocio_str'] == socio_limpio]
-        
-        if not usuario.empty:
-            perfil = usuario.iloc[0]['perfil'].upper()
-            datos = df_n[df_n['nrosocio_str'] == socio_limpio]
-            
-            if not datos.empty:
-                st.session_state.role = perfil
-                st.session_state.user_name = f"{datos.iloc[0]['nombre']} {datos.iloc[0]['apellido']}"
-                st.session_state.user_id = datos.iloc[0]['codnadador']
-                st.session_state.nro_socio = socio_limpio
-                st.success(f"¡Bienvenido {datos.iloc[0]['nombre']}!")
-                time.sleep(0.5)
-                st.rerun()
-            else:
-                st.error("Socio válido pero sin ficha de nadador activa.")
-        else:
-            st.error("Número de socio no registrado.")
+    nro_input = st.session_state.input_socio.strip()
+    
+    # Buscar en tabla User
+    df_user = db['user']
+    user_match = df_user[df_user['nrosocio'].astype(str) == nro_input]
 
-def cerrar_sesion():
-    for key in st.session_state.keys():
-        del st.session_state[key]
-    st.rerun()
+    if not user_match.empty:
+        perfil = user_match.iloc[0]['perfil'] # 'N', 'M', 'P'
+        
+        # Validación de seguridad para roles M/P
+        if perfil in ["M", "P"] and not st.session_state.admin_unlocked:
+            st.error("⚠️ Este usuario requiere validación de PIN de entrenador.")
+            return
 
-# --- 5. PANTALLA DE LOGIN ---
+        # Buscar datos personales en Nadadores
+        df_nad = db['nadadores']
+        nad_data = df_nad[df_nad['nrosocio'].astype(str) == nro_input]
+        
+        nombre = "Usuario"
+        uid = nro_input
+        
+        if not nad_data.empty:
+            nombre = f"{nad_data.iloc[0]['nombre']} {nad_data.iloc[0]['apellido']}"
+            uid = nad_data.iloc[0]['codnadador']
+        
+        # ASIGNAR SESIÓN
+        st.session_state.role = perfil
+        st.session_state.user_name = nombre
+        st.session_state.user_id = uid
+        st.session_state.nro_socio = nro_input
+        
+        st.success(f"¡Bienvenido, {nombre}!")
+        time.sleep(1)
+        st.rerun()
+    else:
+        st.error("❌ Número de socio no encontrado.")
+
+# --- 5. INTERFAZ DE LOGIN ---
 def login_screen():
-    st.markdown("""<style>[data-testid="stSidebar"] {display: none;}</style>""", unsafe_allow_html=True)
-    st.markdown("""
-        <style>
-            .login-container {
-                text-align: center;
-                padding: 30px;
-                border-radius: 20px;
-                background: linear-gradient(180deg, #121212 0%, #000000 100%);
-                border: 2px solid #333;
-                margin-bottom: 20px;
-                box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-            }
-            .nob-title {
-                font-size: 32px;
-                font-weight: 900;
-                color: #E30613;
-                text-transform: uppercase;
-                margin: 10px 0 5px 0;
-                line-height: 1;
-                text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
-            }
-            .nob-quote {
-                font-size: 18px;
-                font-style: italic;
-                color: #ffffff;
-                margin-bottom: 20px;
-                font-family: serif;
-                letter-spacing: 1px;
-                opacity: 0.9;
-            }
-        </style>
-        <div class="login-container">
-            <div style="font-size: 40px; margin-bottom: 10px;">🔴⚫ 🏊 ⚫🔴</div>
-            <div class="nob-title">NEWELL'S OLD BOYS</div>
-            <div class="nob-quote">"Del deporte sos la gloria"</div>
-        </div>
-    """, unsafe_allow_html=True)
-    st.markdown("<div style='text-align:center; color:#aaa; font-size:14px; margin-bottom:5px;'>ACCESO SOCIOS</div>", unsafe_allow_html=True)
-    st.text_input("Ingrese Nro de Socio", key="input_socio", placeholder="Ej: 123456-01", label_visibility="collapsed")
-    if st.button("INGRESAR", type="primary", use_container_width=True):
-        validar_socio()
+    st.image("https://upload.wikimedia.org/wikipedia/commons/4/46/Newell%27s_Old_Boys_shield.svg", width=100)
+    st.markdown("<h1 style='text-align: center; color: #E30613;'>BIENVENIDO LEPROSO</h1>", unsafe_allow_html=True)
+    st.markdown("---")
 
-# --- 6. DEFINICIÓN DE PÁGINAS ---
+    # Selección de Tipo de Usuario (Si no está desbloqueado ni seleccionado)
+    if not st.session_state.show_login_form:
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("SOY NADADOR 🏊", use_container_width=True):
+                st.session_state.show_login_form = True
+                st.rerun()
+        with col2:
+            if st.button("SOY PROFE ⏱️", use_container_width=True):
+                st.session_state.show_login_form = "PIN_REQ"
+                st.rerun()
+
+    # Lógica de PIN para Profes
+    if st.session_state.show_login_form == "PIN_REQ" and not st.session_state.admin_unlocked:
+        st.info("🔒 Área restringida para entrenadores")
+        st.text_input("Ingrese PIN de acceso", type="password", key="input_pin", on_change=verificar_pin_admin)
+        if st.button("Volver"):
+            st.session_state.show_login_form = False
+            st.rerun()
+        return # Cortamos aquí hasta que desbloquee
+
+    # Formulario de Nro Socio (Para Nadadores o Profes Desbloqueados)
+    st.markdown("##### 🆔 Ingrese su Número de Socio")
+    st.markdown("<span style='font-size:12px; color:gray'>Lo encontrarás en tu carnet digital</span>", unsafe_allow_html=True)
+    st.text_input("Ingrese Nro de Socio", key="input_socio", placeholder="Ej: 123456-01", label_visibility="collapsed")
+    
+    c_btn1, c_btn2 = st.columns([1,3])
+    with c_btn1:
+        if st.button("⬅️", use_container_width=True):
+             st.session_state.show_login_form = False
+             st.session_state.admin_unlocked = False # Resetear seguridad al volver
+             st.rerun()
+    with c_btn2:
+        if st.button("INGRESAR", type="primary", use_container_width=True):
+            validar_socio()
+
+# --- 6. PÁGINAS ---
 pg_inicio = st.Page("pages/1_inicio.py", title="Inicio", icon="🏠")
-# CAMBIO AQUÍ: "Base de Datos" -> "Fichero"
-pg_datos = st.Page("pages/2_visualizar_datos.py", title="Fichero", icon="🗃️")
+pg_datos = st.Page("pages/2_visualizar_datos.py", title="Base de Datos", icon="🗃️")
 pg_ranking = st.Page("pages/4_ranking.py", title="Ranking", icon="🏆")
 pg_simulador = st.Page("pages/3_simulador.py", title="Simulador", icon="⏱️")
-pg_entrenamientos = st.Page("pages/5_entrenamientos.py", title="Entrenamientos", icon="🏋️")
+
+# --- PÁGINAS AGREGADAS ---
+pg_entrenamientos = st.Page("pages/5_entrenamientos.py", title="Entrenamientos", icon="🏊")
 pg_categoria = st.Page("pages/6_mi_categoria.py", title="Mi Categoría", icon="🏅")
+pg_agenda = st.Page("pages/7_agenda.py", title="Agenda", icon="📅")
+# -------------------------
+
 pg_carga = st.Page("pages/1_cargar_datos.py", title="Carga de Datos", icon="⚙️")
 pg_login_obj = st.Page(login_screen, title="Acceso", icon="🔒")
 
-# --- 7. RUTEO Y MENÚ ---
+# --- 7. RUTEO ---
 if not st.session_state.role:
     pg = st.navigation([pg_login_obj])
     pg.run()
 else:
-    # --- MENÚ PRINCIPAL ---
-    menu_pages = {
-        "Principal": [pg_inicio, pg_datos, pg_entrenamientos, pg_categoria]
-    }
+    # Definición de Menú
     
-    # --- MENÚ HERRAMIENTAS ---
+    # Páginas comunes para todos (ORDEN SOLICITADO)
+    mis_pages = [pg_inicio, pg_agenda, pg_entrenamientos, pg_categoria, pg_ranking, pg_simulador, pg_datos]
+    
+    menu_pages = {"Principal": mis_pages}
+    
+    # Herramientas extra para Entrenadores
     if st.session_state.role in ["M", "P"]:
-        menu_pages["Herramientas"] = [pg_ranking, pg_simulador]
-        
-        if st.session_state.admin_unlocked:
-            menu_pages["Administración"] = [pg_carga]
-            
-    pg = st.navigation(menu_pages)
+        menu_pages["Administración"] = [pg_carga] 
     
-    with st.sidebar:
-        st.write("") 
-        if st.button("Cerrar Sesión", type="secondary", use_container_width=True):
-            cerrar_sesion()
-            
+    pg = st.navigation(menu_pages)
     pg.run()
