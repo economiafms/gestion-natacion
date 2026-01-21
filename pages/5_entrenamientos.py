@@ -258,7 +258,7 @@ with tab_ver:
         if not df_h.empty:
             df_h = df_h.merge(db['estilos'], on='codestilo', how='left').merge(db['distancias'], left_on='coddistancia', right_on='coddistancia', how='left')
             
-            # --- FILTROS DINÁMICOS (Corregido) ---
+            # --- FILTROS DINÁMICOS ---
             st.markdown("<div class='section-title'>🔍 Filtros</div>", unsafe_allow_html=True)
             
             # 1. Filtro Estilo
@@ -268,10 +268,8 @@ with tab_ver:
             
             # 2. Filtro Distancia (Dependiente del Estilo)
             if f_est == "Todos":
-                # Si ve todos los estilos, ve todas las distancias disponibles del nadador
                 valid_dists = sorted(df_h['descripcion_y'].unique().tolist())
             else:
-                # Si filtra un estilo, solo muestra distancias nadadas en ESE estilo
                 valid_dists = sorted(df_h[df_h['descripcion_x'] == f_est]['descripcion_y'].unique().tolist())
                 
             f_dist = c_f2.selectbox("Distancia", ["Todos"] + valid_dists)
@@ -280,7 +278,29 @@ with tab_ver:
             if f_est != "Todos": df_filt = df_filt[df_filt['descripcion_x'] == f_est]
             if f_dist != "Todos": df_filt = df_filt[df_filt['descripcion_y'] == f_dist]
 
-            # --- GRÁFICO EVOLUCIÓN ---
+            # --- NUEVO: GRÁFICO RESUMEN (Solo si Todos-Todos) ---
+            if f_est == "Todos" and f_dist == "Todos" and not df_filt.empty:
+                st.markdown("<div class='section-title'>📊 Distribución por Estilos</div>", unsafe_allow_html=True)
+                
+                # Contar entrenamientos por estilo
+                conteo = df_filt['descripcion_x'].value_counts().reset_index()
+                conteo.columns = ['Estilo', 'Entrenamientos']
+                
+                fig_count = px.bar(conteo, x='Estilo', y='Entrenamientos', text='Entrenamientos',
+                                   color_discrete_sequence=['#E30613'])
+                
+                fig_count.update_traces(textposition='auto', hovertemplate='<b>%{x}</b><br>Cantidad: %{y}<extra></extra>')
+                fig_count.update_layout(
+                    height=280, 
+                    template="plotly_dark", 
+                    showlegend=False, 
+                    margin=dict(l=0, r=0, t=30, b=0),
+                    yaxis_title="Cantidad", 
+                    xaxis_title=""
+                )
+                st.plotly_chart(fig_count, use_container_width=True)
+
+            # --- GRÁFICO EVOLUCIÓN (Solo si hay filtros específicos) ---
             if f_est != "Todos" and f_dist != "Todos" and len(df_filt) >= 2:
                 st.markdown("<div class='section-title'>📈 Evolución</div>", unsafe_allow_html=True)
                 df_filt['seg'] = df_filt['tiempo_final'].apply(a_segundos)
