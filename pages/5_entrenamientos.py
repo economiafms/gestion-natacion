@@ -278,23 +278,25 @@ with tab_ver:
             if f_est != "Todos": df_filt = df_filt[df_filt['descripcion_x'] == f_est]
             if f_dist != "Todos": df_filt = df_filt[df_filt['descripcion_y'] == f_dist]
 
-            # --- NUEVO: GRÁFICO RESUMEN (Solo si Todos-Todos) ---
+            # --- NUEVO: GRÁFICO RESUMEN (Limpiado y Apilado) ---
             if f_est == "Todos" and f_dist == "Todos" and not df_filt.empty:
                 st.markdown("<div class='section-title'>📊 Distribución por Estilos</div>", unsafe_allow_html=True)
                 
-                # Agrupar por Estilo y Distancia para diferenciar metros (Barras Apiladas)
+                # Agrupar por Estilo y Distancia para diferenciar metros
                 conteo = df_filt.groupby(['descripcion_x', 'descripcion_y']).size().reset_index(name='Cantidad')
                 
-                # Gráfico apilado
+                # Gráfico apilado (Stacked Bar) SIN texto dentro de las barras para prolijidad
                 fig_count = px.bar(
                     conteo, 
                     x='descripcion_x', 
                     y='Cantidad', 
-                    color='descripcion_y', # Colores diferencian distancias
-                    text='Cantidad'
+                    color='descripcion_y', # Los colores diferencian las distancias
+                    # text='Cantidad', <--- REMOVIDO PARA EVITAR DESPROLIJIDAD
+                    labels={'descripcion_x': 'Estilo', 'descripcion_y': 'Distancia'}
                 )
                 
-                fig_count.update_traces(textposition='auto', hovertemplate='<b>%{x}</b><br>%{legendgroup}: %{y}<extra></extra>')
+                # Tooltip enriquecido
+                fig_count.update_traces(hovertemplate='<b>%{x}</b><br>%{legendgroup}: %{y} entrenamientos<extra></extra>')
                 
                 fig_count.update_layout(
                     height=300, 
@@ -302,12 +304,12 @@ with tab_ver:
                     showlegend=True, 
                     legend_title_text="Distancia",
                     margin=dict(l=0, r=0, t=30, b=0),
-                    yaxis=dict(showticklabels=False, title=None, showgrid=False), # Eje Y limpio (sin números)
+                    yaxis=dict(showticklabels=False, title=None, showgrid=False), # Eje Y totalmente limpio
                     xaxis_title=""
                 )
                 st.plotly_chart(fig_count, use_container_width=True)
 
-            # --- GRÁFICO EVOLUCIÓN (Solo si hay filtros específicos) ---
+            # --- GRÁFICO EVOLUCIÓN ---
             if f_est != "Todos" and f_dist != "Todos" and len(df_filt) >= 2:
                 st.markdown("<div class='section-title'>📈 Evolución</div>", unsafe_allow_html=True)
                 df_filt['seg'] = df_filt['tiempo_final'].apply(a_segundos)
@@ -321,10 +323,8 @@ with tab_ver:
                 fig = px.line(df_filt.sort_values('fecha_dt'), x='fecha_dt', y='seg', markers=True, 
                               color_discrete_sequence=['#E30613'], custom_data=['tiempo_final'])
                 
-                # Tooltip con Fecha y Tiempo
                 fig.update_traces(hovertemplate='📅 %{x|%d/%m/%Y}<br>⏱️ %{customdata[0]}<extra></extra>')
                 
-                # Eje Y con MM:SS.MS
                 fig.update_layout(
                     height=250, margin=dict(l=0, r=0, t=10, b=0), template="plotly_dark", 
                     yaxis=dict(title="Tiempo", tickmode='array', tickvals=tick_vals, ticktext=tick_text),
@@ -371,16 +371,14 @@ with tab_ver:
                     fig_bar = px.bar(df_bar, x='Tramo', y='Segundos', text='Etiqueta',
                                      color_discrete_sequence=['#E30613'])
                     
-                    # Tooltip solo Tiempo Parcial
                     fig_bar.update_traces(textposition='auto', hovertemplate='⏱️ %{text}<extra></extra>')
                     
-                    # Eje Y oculto (SOLO EL EJE, la etiqueta sobre barra se mantiene)
                     fig_bar.update_layout(
                         height=200, 
                         template="plotly_dark", 
                         showlegend=False, 
                         margin=dict(l=0, r=0, t=10, b=0),
-                        yaxis=dict(showticklabels=False, title=None, showgrid=False), # Eje oculto limpio
+                        yaxis=dict(showticklabels=False, title=None, showgrid=False), 
                         xaxis_title="Parcial"
                     )
                     st.plotly_chart(fig_bar, use_container_width=True)
