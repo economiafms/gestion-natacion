@@ -120,7 +120,7 @@ def fmt_mm_ss(seconds):
 df_nad = db['nadadores'].copy()
 df_cat = db['categorias'].copy()
 
-# 1. EXCLUSIÓN DE NADADOR 66 (RESTRICCIÓN SOLICITADA)
+# 1. EXCLUSIÓN DE NADADOR 66
 df_nad = df_nad[df_nad['codnadador'].astype(str) != '66']
 
 # Normalizar columnas para evitar errores de espacios/mayúsculas
@@ -206,7 +206,7 @@ if target_categoria and target_genero:
 
     # --- GRÁFICA COMPARATIVA (PROMEDIOS) ---
     if not rivales.empty:
-        st.markdown("<div class='section-title'>📊 Tiempos de la categoría</div>", unsafe_allow_html=True)
+        st.markdown("<div class='section-title'>📊 Tiempos promedios de la categoría</div>", unsafe_allow_html=True)
         
         # 1. Cargar Tiempos y filtrar
         df_tiempos = db['tiempos'].copy()
@@ -271,20 +271,21 @@ if target_categoria and target_genero:
                         color_discrete_map="identity"
                     )
                     
-                    # Ajuste de Ejes y Ordenamiento
+                    # Ajuste de Ejes
                     max_y = avg_times['segundos'].max() * 1.15
                     
-                    # Forzar el orden del eje X para respetar el sort_values del DataFrame
-                    # Esto evita que el color separe los grupos y ponga al usuario al final
+                    # Forzar ordenamiento visual
                     fig.update_xaxes(categoryorder='array', categoryarray=avg_times['Atleta'])
 
-                    fig.update_traces(textposition='auto', hovertemplate='Promedio: %{text}<extra></extra>')
+                    # Texto grande en las barras
+                    fig.update_traces(textposition='auto', textfont=dict(size=16), hovertemplate='Promedio: %{text}<extra></extra>')
+                    
                     fig.update_layout(
                         height=320, 
                         template="plotly_dark", 
                         showlegend=False,
                         margin=dict(l=0, r=0, t=30, b=0),
-                        # Título "TIEMPO" pero sin números (ticks ocultos)
+                        # EJE Y: Título visible, números ocultos
                         yaxis=dict(title="TIEMPO", showticklabels=False, showgrid=False, range=[0, max_y]),
                         xaxis_title=None
                     )
