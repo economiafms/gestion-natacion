@@ -16,7 +16,7 @@ rol = st.session_state.role
 mi_id = st.session_state.user_id 
 mi_nombre = st.session_state.user_name
 
-st.title("🏳️ Categorías")
+st.title("🏆 Ranking por Categoría")
 
 # --- CSS PERSONALIZADO ---
 st.markdown("""
@@ -120,11 +120,15 @@ def fmt_mm_ss(seconds):
 df_nad = db['nadadores'].copy()
 df_cat = db['categorias'].copy()
 
+# 1. EXCLUSIÓN DE NADADOR 66 (RESTRICCIÓN SOLICITADA)
+# Se filtra inmediatamente para que no afecte ningún cálculo posterior
+df_nad = df_nad[df_nad['codnadador'].astype(str) != '66']
+
 # Normalizar columnas para evitar errores de espacios/mayúsculas
 df_nad.columns = df_nad.columns.str.strip().str.lower()
 df_cat.columns = df_cat.columns.str.strip().str.lower()
 
-# 1. Calcular Edad y Categoría para todos
+# 2. Calcular Edad y Categoría para todos
 if 'fechanac' in df_nad.columns:
     df_nad['edad_calculada'] = df_nad['fechanac'].apply(calcular_edad_fina)
 else:
@@ -153,7 +157,7 @@ if rol == "N":
         st.info(f"👋 Hola **{mi_nombre}**. Edad: {edad_str} años.")
         st.markdown(f"### 🏷️ Categoría: <span style='color:#E30613'>{target_categoria}</span> ({target_genero})", unsafe_allow_html=True)
     else:
-        st.error("Perfil no encontrado.")
+        st.error("Perfil no encontrado o acceso restringido.")
         st.stop()
 
 elif rol in ["M", "P"]:
@@ -203,7 +207,7 @@ if target_categoria and target_genero:
 
     # --- GRÁFICA COMPARATIVA (PROMEDIOS) ---
     if not rivales.empty:
-        st.markdown("<div class='section-title'>📊 Ranking de Tiempos (Promedio)</div>", unsafe_allow_html=True)
+        st.markdown("<div class='section-title'>📊 Tiempos de la categoría</div>", unsafe_allow_html=True)
         
         # 1. Cargar Tiempos y filtrar
         df_tiempos = db['tiempos'].copy()
@@ -240,8 +244,7 @@ if target_categoria and target_genero:
                 data_chart = data_chart[data_chart['segundos'] > 0]
                 
                 if not data_chart.empty:
-                    # AQUÍ ESTÁ EL CAMBIO: .mean() en lugar de .min()
-                    # Calculamos el promedio de tiempos para cada nadador en esta prueba
+                    # Promedio por nadador
                     avg_times = data_chart.groupby('codnadador')['segundos'].mean().reset_index()
                     
                     # Pegar nombres
@@ -255,7 +258,9 @@ if target_categoria and target_genero:
                         return "#666666" # Gris Rival
                     
                     avg_times['Color'] = avg_times['codnadador'].apply(get_color)
-                    avg_times = avg_times.sort_values('segundos', ascending=True) # Ranking (menor tiempo promedio es mejor)
+                    
+                    # ORDENAR DE MENOR A MAYOR TIEMPO (El mejor primero)
+                    avg_times = avg_times.sort_values('segundos', ascending=True) 
                     
                     # 6. Graficar
                     fig = px.bar(
@@ -269,8 +274,6 @@ if target_categoria and target_genero:
                     
                     # Ajuste de Ejes
                     max_y = avg_times['segundos'].max() * 1.15
-                    tick_vals = np.linspace(0, max_y, 5)
-                    tick_text = [fmt_mm_ss(x) for x in tick_vals]
 
                     fig.update_traces(textposition='auto', hovertemplate='Promedio: %{text}<extra></extra>')
                     fig.update_layout(
@@ -278,7 +281,8 @@ if target_categoria and target_genero:
                         template="plotly_dark", 
                         showlegend=False,
                         margin=dict(l=0, r=0, t=30, b=0),
-                        yaxis=dict(title="Tiempo Promedio", tickmode='array', tickvals=tick_vals, ticktext=tick_text, range=[0, max_y]),
+                        # EJE Y LIMPIO: Sin título, sin texto de ticks
+                        yaxis=dict(title=None, showticklabels=False, showgrid=False, range=[0, max_y]),
                         xaxis_title=None
                     )
                     st.plotly_chart(fig, use_container_width=True)
