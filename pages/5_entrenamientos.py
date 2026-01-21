@@ -278,29 +278,33 @@ with tab_ver:
             if f_est != "Todos": df_filt = df_filt[df_filt['descripcion_x'] == f_est]
             if f_dist != "Todos": df_filt = df_filt[df_filt['descripcion_y'] == f_dist]
 
-            # --- NUEVO: GRÁFICO RESUMEN (Modificado) ---
+            # --- NUEVO: GRÁFICO RESUMEN (Modificado: Etiquetas condicionales) ---
             if f_est == "Todos" and f_dist == "Todos" and not df_filt.empty:
                 st.markdown("<div class='section-title'>📊 Distribución por Estilos</div>", unsafe_allow_html=True)
                 
-                # Agrupar por Estilo y Distancia
+                # Agrupar
                 conteo = df_filt.groupby(['descripcion_x', 'descripcion_y']).size().reset_index(name='Cantidad')
                 
-                # Gráfico apilado
+                # Lógica de etiqueta: mostrar número solo si > 1
+                conteo['Etiqueta'] = conteo['Cantidad'].apply(lambda x: str(x) if x > 1 else "")
+                
+                # Gráfico
                 fig_count = px.bar(
                     conteo, 
                     x='descripcion_x', 
                     y='Cantidad', 
                     color='descripcion_y',
-                    text='Cantidad',  # Valor dentro de la barra
-                    color_discrete_sequence=px.colors.sequential.OrRd[::-1], # Paleta Rojos-Anaranjados
+                    text='Etiqueta', # Usamos la columna personalizada
+                    color_discrete_sequence=px.colors.sequential.OrRd[::-1],
                     labels={'descripcion_x': 'Estilo', 'descripcion_y': 'Distancia'}
                 )
                 
-                # Ajustes visuales: Texto GRANDE y Ejes limpios
+                # Ajustes: Texto grande, Tooltip detallado
                 fig_count.update_traces(
                     textposition='inside', 
                     textfont=dict(size=20, color='white'), 
-                    hovertemplate='<b>%{x}</b><br>%{legendgroup}: %{y} entrenamientos<extra></extra>'
+                    # Tooltip explícito con Metros
+                    hovertemplate='<b>%{x}</b><br>Metros: %{legendgroup}<br>Cantidad: %{y}<extra></extra>'
                 )
                 
                 fig_count.update_layout(
@@ -309,7 +313,7 @@ with tab_ver:
                     showlegend=True, 
                     legend_title_text="Distancia",
                     margin=dict(l=0, r=0, t=30, b=0),
-                    yaxis=dict(showticklabels=False, title="Cantidad", showgrid=False), # Título SÍ, Números NO
+                    yaxis=dict(showticklabels=False, title="Cantidad", showgrid=False), 
                     xaxis_title=""
                 )
                 st.plotly_chart(fig_count, use_container_width=True)
