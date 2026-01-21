@@ -192,7 +192,7 @@ if db and st.session_state.user_id:
             if st.button("🏅 Mi Categoría", type="primary", use_container_width=True, key="btn_cat_N"): 
                 st.switch_page("pages/6_mi_categoria.py")
 
-    # --- ROL MAESTRO (M/P) ---
+    # --- ROL MAESTRO (M) ---
     else:
         # Fichero y Ranking (Sin color = tipo 'secondary' implícito)
         c1, c2 = st.columns(2)
@@ -255,26 +255,27 @@ if db and st.session_state.user_id:
         base = alt.Chart(df_n).encode(theta=alt.Theta("count()", stack=True))
         st.altair_chart((base.mark_arc(outerRadius=80, innerRadius=50).encode(color=alt.Color("codgenero", scale=colors, legend=None)) + base.mark_text(radius=100).encode(text="count()", order=alt.Order("codgenero"), color=alt.value("white"))), use_container_width=True)
 
-    # --- 6. CANDADO DEL PROFE ---
-    st.write(""); st.write("")
-    col_space, col_lock = st.columns([8, 1])
-    with col_lock:
+    # --- 6. GESTIÓN DE COMPETENCIAS (SOLO M) ---
+    if st.session_state.role == "M":
+        st.write(""); st.write("")
+        
         if not st.session_state.admin_unlocked:
-            if st.button("🔒", help="Desbloquear Admin", type="tertiary", key="btn_lock_open"):
+            if st.button("⚙️ CARGAR DATOS DE COMPETENCIA", use_container_width=True, key="btn_login_comp"):
                 st.session_state.show_login_form = not st.session_state.show_login_form
         else:
-            if st.button("🔓", help="Bloquear Admin", key="btn_lock_close"):
+            if st.button("🔒 CERRAR SESIÓN ADMIN", use_container_width=True, key="btn_logout_comp"):
                 st.session_state.admin_unlocked = False
+                st.session_state.show_login_form = False
                 st.rerun()
 
-    if st.session_state.show_login_form and not st.session_state.admin_unlocked:
-        with st.form("admin_login_form"):
-            st.write("**Acceso Profesor**")
-            st.text_input("Usuario", key="u_in")
-            st.text_input("Contraseña", type="password", key="p_in")
-            st.form_submit_button("Desbloquear", on_click=intentar_desbloqueo)
-    
-    if st.session_state.admin_unlocked:
-        st.success("🔓 Gestión Habilitada: Ver menú lateral")
-        if st.button("⚙️ IR AL PANEL DE CARGA", type="primary", use_container_width=True):
-            st.switch_page("pages/1_cargar_datos.py")
+        if st.session_state.show_login_form and not st.session_state.admin_unlocked:
+            with st.form("admin_login_form"):
+                st.write("**Acceso Entrenador**")
+                st.text_input("Usuario", key="u_in")
+                st.text_input("Contraseña", type="password", key="p_in")
+                st.form_submit_button("Ingresar", on_click=intentar_desbloqueo)
+        
+        if st.session_state.admin_unlocked:
+            st.success("🔓 Gestión Habilitada")
+            if st.button("🚀 IR AL PANEL DE CARGA", type="primary", use_container_width=True):
+                st.switch_page("pages/1_cargar_datos.py")
