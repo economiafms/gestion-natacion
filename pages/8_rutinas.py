@@ -28,9 +28,9 @@ def obtener_nombre_mes(n):
     except:
         return "Desconocido"
 
-# --- GLOSARIO DE REFERENCIAS ---
+# --- GLOSARIO DE REFERENCIAS (LISTA LIMPIA Y COMPLETA) ---
 def mostrar_referencias():
-    with st.expander("📖 Glosario de Referencias (Ayuda)"):
+    with st.expander("📖 Glosario de Referencias (Clic para ver)"):
         st.markdown("""
         **INTENSIDADES**
         * **T (Tolerancia):** Intensidad alta 100 – 110%
@@ -44,9 +44,9 @@ def mostrar_referencias():
 
         **ACTIVACIÓN Y ENTRADA EN CALOR**
         * **Ec (Entrada en Calor):** Nado suave inicial
-        * **EcT (Ec Tensor):** Bíceps, Tríceps, Dorsales, Hombros...
-        * **EcM (Ec Movilidad):** Fuera del agua (Articulaciones)
-        * **Act (Activación):** Fuera del agua (Piernas, Core)
+        * **EcT (Ec Tensor):** Bíceps, Tríceps, Dorsales, Hombros, Pecho, Antebrazos
+        * **EcM (Ec Movilidad):** Fuera del agua (Brazos, Cintura, Piernas, Tobillos, Cuello)
+        * **Act (Activación):** Fuera del agua (Piernas, Brazos, Core)
 
         **TÉCNICA Y ESTILOS**
         * **B (Brazada):** C (Crol), E (Espalda), P (Pecho), M (Mariposa)
@@ -54,6 +54,13 @@ def mostrar_referencias():
         * **Pat Tabla:** Patada con tabla
         * **PB (Pull Brazada):** Uso de pullboy
         * **CT:** Corrección Técnica
+        
+        **OTROS**
+        * **m:** Metros
+        * **p:** Pausa estática
+        * **p act:** Pausa Activa
+        * **D/:** Dentro del tiempo
+        * **C/:** Con tiempo de pausa
         """)
 
 # --- FUNCIÓN DE RETRY ---
@@ -197,6 +204,7 @@ def render_tarjeta_individual(row, df_seg, key_suffix):
         fecha_obj = pd.to_datetime(check.iloc[0]['fecha_realizada'])
         fecha_str = fecha_obj.strftime("%d/%m")
 
+    # Colores
     if esta_realizada:
         borde = "#2E7D32"
         bg = "#1B2E1B"
@@ -240,8 +248,11 @@ def render_feed_activo(df_rut, df_seg, anio_ver, mes_ver, key_suffix=""):
         return
 
     rutinas_filtradas.sort_values(by='nro_sesion', ascending=True, inplace=True)
+    
+    # 1. MOSTRAR REFERENCIAS ARRIBA
     mostrar_referencias()
 
+    # 2. LISTADO DE SESIONES
     l_pendientes = []
     l_completadas = []
 
@@ -263,8 +274,9 @@ def render_feed_activo(df_rut, df_seg, anio_ver, mes_ver, key_suffix=""):
     else:
         if l_completadas: st.success("¡Excelente! Has completado todo el mes. 🏆")
 
-# --- HISTORIAL UX/UI MEJORADO (SIN HTML ROTO) ---
 def render_historial_compacto(df_rut, df_seg, anio, mes, id_usuario_objetivo):
+    """Muestra tabla completa de asistencia + Métricas."""
+    
     rutinas_mes = df_rut[
         (df_rut['anio_rutina'] == anio) & 
         (df_rut['mes_rutina'] == mes)
@@ -274,75 +286,47 @@ def render_historial_compacto(df_rut, df_seg, anio, mes, id_usuario_objetivo):
         st.info("No hay planificación cargada para este mes.")
         return
 
+    # Preparar datos para tabla
+    datos_tabla = []
     total_rutinas = len(rutinas_mes)
     completadas = 0
-    detalle_sesiones = []
 
     for _, r in rutinas_mes.iterrows():
         r_id = r['id_rutina']
         check = df_seg[(df_seg['id_rutina'] == r_id) & (df_seg['codnadador'] == id_usuario_objetivo)]
+        
         hecho = not check.empty
         fecha_txt = "-"
         if hecho:
             completadas += 1
             fecha_obj = pd.to_datetime(check.iloc[0]['fecha_realizada'])
-            fecha_txt = fecha_obj.strftime("%d/%m")
+            fecha_txt = fecha_obj.strftime("%d/%m/%Y %H:%M")
         
-        detalle_sesiones.append({
-            "nro": r['nro_sesion'],
-            "hecho": hecho,
-            "fecha": fecha_txt
+        datos_tabla.append({
+            "Sesión": f"Sesión {r['nro_sesion']}",
+            "Estado": "✅ Completado" if hecho else "❌ Pendiente",
+            "Fecha Realización": fecha_txt,
+            "_nro": r['nro_sesion'] # para ordenar si hiciera falta
         })
 
     porcentaje = int((completadas / total_rutinas) * 100) if total_rutinas > 0 else 0
     
-    # 1. SCORECARD SUPERIOR
-    st.markdown(f"""
-    <div style="background-color: #262730; border-radius: 12px; padding: 20px; margin-bottom: 25px; border: 1px solid #444; text-align: center;">
-        <h3 style="margin:0; font-size: 16px; color: #aaa;">ASISTENCIA {obtener_nombre_mes(mes).upper()}</h3>
-        <h1 style="margin:0; font-size: 48px; color: white;">{porcentaje}%</h1>
-        <p style="margin:0; color: #888;">{completadas} de {total_rutinas} sesiones completadas</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
+    # METRICAS VISUALES
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Total Sesiones", total_rutinas)
+    c2.metric("Completadas", completadas)
+    c3.metric("Asistencia Global", f"{porcentaje}%")
     st.progress(porcentaje / 100)
-    st.write("") 
-
-    # 2. LISTA DE SESIONES (HTML SIMPLIFICADO)
-    st.caption("DETALLE DE ACTIVIDAD")
     
-    for item in detalle_sesiones:
-        if item['hecho']:
-            icono = "✅"
-            color_txt = "white"
-            badge_bg = "rgba(46, 125, 50, 0.3)"
-            badge_border = "#2E7D32"
-            badge_txt = "COMPLETADO"
-            opacity = "1.0"
-            fecha_display = item['fecha']
-        else:
-            icono = "⭕"
-            color_txt = "#888"
-            badge_bg = "rgba(255, 255, 255, 0.05)"
-            badge_border = "#444"
-            badge_txt = "PENDIENTE"
-            opacity = "0.6"
-            fecha_display = "--/--"
-
-        # Estructura simple sin divs anidados innecesarios
-        st.markdown(f"""
-        <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #333; opacity: {opacity};">
-            <div style="font-size: 16px; color: {color_txt};">
-                <span style="font-size: 18px; margin-right: 8px;">{icono}</span> Sesión {item['nro']}
-            </div>
-            <div style="text-align: right;">
-                <span style="font-size: 10px; font-weight: bold; background-color: {badge_bg}; border: 1px solid {badge_border}; color: {color_txt}; padding: 4px 8px; border-radius: 12px;">
-                    {badge_txt}
-                </span>
-                <div style="font-size: 12px; color: #666; margin-top: 4px;">{fecha_display}</div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+    st.divider()
+    
+    # TABLA COMPLETA (Lo que el usuario pidió)
+    df_view = pd.DataFrame(datos_tabla).sort_values('_nro')
+    st.dataframe(
+        df_view[["Sesión", "Estado", "Fecha Realización"]],
+        use_container_width=True,
+        hide_index=True
+    )
 
 # --- 5. LOGICA PRINCIPAL ---
 df_rutinas, df_seguimiento, df_nadadores = cargar_datos_rutinas_view()
@@ -362,7 +346,7 @@ if rol in ["M", "P"]:
 
 # --- UI PRINCIPAL ---
 st.title("📝 Sesiones de Entrenamiento")
-st.subheader(f"{mi_nombre}") 
+st.subheader(f"{mi_nombre}") # Solo nombre
 
 if df_rutinas is None:
     st.error("No se pudieron cargar los datos. Verifica tu conexión.")
