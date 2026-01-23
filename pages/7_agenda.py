@@ -175,7 +175,7 @@ def gestionar_inscripcion(id_comp, id_nadador, lista_pruebas):
     if not df_ins[mask].empty:
         df_ins.loc[mask, 'pruebas'] = pruebas_str
         df_ins.loc[mask, 'fecha_inscripcion'] = datetime.now().strftime("%Y-%m-%d")
-        msg = "✏️ Modificado."
+        msg = "✏️ Inscripción actualizada."
     else:
         nuevo = {"id_inscripcion": str(uuid.uuid4()), "id_competencia": id_comp, "codnadador": int(id_nadador), "pruebas": pruebas_str, "fecha_inscripcion": datetime.now().strftime("%Y-%m-%d")}
         df_ins = pd.concat([df_ins, pd.DataFrame([nuevo])], ignore_index=True)
@@ -245,6 +245,19 @@ else:
     for _, row in df_view.iterrows():
         comp_id = row['id_competencia']
         
+        # --- CORRECCIÓN ERROR: DEFINIR FILTRO AL INICIO ---
+        filtro_ins = df_inscripciones[df_inscripciones['id_competencia'] == comp_id]
+        
+        # Pre-cálculo de datos de inscriptos (OPTIMIZACIÓN DE CÓDIGO)
+        # Se calcula una vez y se usa en la vista pública y en el panel admin
+        if not filtro_ins.empty:
+            d_full = filtro_ins.merge(df_nadadores, on="codnadador", how="left")
+            d_full['Anio'] = d_full['fechanac'].dt.year
+            d_full['Cat'] = d_full['Anio'].apply(calcular_categoria_master)
+            d_full['Nombre'] = d_full['apellido'] + ", " + d_full['nombre']
+        else:
+            d_full = pd.DataFrame()
+
         # Info Pileta
         d_pil = df_piletas[df_piletas['codpileta'] == row['cod_pileta']]
         nom_pil = f"{d_pil.iloc[0]['club']} ({d_pil.iloc[0]['medida']})" if not d_pil.empty else row['cod_pileta']
@@ -280,33 +293,31 @@ else:
                 <div style="font-size:13px; color:#ccc;">{row['descripcion'] or ''}</div>
             </div>""", unsafe_allow_html=True)
 
-            # === A. LISTA PÚBLICA DE INSCRIPTOS (CON CATEGORIAS GRANDES) ===
+            # === A. LISTA PÚBLICA (VISUAL MEJORADA) ===
             with st.expander("📋 Ver Lista de Inscriptos"):
-                f_ins = df_inscripciones[df_inscripciones['id_competencia'] == comp_id]
-                if f_ins.empty:
+                if d_full.empty:
                     st.caption("Aún no hay nadadores inscriptos.")
                 else:
-                    d_full = f_ins.merge(df_nadadores, on="codnadador", how="left")
-                    d_full['Anio'] = d_full['fechanac'].dt.year
-                    d_full['Cat'] = d_full['Anio'].apply(calcular_categoria_master)
-                    
-                    # Generación visual de filas con Chips y Categoría Destacada
+                    # Renderizado Visual con Tarjetas (Diseño Oscuro/Separado)
                     for _, r_pub in d_full.iterrows():
-                        nad_nom = f"{r_pub['apellido']}, {r_pub['nombre']}"
-                        cat_gen = f"{r_pub['Cat']} ({r_pub['codgenero']})"
+                        nad_nom = r_pub['Nombre']
+                        cat_val = r_pub['Cat']
+                        gen_val = r_pub['codgenero']
                         
                         # Chips para pruebas
                         pruebas_lista = [p.strip() for p in str(r_pub['pruebas']).split(",")]
                         chips_html = ""
                         for p in pruebas_lista:
-                            chips_html += f"<span style='background-color:#444; padding:3px 8px; border-radius:10px; font-size:11px; margin-right:4px; display:inline-block; margin-bottom:3px; color:#eee;'>{p}</span>"
+                            chips_html += f"<span style='background-color:#444; padding:3px 8px; border-radius:10px; font-size:11px; margin-right:4px; display:inline-block; margin-bottom:3px; color:#ddd;'>{p}</span>"
 
-                        # HTML MEJORADO: Categoría más grande y color azul vibrante
                         st.markdown(f"""
-                        <div style="background-color: #383940; padding: 12px; border-radius: 8px; margin-bottom: 8px; border-left: 4px solid #007bff;">
-                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                                <span style="font-weight:bold; color:white; font-size:15px;">{nad_nom}</span>
-                                <span style="font-size:13px; background-color:#007bff; color:white; padding:4px 8px; border-radius:6px; font-weight:bold;">{cat_gen}</span>
+                        <div style="background-color: #333; padding: 12px; border-radius: 8px; margin-bottom: 8px; border: 1px solid #444;">
+                            <div style="margin-bottom:8px;">
+                                <span style="font-weight:bold; color:white; font-size:15px; display:block; margin-bottom:4px;">{nad_nom}</span>
+                                <div style="display:flex; gap:10px;">
+                                    <span style="font-size:12px; background-color:#111; color:#aaa; padding:2px 8px; border-radius:4px; border:1px solid #555;">{cat_val}</span>
+                                    <span style="font-size:12px; background-color:#111; color:#aaa; padding:2px 8px; border-radius:4px; border:1px solid #555;">{gen_val}</span>
+                                </div>
                             </div>
                             <div>{chips_html}</div>
                         </div>
@@ -344,45 +355,42 @@ else:
             elif esta:
                 st.success(f"✅ Inscripto en: {ins_user.iloc[0]['pruebas']}")
 
-            # === C. PANEL ENTRENADOR (RESPONSIVE FIX) ===
+            # === C. PANEL ENTRENADOR (TABLA SEPARADA) ===
             if rol in ["M", "P"]:
                 with st.expander(f"🛡️ Panel Entrenador ({row['nombre_evento']})"):
                     t1, t2 = st.tabs(["❌ Gestión Bajas", "⚙️ Editar Evento"])
                     
                     # 1. Gestión Bajas
                     with t1:
-                        if filtro_ins.empty:
+                        if d_full.empty:
                             st.caption("Nada para gestionar.")
                         else:
-                            if 'd_full' not in locals():
-                                d_full = f_ins.merge(df_nadadores, on="codnadador", how="left")
-                                d_full['Anio'] = d_full['fechanac'].dt.year
-                                d_full['Cat'] = d_full['Anio'].apply(calcular_categoria_master)
-                            
-                            d_full['Nombre'] = d_full['apellido'] + ", " + d_full['nombre']
-                            
-                            # Tabla limpia
+                            # Tabla limpia nativa (Separación Cat/Gen)
                             st.dataframe(
-                                d_full[['Nombre', 'codgenero', 'Cat', 'pruebas']].rename(columns={'codgenero':'Gen', 'pruebas':'Pruebas Inscriptas'}),
+                                d_full[['Nombre', 'codgenero', 'Cat', 'pruebas']].rename(columns={'codgenero':'Gen', 'pruebas':'Pruebas'}),
                                 hide_index=True,
                                 use_container_width=True,
                                 column_config={
-                                    "Pruebas Inscriptas": st.column_config.TextColumn("Pruebas Inscriptas", width="large")
+                                    "Pruebas": st.column_config.TextColumn("Pruebas", width="large"),
+                                    "Gen": st.column_config.TextColumn("Gen", width="small"),
+                                    "Cat": st.column_config.TextColumn("Cat", width="medium"),
                                 }
                             )
                             
                             st.divider()
                             
-                            # --- FIX RESPONSIVE: CONTENEDOR DE BORRADO ---
+                            # --- FIX RESPONSIVE: CONTENEDOR DE BAJA ---
                             st.markdown("##### 🗑️ Zona de Baja")
+                            # Usamos un contenedor con borde para delimitar la zona de acción
                             with st.container(border=True):
+                                # Selector ocupa el ancho disponible (mejor en móvil)
                                 u_del = st.selectbox(
                                     "Seleccionar nadador:", 
                                     d_full['codnadador'].unique(), 
                                     format_func=lambda x: d_full[d_full['codnadador']==x]['Nombre'].values[0],
                                     key=f"s_del_{comp_id}"
                                 )
-                                # Botón full-width para móviles
+                                # Botón full-width
                                 if st.button("Confirmar Eliminación", key=f"b_del_{comp_id}", type="primary", use_container_width=True):
                                     eliminar_inscripcion(comp_id, u_del)
                                     st.rerun()
@@ -397,7 +405,7 @@ else:
                             
                             ce3, ce4 = st.columns(2)
                             nf = ce3.date_input("Fecha", value=pd.to_datetime(row['fecha_dt']), format="DD/MM/YYYY")
-                            nl = ce4.date_input("Cierre", value=pd.to_datetime(f_lim), format="DD/MM/YYYY")
+                            nl = ce4.date_input("Cierre", value=pd.to_datetime(f_limite), format="DD/MM/YYYY")
                             
                             nh = st.multiselect("Pruebas", LISTA_PRUEBAS, default=[x for x in l_pre if x in LISTA_PRUEBAS])
                             nd = st.text_area("Desc.", value=row['descripcion'])
