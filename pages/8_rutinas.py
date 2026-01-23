@@ -72,10 +72,6 @@ def leer_dataset_fresco(worksheet):
         df = conn.read(worksheet=worksheet, ttl=0).copy()
         return df
     except Exception as e:
-        # Si la hoja no existe (primer uso), devolvemos DF vacío estructura correcta
-        # Pero si es error de conexión, esto podría ser peligroso. 
-        # Asumimos que si falla la lectura, NO DEBEMOS escribir.
-        # Retornamos None para indicar fallo crítico.
         st.error(f"Error de conexión con {worksheet}: {e}")
         return None
 
@@ -88,15 +84,12 @@ def calcular_proxima_sesion(df, anio, mes):
 # --- FUNCIONES DE GUARDADO BLINDADAS ---
 
 def guardar_seguimiento(id_rutina, id_nadador):
-    # 1. Lectura fresca
     df_seg = leer_dataset_fresco("Rutinas_Seguimiento")
-    if df_seg is None: return False # Abortar si no hay lectura
+    if df_seg is None: return False 
     
-    # Asegurar tipos en el DF fresco
     if not df_seg.empty:
         df_seg['codnadador'] = pd.to_numeric(df_seg['codnadador'], errors='coerce').fillna(0).astype(int)
 
-    # 2. Lógica
     existe = df_seg[(df_seg['id_rutina'] == id_rutina) & (df_seg['codnadador'] == id_nadador)]
     
     if existe.empty:
@@ -108,10 +101,9 @@ def guardar_seguimiento(id_rutina, id_nadador):
         }])
         df_final = pd.concat([df_seg, nuevo_registro], ignore_index=True)
         
-        # 3. Escritura
         try:
             conn.update(worksheet="Rutinas_Seguimiento", data=df_final)
-            st.cache_data.clear() # Solo limpiar si éxito
+            st.cache_data.clear() 
             return True
         except Exception as e:
             st.error(f"Error al guardar: {e}")
@@ -136,20 +128,16 @@ def borrar_seguimiento(id_rutina, id_nadador):
         return False
 
 def guardar_rutina_admin(anio, mes, sesion, texto):
-    # 1. Lectura fresca BLINDADA
     df_rut = leer_dataset_fresco("Rutinas")
     
-    # Si df_rut es None, hubo error de conexión -> STOP TOTAL
     if df_rut is None:
         return "❌ Error CRÍTICO de conexión. No se guardó para evitar pérdida de datos."
 
-    # Normalización preventiva
     if not df_rut.empty:
         df_rut['anio_rutina'] = pd.to_numeric(df_rut['anio_rutina'], errors='coerce').fillna(0).astype(int)
         df_rut['mes_rutina'] = pd.to_numeric(df_rut['mes_rutina'], errors='coerce').fillna(0).astype(int)
         df_rut['nro_sesion'] = pd.to_numeric(df_rut['nro_sesion'], errors='coerce').fillna(0).astype(int)
 
-    # 2. Lógica
     nuevo_id = f"{anio}-{mes:02d}-S{sesion:02d}"
     mask = df_rut['id_rutina'] == nuevo_id
     
@@ -171,10 +159,9 @@ def guardar_rutina_admin(anio, mes, sesion, texto):
         df_rut.loc[mask, "nro_sesion"] = int(sesion)
         msg = "✅ Rutina actualizada correctamente."
         
-    # 3. Escritura
     try:
         conn.update(worksheet="Rutinas", data=df_rut)
-        st.cache_data.clear() # Limpiar caché para que la vista se actualice
+        st.cache_data.clear()
         return msg
     except Exception as e:
         return f"❌ Error al escribir en Google Sheets: {e}"
@@ -324,7 +311,6 @@ if rol in ["M", "P"]:
     if "g_mes" not in st.session_state: st.session_state.g_mes = datetime.now().month
 
     if st.session_state.get("trigger_calculo", False) or "admin_sesion" not in st.session_state:
-        # Usamos el df de la vista para calcular el siguiente ID, es seguro
         if df_rutinas is not None:
             prox = calcular_proxima_sesion(df_rutinas, st.session_state.g_anio, st.session_state.g_mes)
             st.session_state.admin_sesion = min(prox, 31)
@@ -394,9 +380,19 @@ if rol in ["M", "P"]:
         v_anios = sorted(list(set(df_rutinas['anio_rutina'].unique().tolist() + [datetime.now().year])), reverse=True)
         
         with col_v1: sel_a = st.selectbox("Año", v_anios, key="adm_v_a")
-        with col_v2: sel_m = st.selectbox("Mes", meses_indices, format_func=lambda x: mapa_meses[x], index=meses_indices.index(datetime.now().month), key="adm_v_m")
         
-        render_feed_activo(df_rutinas, df_seguimiento, sel_a, sel_m, key_suffix="admin_view")
+        # CAMBIO: Filtrado de meses existentes para el año seleccionado (Explorar)
+        meses_disp_explorar = sorted(df_rutinas[df_rutinas['anio_rutina'] == sel_a]['mes_rutina'].unique().tolist())
+        
+        if not meses_disp_explorar:
+             with col_v2: st.warning("Sin datos")
+             sel_m = None
+        else:
+             mapa_meses_ex = {i: obtener_nombre_mes(i) for i in meses_disp_explorar}
+             with col_v2: sel_m = st.selectbox("Mes", meses_disp_explorar, format_func=lambda x: mapa_meses_ex[x], key="adm_v_m")
+        
+        if sel_m:
+            render_feed_activo(df_rutinas, df_seguimiento, sel_a, sel_m, key_suffix="admin_view")
 
     with tab_seguimiento:
         st.info("Seleccione un alumno para ver su cumplimiento histórico.")
@@ -419,11 +415,20 @@ if rol in ["M", "P"]:
                 )
             with col_s2:
                 sel_a_seg = st.selectbox("Año", v_anios, key="seg_a")
-            with col_s3:
-                sel_m_seg = st.selectbox("Mes", meses_indices, format_func=lambda x: mapa_meses[x], index=meses_indices.index(datetime.now().month), key="seg_m")
+            
+            # CAMBIO: Filtrado de meses existentes para el año seleccionado (Seguimiento)
+            meses_disp_seg = sorted(df_rutinas[df_rutinas['anio_rutina'] == sel_a_seg]['mes_rutina'].unique().tolist())
+            
+            if not meses_disp_seg:
+                 with col_s3: st.warning("Sin datos")
+                 sel_m_seg = None
+            else:
+                 mapa_meses_seg = {i: obtener_nombre_mes(i) for i in meses_disp_seg}
+                 with col_s3: sel_m_seg = st.selectbox("Mes", meses_disp_seg, format_func=lambda x: mapa_meses_seg[x], key="seg_m")
                 
             st.markdown(f"**Reporte para:** {lista_nads[lista_nads['codnadador']==sel_nad_id]['NombreCompleto'].values[0]}")
-            render_historial_compacto(df_rutinas, df_seguimiento, sel_a_seg, sel_m_seg, sel_nad_id)
+            if sel_m_seg:
+                render_historial_compacto(df_rutinas, df_seguimiento, sel_a_seg, sel_m_seg, sel_nad_id)
 
 # ==========================
 # ROL: NADADOR (N)
