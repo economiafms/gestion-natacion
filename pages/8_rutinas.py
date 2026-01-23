@@ -3,6 +3,7 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime, date, timedelta
 import time
+import random  # Importamos random para variar el tiempo de espera
 
 # --- 1. CONFIGURACIÓN ---
 st.set_page_config(page_title="Rutinas", layout="centered")
@@ -27,11 +28,32 @@ def obtener_nombre_mes(n):
     except:
         return "Desconocido"
 
-# --- LECTURA PARA VISUALIZACIÓN (Caché permitida) ---
+# --- FUNCIÓN DE RETRY (NUEVA: EL CEREBRO DE LA ESPERA) ---
+def actualizar_con_retry(worksheet, data, max_retries=5):
+    """
+    Intenta actualizar la hoja. Si falla por límites de API, espera y reintenta.
+    """
+    for i in range(max_retries):
+        try:
+            conn.update(worksheet=worksheet, data=data)
+            return True, None # Éxito
+        except Exception as e:
+            error_msg = str(e).lower()
+            # Detectar errores de cuota o rate limit
+            if "429" in error_msg or "quota" in error_msg or "rate limit" in error_msg:
+                # Espera exponencial: 1s, 2s, 4s... + un poquito de aleatoriedad
+                wait_time = (2 ** i) + random.uniform(0, 1)
+                time.sleep(wait_time)
+                continue # Volver a intentar
+            else:
+                # Si es otro error (ej: columna no existe), fallar directo
+                return False, e
+    return False, "Tiempo de espera agotado (API ocupada)."
+
+# --- LECTURA ---
 @st.cache_data(ttl="10s")
 def cargar_datos_rutinas_view():
     try:
-        # Intentamos leer con copia para evitar mutaciones de caché
         try:
             df_rut = conn.read(worksheet="Rutinas").copy()
         except:
@@ -47,7 +69,7 @@ def cargar_datos_rutinas_view():
         except:
             df_nad = pd.DataFrame(columns=["codnadador", "nombre", "apellido"])
             
-        # Normalización de tipos
+        # Normalización
         if not df_rut.empty:
             df_rut['anio_rutina'] = pd.to_numeric(df_rut['anio_rutina'], errors='coerce').fillna(0).astype(int)
             df_rut['mes_rutina'] = pd.to_numeric(df_rut['mes_rutina'], errors='coerce').fillna(0).astype(int)
@@ -64,11 +86,8 @@ def cargar_datos_rutinas_view():
         st.error(f"Error visual: {e}")
         return None, None, None
 
-# --- LECTURA SEGURA PARA ESCRITURA (Sin caché, Sin fallos silenciosos) ---
 def leer_dataset_fresco(worksheet):
-    """Lee la hoja asegurando datos frescos. Si falla, levanta excepción."""
     try:
-        # ttl=0 fuerza lectura real desde Google
         df = conn.read(worksheet=worksheet, ttl=0).copy()
         return df
     except Exception as e:
@@ -81,7 +100,7 @@ def calcular_proxima_sesion(df, anio, mes):
     if filtro.empty: return 1
     return int(filtro['nro_sesion'].max()) + 1
 
-# --- FUNCIONES DE GUARDADO BLINDADAS ---
+# --- FUNCIONES DE GUARDADO (MODIFICADAS CON RETRY) ---
 
 def guardar_seguimiento(id_rutina, id_nadador):
     df_seg = leer_dataset_fresco("Rutinas_Seguimiento")
@@ -101,12 +120,14 @@ def guardar_seguimiento(id_rutina, id_nadador):
         }])
         df_final = pd.concat([df_seg, nuevo_registro], ignore_index=True)
         
-        try:
-            conn.update(worksheet="Rutinas_Seguimiento", data=df_final)
+        # USAMOS LA NUEVA FUNCIÓN CON RETRY
+        exito, error = actualizar_con_retry("Rutinas_Seguimiento", df_final)
+        
+        if exito:
             st.cache_data.clear() 
             return True
-        except Exception as e:
-            st.error(f"Error al guardar: {e}")
+        else:
+            st.error(f"Error al guardar (Reintentos agotados): {error}")
             return False
     return False
 
@@ -119,19 +140,21 @@ def borrar_seguimiento(id_rutina, id_nadador):
 
     df_final = df_seg[~((df_seg['id_rutina'] == id_rutina) & (df_seg['codnadador'] == id_nadador))]
     
-    try:
-        conn.update(worksheet="Rutinas_Seguimiento", data=df_final)
+    # USAMOS LA NUEVA FUNCIÓN CON RETRY
+    exito, error = actualizar_con_retry("Rutinas_Seguimiento", df_final)
+    
+    if exito:
         st.cache_data.clear()
         return True
-    except Exception as e:
-        st.error(f"Error al guardar: {e}")
+    else:
+        st.error(f"Error al borrar: {error}")
         return False
 
 def guardar_rutina_admin(anio, mes, sesion, texto):
     df_rut = leer_dataset_fresco("Rutinas")
     
     if df_rut is None:
-        return "❌ Error CRÍTICO de conexión. No se guardó para evitar pérdida de datos."
+        return "❌ Error CRÍTICO de conexión."
 
     if not df_rut.empty:
         df_rut['anio_rutina'] = pd.to_numeric(df_rut['anio_rutina'], errors='coerce').fillna(0).astype(int)
@@ -159,12 +182,14 @@ def guardar_rutina_admin(anio, mes, sesion, texto):
         df_rut.loc[mask, "nro_sesion"] = int(sesion)
         msg = "✅ Rutina actualizada correctamente."
         
-    try:
-        conn.update(worksheet="Rutinas", data=df_rut)
+    # USAMOS LA NUEVA FUNCIÓN CON RETRY
+    exito, error = actualizar_con_retry("Rutinas", df_rut)
+    
+    if exito:
         st.cache_data.clear()
         return msg
-    except Exception as e:
-        return f"❌ Error al escribir en Google Sheets: {e}"
+    else:
+        return f"❌ Error al escribir: {error}"
 
 def activar_calculo_auto():
     st.session_state.trigger_calculo = True
@@ -199,7 +224,9 @@ def render_tarjeta_individual(row, df_seg, key_suffix):
             with c_act:
                 st.write("") 
                 if st.button("❌", key=f"un_{r_id}_{key_suffix}", help="Desmarcar"):
-                    borrar_seguimiento(r_id, mi_id)
+                    # SPINNER VISUAL: Le dice al usuario "Espera" mientras reintenta en background
+                    with st.spinner("Desmarcando..."):
+                        borrar_seguimiento(r_id, mi_id)
                     st.rerun()
         else:
             c_head, c_act = st.columns([5, 2])
@@ -209,7 +236,9 @@ def render_tarjeta_individual(row, df_seg, key_suffix):
             with c_act:
                 st.write("") 
                 if st.button("🏊 DÍA GANADO", key=f"do_{r_id}_{key_suffix}", type="primary"):
-                    guardar_seguimiento(r_id, mi_id)
+                    # SPINNER VISUAL: Bloquea el doble click y muestra actividad
+                    with st.spinner("Guardando..."):
+                        guardar_seguimiento(r_id, mi_id)
                     st.rerun()
 
         st.markdown("</div>", unsafe_allow_html=True)
@@ -332,7 +361,6 @@ st.write("---")
 # ==========================
 if rol in ["M", "P"]:
     
-    # 1. BLOQUE DE GESTIÓN (Carga)
     with st.expander("⚙️ Gestión de Rutinas (Crear/Editar)", expanded=False):
         st.markdown("##### Editor de Rutinas")
         c1, c2, c3 = st.columns([1, 1, 1])
@@ -372,7 +400,6 @@ if rol in ["M", "P"]:
 
     st.divider()
 
-    # 2. BLOQUE DE CONSULTA (Tabs)
     tab_explorar, tab_seguimiento = st.tabs(["📖 Explorar Rutinas (Textos)", "📊 Seguimiento Alumnos"])
     
     with tab_explorar:
@@ -381,7 +408,6 @@ if rol in ["M", "P"]:
         
         with col_v1: sel_a = st.selectbox("Año", v_anios, key="adm_v_a")
         
-        # CAMBIO: Filtrado de meses existentes para el año seleccionado (Explorar)
         meses_disp_explorar = sorted(df_rutinas[df_rutinas['anio_rutina'] == sel_a]['mes_rutina'].unique().tolist())
         
         if not meses_disp_explorar:
@@ -416,7 +442,6 @@ if rol in ["M", "P"]:
             with col_s2:
                 sel_a_seg = st.selectbox("Año", v_anios, key="seg_a")
             
-            # CAMBIO: Filtrado de meses existentes para el año seleccionado (Seguimiento)
             meses_disp_seg = sorted(df_rutinas[df_rutinas['anio_rutina'] == sel_a_seg]['mes_rutina'].unique().tolist())
             
             if not meses_disp_seg:
