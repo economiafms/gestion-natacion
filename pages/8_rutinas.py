@@ -1,9 +1,8 @@
 import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import time
-import plotly.express as px
 
 # --- 1. CONFIGURACIÓN ---
 st.set_page_config(page_title="Rutinas", layout="centered")
@@ -78,10 +77,13 @@ def guardar_seguimiento(id_rutina, id_nadador):
     existe = df_seg[(df_seg['id_rutina'] == id_rutina) & (df_seg['codnadador'] == id_nadador)]
     
     if existe.empty:
+        # AJUSTE HORARIO: Restamos 3 horas para Argentina
+        hora_arg = datetime.now() - timedelta(hours=3)
+        
         nuevo_registro = pd.DataFrame([{
             "id_rutina": id_rutina,
             "codnadador": id_nadador,
-            "fecha_realizada": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            "fecha_realizada": hora_arg.strftime("%Y-%m-%d %H:%M:%S")
         }])
         df_final = pd.concat([df_seg, nuevo_registro], ignore_index=True)
         conn.update(worksheet="Rutinas_Seguimiento", data=df_final)
@@ -128,8 +130,49 @@ def activar_calculo_auto():
 
 # --- COMPONENTES DE VISUALIZACIÓN ---
 
+def render_tarjeta_individual(row, df_seg, key_suffix):
+    r_id = row['id_rutina']
+    r_sesion = row['nro_sesion']
+    r_texto = row['texto_rutina']
+    
+    # Verificar estado
+    check = df_seg[(df_seg['id_rutina'] == r_id) & (df_seg['codnadador'] == mi_id)]
+    esta_realizada = not check.empty
+    fecha_str = ""
+    if esta_realizada:
+        fecha_obj = pd.to_datetime(check.iloc[0]['fecha_realizada'])
+        fecha_str = fecha_obj.strftime("%d/%m")
+
+    # Estilos
+    borde = "#2E7D32" if esta_realizada else "#444" 
+    bg = "#1B2E1B" if esta_realizada else "#262730"
+    
+    with st.container():
+        st.markdown(f"""<div style="border: 2px solid {borde}; border-radius: 10px; background-color: {bg}; padding: 15px; margin-bottom: 15px;">""", unsafe_allow_html=True)
+        c_head, c_act = st.columns([3, 1])
+        with c_head:
+            if esta_realizada:
+                st.markdown(f"#### ✅ Sesión {r_sesion} <span style='font-size:14px; color:#888'>({fecha_str})</span>", unsafe_allow_html=True)
+                st.markdown(f"<div style='text-decoration: line-through; color: #aaa;'>", unsafe_allow_html=True)
+                st.markdown(r_texto)
+                st.markdown("</div>", unsafe_allow_html=True)
+            else:
+                st.markdown(f"#### ⭕ Sesión {r_sesion}")
+                st.markdown(r_texto)
+        with c_act:
+            st.write("")
+            if esta_realizada:
+                if st.button("Desmarcar", key=f"un_{r_id}_{key_suffix}"):
+                    borrar_seguimiento(r_id, mi_id)
+                    st.rerun()
+            else:
+                if st.button("COMPLETADO", key=f"do_{r_id}_{key_suffix}", type="primary"):
+                    guardar_seguimiento(r_id, mi_id)
+                    st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
+
 def render_feed_activo(df_rut, df_seg, anio_ver, mes_ver, key_suffix=""):
-    """Muestra las tarjetas con texto completo y botones de acción (Para mes en curso o admin)."""
+    """Muestra las tarjetas con lógica de colapsado para las completadas."""
     rutinas_filtradas = df_rut[
         (df_rut['anio_rutina'] == anio_ver) & 
         (df_rut['mes_rutina'] == mes_ver)
@@ -138,52 +181,38 @@ def render_feed_activo(df_rut, df_seg, anio_ver, mes_ver, key_suffix=""):
 
     if rutinas_filtradas.empty:
         st.info(f"No hay rutinas cargadas para {obtener_nombre_mes(mes_ver)} {anio_ver}.")
-    else:
-        for index, row in rutinas_filtradas.iterrows():
-            r_id = row['id_rutina']
-            r_sesion = row['nro_sesion']
-            r_texto = row['texto_rutina']
-            
-            # Verificar estado
-            check = df_seg[(df_seg['id_rutina'] == r_id) & (df_seg['codnadador'] == mi_id)]
-            esta_realizada = not check.empty
-            fecha_str = ""
-            if esta_realizada:
-                fecha_obj = pd.to_datetime(check.iloc[0]['fecha_realizada'])
-                fecha_str = fecha_obj.strftime("%d/%m")
+        return
 
-            # Tarjeta
-            borde = "#2E7D32" if esta_realizada else "#444" 
-            bg = "#1B2E1B" if esta_realizada else "#262730"
-            
-            with st.container():
-                st.markdown(f"""<div style="border: 2px solid {borde}; border-radius: 10px; background-color: {bg}; padding: 15px; margin-bottom: 15px;">""", unsafe_allow_html=True)
-                c_head, c_act = st.columns([3, 1])
-                with c_head:
-                    if esta_realizada:
-                        st.markdown(f"#### ✅ Sesión {r_sesion} <span style='font-size:14px; color:#888'>({fecha_str})</span>", unsafe_allow_html=True)
-                        st.markdown(f"<div style='text-decoration: line-through; color: #aaa;'>", unsafe_allow_html=True)
-                        st.markdown(r_texto)
-                        st.markdown("</div>", unsafe_allow_html=True)
-                    else:
-                        st.markdown(f"#### ⭕ Sesión {r_sesion}")
-                        st.markdown(r_texto)
-                with c_act:
-                    st.write("")
-                    if esta_realizada:
-                        if st.button("Desmarcar", key=f"un_{r_id}_{key_suffix}"):
-                            borrar_seguimiento(r_id, mi_id)
-                            st.rerun()
-                    else:
-                        if st.button("Completar", key=f"do_{r_id}_{key_suffix}", type="primary"):
-                            guardar_seguimiento(r_id, mi_id)
-                            st.rerun()
-                st.markdown("</div>", unsafe_allow_html=True)
+    # Separar en Pendientes y Completadas
+    l_pendientes = []
+    l_completadas = []
+
+    for index, row in rutinas_filtradas.iterrows():
+        check = df_seg[(df_seg['id_rutina'] == row['id_rutina']) & (df_seg['codnadador'] == mi_id)]
+        if not check.empty:
+            l_completadas.append(row)
+        else:
+            l_pendientes.append(row)
+
+    # 1. Mostrar Pendientes (Siempre visibles y arriba)
+    if l_pendientes:
+        st.caption("Próximas Sesiones")
+        for row in l_pendientes:
+            render_tarjeta_individual(row, df_seg, key_suffix)
+    else:
+        st.success("¡Todo al día! No tienes sesiones pendientes este mes.")
+
+    # 2. Mostrar Completadas (Colapsadas)
+    if l_completadas:
+        st.write("")
+        with st.expander(f"✅ Ver Sesiones Completadas ({len(l_completadas)})", expanded=False):
+            # Invertimos el orden para ver la última completada arriba dentro del expander
+            for row in reversed(l_completadas):
+                render_tarjeta_individual(row, df_seg, key_suffix)
 
 def render_historial_compacto(df_rut, df_seg, anio, mes, id_usuario_objetivo):
-    """Muestra tabla de cumplimiento SIN TEXTO (Para historial o seguimiento del profe)."""
+    """Muestra tabla de cumplimiento SIN TEXTO."""
     
-    # 1. Preparar datos
     rutinas_mes = df_rut[
         (df_rut['anio_rutina'] == anio) & 
         (df_rut['mes_rutina'] == mes)
@@ -193,7 +222,6 @@ def render_historial_compacto(df_rut, df_seg, anio, mes, id_usuario_objetivo):
         st.info("No hay rutinas definidas para este mes.")
         return
 
-    # 2. Cruzar con seguimiento del usuario objetivo
     datos_tabla = []
     total_rutinas = len(rutinas_mes)
     completadas = 0
@@ -219,29 +247,21 @@ def render_historial_compacto(df_rut, df_seg, anio, mes, id_usuario_objetivo):
             "_sort": r['nro_sesion']
         })
 
-    # 3. Mostrar Métricas
     porcentaje = int((completadas / total_rutinas) * 100) if total_rutinas > 0 else 0
     c1, c2, c3 = st.columns(3)
     c1.metric("Total Sesiones", total_rutinas)
     c2.metric("Completadas", completadas)
     c3.metric("Asistencia", f"{porcentaje}%")
 
-    # 4. Mostrar Barra de Progreso
     st.progress(porcentaje / 100)
     
-    # 5. Mostrar Tabla
     df_view = pd.DataFrame(datos_tabla).sort_values('_sort')
-    # Configuramos columnas para que se vea lindo
     st.dataframe(
         df_view[["Sesión", "Estado", "Fecha Realización"]],
         use_container_width=True,
         hide_index=True,
         column_config={
-            "Estado": st.column_config.TextColumn(
-                "Estado",
-                help="Estado de cumplimiento",
-                width="medium"
-            )
+            "Estado": st.column_config.TextColumn("Estado", width="medium")
         }
     )
 
@@ -297,8 +317,6 @@ if rol in ["M", "P"]:
         
         st.caption(f"ID: {id_busqueda} | {'✏️ Editando' if not row_existente.empty else '✨ Nueva'}")
         
-        with st.expander("Ayuda Formato"): st.markdown("`**Negrita**`, `### Titulo`, `- Lista`")
-
         with st.form("form_rutina"):
             f_texto = st.text_area("Contenido", value=texto_previo, height=200, key=f"txt_{id_busqueda}")
             if st.form_submit_button("Guardar"):
@@ -323,12 +341,13 @@ if rol in ["M", "P"]:
         with col_v1: sel_a = st.selectbox("Año", v_anios, key="adm_v_a")
         with col_v2: sel_m = st.selectbox("Mes", meses_indices, format_func=lambda x: mapa_meses[x], index=meses_indices.index(datetime.now().month), key="adm_v_m")
         
+        # En vista Admin, no usamos colapsado porque el profe quiere revisar contenido
+        # Así que pasamos todas
         render_feed_activo(df_rutinas, df_seguimiento, sel_a, sel_m, key_suffix="admin_view")
 
     with tab_seguimiento:
         st.info("Seleccione un alumno para ver su cumplimiento histórico.")
         
-        # Selector de Alumno
         df_nadadores['NombreCompleto'] = df_nadadores['apellido'] + ", " + df_nadadores['nombre']
         lista_nads = df_nadadores[['codnadador', 'NombreCompleto']].sort_values('NombreCompleto')
         
@@ -346,7 +365,6 @@ if rol in ["M", "P"]:
             
         st.markdown(f"**Reporte para:** {lista_nads[lista_nads['codnadador']==sel_nad_id]['NombreCompleto'].values[0]}")
         render_historial_compacto(df_rutinas, df_seguimiento, sel_a_seg, sel_m_seg, sel_nad_id)
-
 
 # ==========================
 # ROL: NADADOR (N)
