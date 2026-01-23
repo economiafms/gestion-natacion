@@ -30,7 +30,6 @@ def obtener_nombre_mes(n):
 @st.cache_data(ttl="10s")
 def cargar_datos_rutinas():
     try:
-        # Intentamos leer las hojas. Si no existen, devolvemos DataFrames vacíos con la estructura correcta
         try:
             df_rut = conn.read(worksheet="Rutinas")
         except:
@@ -55,10 +54,20 @@ def cargar_datos_rutinas():
         st.error(f"Error al cargar datos: {e}")
         return None, None
 
+def calcular_proxima_sesion(df, anio, mes):
+    """Devuelve el número de sesión siguiente al último cargado para ese mes."""
+    if df is None or df.empty:
+        return 1
+    
+    filtro = df[(df['anio_rutina'] == anio) & (df['mes_rutina'] == mes)]
+    if filtro.empty:
+        return 1
+    
+    max_sesion = filtro['nro_sesion'].max()
+    return int(max_sesion) + 1
+
 def guardar_seguimiento(id_rutina, id_nadador):
     df_rut, df_seg = cargar_datos_rutinas()
-    
-    # Verificar si ya existe
     existe = df_seg[(df_seg['id_rutina'] == id_rutina) & (df_seg['codnadador'] == id_nadador)]
     
     if existe.empty:
@@ -67,7 +76,6 @@ def guardar_seguimiento(id_rutina, id_nadador):
             "codnadador": id_nadador,
             "fecha_realizada": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }])
-        
         df_final = pd.concat([df_seg, nuevo_registro], ignore_index=True)
         conn.update(worksheet="Rutinas_Seguimiento", data=df_final)
         st.cache_data.clear()
@@ -76,21 +84,14 @@ def guardar_seguimiento(id_rutina, id_nadador):
 
 def borrar_seguimiento(id_rutina, id_nadador):
     df_rut, df_seg = cargar_datos_rutinas()
-    
-    # Filtrar para excluir el registro
     df_final = df_seg[~((df_seg['id_rutina'] == id_rutina) & (df_seg['codnadador'] == id_nadador))]
-    
     conn.update(worksheet="Rutinas_Seguimiento", data=df_final)
     st.cache_data.clear()
     return True
 
 def guardar_rutina_admin(anio, mes, sesion, texto):
     df_rut, df_seg = cargar_datos_rutinas()
-    
-    # Generar ID
     nuevo_id = f"{anio}-{mes:02d}-S{sesion:02d}"
-    
-    # Verificar si ya existe para sobrescribir
     mask = df_rut['id_rutina'] == nuevo_id
     
     nueva_fila = {
@@ -102,11 +103,9 @@ def guardar_rutina_admin(anio, mes, sesion, texto):
     }
     
     if df_rut[mask].empty:
-        # Nuevo
         df_rut = pd.concat([df_rut, pd.DataFrame([nueva_fila])], ignore_index=True)
         msg = "Rutina creada correctamente."
     else:
-        # Actualizar existente
         df_rut.loc[mask, "texto_rutina"] = texto
         df_rut.loc[mask, "anio_rutina"] = int(anio)
         df_rut.loc[mask, "mes_rutina"] = int(mes)
@@ -117,17 +116,37 @@ def guardar_rutina_admin(anio, mes, sesion, texto):
     st.cache_data.clear()
     return msg
 
-# --- 5. INTERFAZ ---
-st.title("📝 Rutinas de Entrenamiento")
+# Callback para activar recálculo
+def activar_calculo_auto():
+    st.session_state.trigger_calculo = True
 
-# Carga de datos
+# --- 5. LOGICA PREVIA AL RENDERIZADO (FIX PARA EL ERROR) ---
 df_rutinas, df_seguimiento = cargar_datos_rutinas()
+
+# Inicializar valores de gestión si no existen
+if "g_anio" not in st.session_state: st.session_state.g_anio = datetime.now().year
+if "g_mes" not in st.session_state: st.session_state.g_mes = datetime.now().month
+
+# Lógica de Autocompletado de Sesión
+# Se ejecuta si: 1) Se activó el trigger (por guardar o cambiar mes), o 2) No existe la variable 'admin_sesion'
+if st.session_state.get("trigger_calculo", False) or "admin_sesion" not in st.session_state:
+    if df_rutinas is not None:
+        prox = calcular_proxima_sesion(df_rutinas, st.session_state.g_anio, st.session_state.g_mes)
+        # Limitamos a 31
+        st.session_state.admin_sesion = min(prox, 31)
+    else:
+        st.session_state.admin_sesion = 1
+    
+    # Apagamos el trigger
+    st.session_state.trigger_calculo = False
+
+# --- 6. INTERFAZ ---
+st.title("📝 Rutinas de Entrenamiento")
 
 if df_rutinas is None:
     st.stop()
 
 # --- BARRA DE FILTROS SUPERIOR (Para visualización) ---
-# Separamos la lógica de visualización de la de carga para evitar conflictos
 st.write("---")
 
 # --- SECCIÓN ADMIN (Cargar Rutinas) ---
@@ -135,8 +154,7 @@ if rol in ["M", "P"]:
     with st.expander("⚙️ Gestión de Rutinas (Solo Profes)", expanded=False):
         st.markdown("##### Cargar / Editar Rutina")
         
-        # 1. CONTROLES DE SELECCIÓN (FUERA DEL FORMULARIO)
-        # Esto permite que al cambiar la sesión, se recargue la página y el texto correcto
+        # 1. CONTROLES DE SELECCIÓN (Con callbacks para auto-actualizar sesión)
         c1, c2, c3 = st.columns([1, 1, 1])
         
         anio_actual = datetime.now().year
@@ -146,16 +164,20 @@ if rol in ["M", "P"]:
         mapa_meses = {i: obtener_nombre_mes(i) for i in meses_indices}
 
         with c1: 
-            g_anio = st.number_input("Año Gestión", value=anio_actual, min_value=2020, max_value=2030, key="g_anio")
+            st.number_input("Año Gestión", value=anio_actual, min_value=2020, max_value=2030, key="g_anio", on_change=activar_calculo_auto)
         with c2: 
-            g_mes = st.selectbox("Mes Gestión", meses_indices, format_func=lambda x: mapa_meses[x], index=meses_indices.index(mes_actual), key="g_mes")
+            st.selectbox("Mes Gestión", meses_indices, format_func=lambda x: mapa_meses[x], index=meses_indices.index(mes_actual), key="g_mes", on_change=activar_calculo_auto)
         with c3: 
-            # Controlamos la sesión con session_state para permitir auto-incremento
-            if "admin_sesion" not in st.session_state: st.session_state.admin_sesion = 1
-            g_sesion = st.number_input("Nro Sesión", min_value=1, max_value=31, key="admin_sesion")
+            # El input está linkeado a 'admin_sesion', que ya fue actualizado arriba si era necesario
+            st.number_input("Nro Sesión", min_value=1, max_value=31, key="admin_sesion")
+            
+        # Valores actuales para buscar
+        g_anio_val = st.session_state.g_anio
+        g_mes_val = st.session_state.g_mes
+        g_ses_val = st.session_state.admin_sesion
             
         # 2. LOGICA DE PRECARGA
-        id_busqueda = f"{g_anio}-{g_mes:02d}-S{g_sesion:02d}"
+        id_busqueda = f"{g_anio_val}-{g_mes_val:02d}-S{g_ses_val:02d}"
         texto_previo = ""
         row_existente = df_rutinas[df_rutinas['id_rutina'] == id_busqueda]
         
@@ -166,9 +188,8 @@ if rol in ["M", "P"]:
             
         st.caption(f"{msg_estado}: {id_busqueda}")
 
-        # 3. FORMULARIO (SOLO TEXTO Y BOTÓN)
+        # 3. FORMULARIO
         with st.form("form_rutina"):
-            # Usamos key dinámica basada en el ID para forzar refresco si cambia la sesión
             f_texto = st.text_area("Detalle del Entrenamiento", value=texto_previo, height=200, key=f"txt_{id_busqueda}")
             
             btn_guardar = st.form_submit_button("Guardar Rutina")
@@ -177,48 +198,45 @@ if rol in ["M", "P"]:
                 if f_texto.strip() == "":
                     st.error("El texto de la rutina no puede estar vacío.")
                 else:
-                    res = guardar_rutina_admin(g_anio, g_mes, g_sesion, f_texto)
+                    res = guardar_rutina_admin(g_anio_val, g_mes_val, g_ses_val, f_texto)
                     st.success(res)
                     
-                    # Auto-incremento
-                    if st.session_state.admin_sesion < 31:
-                        st.session_state.admin_sesion += 1
-                        
+                    # Activamos el trigger para que en la próxima recarga calcule la siguiente sesión
+                    st.session_state.trigger_calculo = True
                     time.sleep(1)
                     st.rerun()
 
 st.divider()
 
 # --- SECCIÓN VISUALIZACIÓN (Feed) ---
-# Filtros independientes para el Feed (para que el alumno pueda ver meses pasados sin afectar al profe que carga)
 st.markdown("#### 📅 Explorar Rutinas")
 col_f1, col_f2 = st.columns(2)
 with col_f1:
     v_anios = sorted(list(set(df_rutinas['anio_rutina'].unique().tolist() + [datetime.now().year])), reverse=True)
-    v_anio = st.selectbox("Año", v_anios, index=0, key="view_anio")
+    st.selectbox("Año", v_anios, index=0, key="view_anio")
 
 with col_f2:
     v_mes_actual = datetime.now().month
-    v_mes = st.selectbox("Mes", meses_indices, format_func=lambda x: mapa_meses[x], index=meses_indices.index(v_mes_actual), key="view_mes")
+    st.selectbox("Mes", meses_indices, format_func=lambda x: mapa_meses[x], index=meses_indices.index(v_mes_actual), key="view_mes")
 
 # 1. Filtrar rutinas del mes seleccionado
 rutinas_filtradas = df_rutinas[
-    (df_rutinas['anio_rutina'] == v_anio) & 
-    (df_rutinas['mes_rutina'] == v_mes)
+    (df_rutinas['anio_rutina'] == st.session_state.view_anio) & 
+    (df_rutinas['mes_rutina'] == st.session_state.view_mes)
 ].copy()
 
 # 2. Ordenar por número de sesión
 rutinas_filtradas.sort_values(by='nro_sesion', ascending=True, inplace=True)
 
 if rutinas_filtradas.empty:
-    st.info(f"No hay rutinas cargadas para {obtener_nombre_mes(v_mes)} {v_anio}.")
+    st.info(f"No hay rutinas cargadas para {obtener_nombre_mes(st.session_state.view_mes)} {st.session_state.view_anio}.")
 else:
     for index, row in rutinas_filtradas.iterrows():
         r_id = row['id_rutina']
         r_sesion = row['nro_sesion']
         r_texto = row['texto_rutina']
         
-        # Verificar estado (Individual por usuario)
+        # Verificar estado
         check = df_seguimiento[
             (df_seguimiento['id_rutina'] == r_id) & 
             (df_seguimiento['codnadador'] == mi_id)
