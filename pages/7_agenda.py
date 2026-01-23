@@ -62,13 +62,11 @@ def cargar_datos_agenda():
         try:
             df_comp = conn.read(worksheet="Competencias").copy()
             if not df_comp.empty:
-                # Convertir columnas de fecha
                 if 'fecha_evento' in df_comp.columns:
                     df_comp['fecha_evento'] = pd.to_datetime(df_comp['fecha_evento']).dt.date
                 if 'fecha_limite' in df_comp.columns:
                     df_comp['fecha_limite'] = pd.to_datetime(df_comp['fecha_limite']).dt.date
         except:
-            # Estructura Nueva
             df_comp = pd.DataFrame(columns=["id_competencia", "nombre_evento", "fecha_evento", "hora_inicio", "cod_pileta", "fecha_limite", "costo", "descripcion"])
 
         # 2. Inscripciones
@@ -79,14 +77,14 @@ def cargar_datos_agenda():
         except:
             df_ins = pd.DataFrame(columns=["id_inscripcion", "id_competencia", "codnadador", "pruebas", "fecha_inscripcion"])
 
-        # 3. Nadadores (Solo lectura nombres)
+        # 3. Nadadores
         try:
             df_nad = conn.read(worksheet="Nadadores").copy()
             df_nad['codnadador'] = pd.to_numeric(df_nad['codnadador'], errors='coerce').fillna(0).astype(int)
         except:
             df_nad = pd.DataFrame(columns=["codnadador", "nombre", "apellido"])
 
-        # 4. Piletas (Para el selector de lugares)
+        # 4. Piletas
         try:
             df_pil = conn.read(worksheet="Piletas").copy()
         except:
@@ -126,13 +124,11 @@ def guardar_competencia(id_comp, nombre, fecha_ev, hora, cod_pil, fecha_lim, cos
     }
 
     if id_comp and not df_comp.empty and id_comp in df_comp['id_competencia'].values:
-        # Editar
         idx = df_comp.index[df_comp['id_competencia'] == id_comp].tolist()[0]
         for key, val in nuevo_registro.items():
             df_comp.at[idx, key] = val
         msg = "✅ Evento actualizado."
     else:
-        # Crear
         df_comp = pd.concat([df_comp, pd.DataFrame([nuevo_registro])], ignore_index=True)
         msg = "✅ Evento creado."
 
@@ -231,7 +227,7 @@ if rol in ["M", "P"]:
         with st.form("form_crear_comp"):
             st.markdown("##### Datos del Evento")
             c1, c2 = st.columns(2)
-            nombre_in = c1.text_input("Nombre del Evento (Ej: Torneo Aniversario)")
+            nombre_in = c1.text_input("Nombre del Evento")
             
             # Selector de Piletas
             opciones_piletas = df_piletas['codpileta'].tolist() if not df_piletas.empty else []
@@ -242,12 +238,14 @@ if rol in ["M", "P"]:
             cod_pil_in = c2.selectbox("Sede / Pileta", opciones_piletas, format_func=format_pileta if opciones_piletas else str)
             
             c3, c4 = st.columns(2)
-            fecha_in = c3.date_input("Fecha del Torneo", min_value=datetime.today())
+            # --- FIX FECHA FORMATO DD/MM/YYYY ---
+            fecha_in = c3.date_input("Fecha del Torneo", min_value=datetime.today(), format="DD/MM/YYYY")
             hora_in = c4.time_input("Hora Inicio", value=datetime.strptime("08:30", "%H:%M").time())
             
             st.markdown("##### Configuración de Inscripción")
             c5, c6 = st.columns(2)
-            fecha_lim_in = c5.date_input("Fecha Límite Inscripción", min_value=datetime.today())
+            # --- FIX FECHA FORMATO DD/MM/YYYY ---
+            fecha_lim_in = c5.date_input("Fecha Límite Inscripción", min_value=datetime.today(), format="DD/MM/YYYY")
             costo_in = c6.number_input("Costo Inscripción ($)", min_value=0, step=1000)
             
             desc_in = st.text_area("Descripción (Reglamento, info de pago, etc.)")
@@ -289,7 +287,7 @@ else:
             ubic_pil = "-"
 
         # Fechas y Estados
-        # --- CORRECCIÓN AQUÍ: .dt.date ELIMINADO PORQUE ES UN SCALAR ---
+        # --- FIX ERROR ATTRIBUTE: Usar .date() directo sobre el valor, no .dt ---
         f_limite = pd.to_datetime(row['fecha_limite']).date()
         dias_para_torneo = (row['fecha_dt'] - hoy).days
         dias_para_cierre = (f_limite - hoy).days
@@ -302,15 +300,18 @@ else:
             inscripcion_abierta = False
         elif dias_para_cierre < 0:
             badge = "🔒 INSCRIPCIÓN CERRADA"
-            badge_bg = "#E30613" # Rojo
+            badge_bg = "#E30613"
             inscripcion_abierta = False
         else:
             badge = f"🟢 ABIERTA (Cierra en {dias_para_cierre} días)"
-            badge_bg = "#2E7D32" # Verde
+            badge_bg = "#2E7D32"
 
+        # --- ARQUITECTURA VISUAL SIN HTML PARTIDO ---
+        # 1. Contenedor principal para cada evento
         with st.container():
+            # 2. Bloque HTML de información (Cerrado)
             st.markdown(f"""
-            <div style="background-color: #262730; border: 1px solid #555; border-radius: 10px; padding: 15px; margin-bottom: 20px;">
+            <div style="background-color: #262730; border: 1px solid #555; border-radius: 10px; padding: 15px; margin-bottom: 10px;">
                 <div style="display:flex; justify-content:space-between; align-items:start;">
                     <div>
                         <h3 style="margin:0; color:white;">{row['nombre_evento']}</h3>
@@ -332,9 +333,12 @@ else:
                 </div>
                 
                 <div style="background-color:#333; padding:10px; border-radius:5px; font-size:13px; color:#ccc; white-space: pre-wrap;">{row['descripcion'] if row['descripcion'] else 'Sin información adicional.'}</div>
+            </div>
             """, unsafe_allow_html=True)
 
-            # --- LÓGICA USUARIO (INSCRIPCIÓN) ---
+            # 3. Widgets de Streamlit debajo del HTML (Sin estar envueltos en div)
+            
+            # --- LÓGICA USUARIO ---
             inscripcion_user = df_inscripciones[
                 (df_inscripciones['id_competencia'] == comp_id) & 
                 (df_inscripciones['codnadador'] == mi_id)
@@ -375,13 +379,9 @@ else:
                             if ok: st.warning(m); time.sleep(1); st.rerun()
             else:
                 if esta_inscripto:
-                    st.markdown(f"""
-                    <div style="margin-top:10px; padding:10px; border:1px solid #2E7D32; border-radius:5px; background-color:#1B2E1B;">
-                        <strong>✅ Estás inscripto en:</strong> {inscripcion_user.iloc[0]['pruebas']}
-                    </div>
-                    """, unsafe_allow_html=True)
+                    st.success(f"✅ Estás inscripto en: {inscripcion_user.iloc[0]['pruebas']}")
 
-            # --- LÓGICA ADMIN (PLANILLA) ---
+            # --- LÓGICA ADMIN ---
             if rol in ["M", "P"]:
                 with st.expander(f"🛡️ Gestión Entrenador ({row['nombre_evento']})"):
                     t1, t2 = st.tabs(["📋 Inscriptos", "⚙️ Editar"])
@@ -405,8 +405,9 @@ else:
                     with t2:
                         with st.form(f"edit_{comp_id}"):
                             new_n = st.text_input("Nombre", value=row['nombre_evento'])
-                            new_f = st.date_input("Fecha Evento", value=pd.to_datetime(row['fecha_dt']))
-                            new_l = st.date_input("Cierre Inscripción", value=pd.to_datetime(f_limite))
+                            # --- FIX FECHA DD/MM/YYYY ---
+                            new_f = st.date_input("Fecha Evento", value=pd.to_datetime(row['fecha_dt']), format="DD/MM/YYYY")
+                            new_l = st.date_input("Cierre Inscripción", value=pd.to_datetime(f_limite), format="DD/MM/YYYY")
                             new_desc = st.text_area("Descripción", value=row['descripcion'])
                             
                             if st.form_submit_button("Actualizar Datos"):
@@ -415,5 +416,5 @@ else:
                             
                             if st.form_submit_button("⚠️ ELIMINAR EVENTO"):
                                 eliminar_competencia(comp_id); st.rerun()
-
-            st.markdown("</div>", unsafe_allow_html=True)
+            
+            st.divider() # Separador visual entre eventos
