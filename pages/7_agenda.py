@@ -103,11 +103,10 @@ def cargar_datos_agenda():
         except:
             df_ins = pd.DataFrame(columns=["id_inscripcion", "id_competencia", "codnadador", "pruebas", "fecha_inscripcion"])
 
-        # 3. Nadadores (Incluimos Fecha Nac y Genero)
+        # 3. Nadadores
         try:
             df_nad = conn.read(worksheet="Nadadores").copy()
             df_nad['codnadador'] = pd.to_numeric(df_nad['codnadador'], errors='coerce').fillna(0).astype(int)
-            # Asegurar fecha nacimiento para cálculo
             df_nad['fechanac'] = pd.to_datetime(df_nad['fechanac'], errors='coerce')
         except:
             df_nad = pd.DataFrame(columns=["codnadador", "nombre", "apellido", "fechanac", "codgenero"])
@@ -321,6 +320,9 @@ else:
         else:
             badge = f"🟢 ABIERTA ({dias_para_cierre} días)"; badge_bg = "#2E7D32"
 
+        # Formateo de costo sin decimales
+        txt_costo = f"${int(row['costo'])}" if pd.notna(row['costo']) else "$0"
+
         # --- TARJETA VISUAL ---
         with st.container():
             st.markdown(f"""
@@ -340,34 +342,29 @@ else:
                 <div style="display:flex; gap:20px; color:#ddd; font-size:14px; margin-bottom:10px;">
                     <div>📍 {nom_pil}</div>
                     <div>🏙️ {ubic_pil}</div>
-                    <div>💰 ${row['costo']}</div>
+                    <div>💰 {txt_costo}</div>
                 </div>
                 <div style="background-color:#333; padding:10px; border-radius:5px; font-size:13px; color:#ccc; white-space: pre-wrap;">{row['descripcion'] if row['descripcion'] else 'Sin información adicional.'}</div>
             </div>
             """, unsafe_allow_html=True)
 
-            # --- LISTADO PÚBLICO DE INSCRIPTOS (NUEVO REQUERIMIENTO) ---
+            # --- LISTADO PÚBLICO DE INSCRIPTOS ---
             with st.expander("📋 Ver Lista de Inscriptos"):
                 filtro_ins = df_inscripciones[df_inscripciones['id_competencia'] == comp_id]
                 
                 if filtro_ins.empty:
                     st.caption("Aún no hay nadadores inscriptos.")
                 else:
-                    # Cruzar datos con Nadadores
                     data_full = filtro_ins.merge(df_nadadores, on="codnadador", how="left")
-                    
-                    # Calcular categorías y armar datos visuales
                     data_full['AnioNac'] = data_full['fechanac'].dt.year
                     data_full['Categoria'] = data_full['AnioNac'].apply(calcular_categoria_master)
                     data_full['Nadador'] = data_full['apellido'] + " " + data_full['nombre']
                     data_full['Genero'] = data_full['codgenero']
                     
-                    # Seleccionar columnas limpias
                     df_display = data_full[['Nadador', 'Genero', 'Categoria', 'pruebas']].rename(columns={'pruebas': 'Pruebas Inscriptas'})
-                    
                     st.dataframe(df_display, hide_index=True, use_container_width=True)
 
-            # --- LÓGICA USUARIO (INSCRIPCIÓN) ---
+            # --- LÓGICA USUARIO ---
             inscripcion_user = df_inscripciones[
                 (df_inscripciones['id_competencia'] == comp_id) & 
                 (df_inscripciones['codnadador'] == mi_id)
@@ -391,8 +388,6 @@ else:
 
                     with st.form(f"ins_{comp_id}"):
                         st.write("**Selecciona las pruebas en las que vas a participar:**")
-                        
-                        # SOLO MULTISELECT DE OPCIONES HABILITADAS (SIN CAMPO "OTROS")
                         sel = st.multiselect("Pruebas Habilitadas", opciones_usuario, default=[p for p in pruebas_sel_usuario if p in opciones_usuario])
                         
                         c_s, c_d = st.columns([3, 1])
@@ -414,30 +409,44 @@ else:
                 if esta_inscripto:
                     st.success(f"✅ Tu inscripción: {inscripcion_user.iloc[0]['pruebas']}")
 
-            # --- LÓGICA ADMIN (EDICIÓN Y BAJAS) ---
+            # --- LÓGICA ADMIN (PANEL MEJORADO) ---
             if rol in ["M", "P"]:
                 with st.expander(f"🛡️ Panel Entrenador ({row['nombre_evento']})"):
                     t1, t2 = st.tabs(["❌ Gestión Bajas", "⚙️ Editar Evento"])
                     
+                    # --- PESTAÑA 1: LISTA DETALLADA ---
                     with t1:
-                        # Reutilizamos filtro_ins
                         if filtro_ins.empty:
                             st.caption("Nada para gestionar.")
                         else:
-                            # Re-creamos data_full si no se creó arriba (aunque ya debería estar)
+                            # Re-crear data_full si es necesario (ya viene del bloque público)
                             if 'data_full' not in locals():
                                 data_full = filtro_ins.merge(df_nadadores, on="codnadador", how="left")
+                                data_full['AnioNac'] = data_full['fechanac'].dt.year
+                                data_full['Categoria'] = data_full['AnioNac'].apply(calcular_categoria_master)
                                 data_full['Nadador'] = data_full['apellido'] + " " + data_full['nombre']
+                                data_full['Genero'] = data_full['codgenero']
 
-                            # LISTA CON BOTONES X (SOLICITUD ANTERIOR MANTENIDA)
+                            # Cabecera
+                            h1, h2, h3, h4, h5 = st.columns([3, 1, 1, 4, 1])
+                            h1.markdown("**Nadador**")
+                            h2.markdown("**Gen**")
+                            h3.markdown("**Cat**")
+                            h4.markdown("**Pruebas**")
+                            h5.markdown("**X**")
+                            st.divider()
+
+                            # Filas
                             for idx_nad, r_nad in data_full.iterrows():
-                                n_col1, n_col2, n_col3 = st.columns([3, 4, 1])
-                                with n_col1: st.write(f"{r_nad['Nadador']}")
-                                with n_col2: st.caption(r_nad['pruebas'])
-                                with n_col3:
-                                    if st.button("❌", key=f"del_{comp_id}_{r_nad['codnadador']}", help="Eliminar inscripción"):
+                                c1, c2, c3, c4, c5 = st.columns([3, 1, 1, 4, 1])
+                                with c1: st.write(f"{r_nad['Nadador']}")
+                                with c2: st.write(f"{r_nad['Genero']}")
+                                with c3: st.write(f"{r_nad['Categoria']}")
+                                with c4: st.caption(r_nad['pruebas'])
+                                with c5:
+                                    if st.button("❌", key=f"del_{comp_id}_{r_nad['codnadador']}", help="Eliminar"):
                                         eliminar_inscripcion(comp_id, r_nad['codnadador']); st.rerun()
-                                st.markdown("<hr style='margin: 5px 0; border-color: #444;'>", unsafe_allow_html=True)
+                                st.markdown("<hr style='margin: 5px 0; border-color: #333;'>", unsafe_allow_html=True)
 
                     with t2:
                         pruebas_actuales_db = row.get('pruebas_habilitadas', "")
