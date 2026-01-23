@@ -38,6 +38,10 @@ def obtener_nombre_mes(n):
         return "Desconocido"
 
 def mostrar_referencias():
+    """
+    Muestra el glosario de referencias en un desplegable.
+    Usamos Markdown listas para evitar que se rompa en móviles (responsive).
+    """
     with st.expander("📖 Glosario de Referencias (Clic para ver)"):
         st.markdown("""
         **INTENSIDADES**
@@ -88,7 +92,7 @@ def actualizar_con_retry(worksheet, data, max_retries=5):
     return False, "Tiempo de espera agotado (API ocupada)."
 
 # --- LECTURA DE DATOS (CON CACHÉ) ---
-@st.cache_data(ttl="5s") # TTL bajo para refrescar rápido
+@st.cache_data(ttl="5s")
 def cargar_datos_rutinas_view():
     try:
         try:
@@ -246,7 +250,6 @@ def guardar_sesion_admin(anio, mes, sesion, texto):
         
     exito, error = actualizar_con_retry("Rutinas", df_rut)
     
-    # IMPORTANTE: LIMPIAR CACHÉ PARA VER EL CAMBIO
     if exito:
         st.cache_data.clear()
     
@@ -271,6 +274,7 @@ def render_tarjeta_individual(row, df_seg, key_suffix):
         fecha_obj = pd.to_datetime(check.iloc[0]['fecha_realizada'])
         fecha_str = fecha_obj.strftime("%d/%m")
 
+    # Estilos visuales condicionales
     if esta_realizada:
         borde = "#2E7D32" # Verde
         bg = "#1B2E1B"
@@ -345,6 +349,7 @@ def render_feed_activo(df_rut, df_seg, anio_ver, mes_ver, key_suffix=""):
         if l_completadas:
             st.success("¡Excelente! Has completado todas las sesiones del mes. 🏆")
 
+# --- HISTORIAL VISUAL MEJORADO (SIN DATAFRAME FEO) ---
 def render_historial_compacto(df_rut, df_seg, anio, mes, id_usuario_objetivo):
     rutinas_mes = df_rut[
         (df_rut['anio_rutina'] == anio) & 
@@ -355,44 +360,93 @@ def render_historial_compacto(df_rut, df_seg, anio, mes, id_usuario_objetivo):
         st.info("No hay planificación cargada para este mes.")
         return
 
-    datos_tabla = []
+    # Preparar datos
     total_rutinas = len(rutinas_mes)
     completadas = 0
+    lista_render = []
 
     for _, r in rutinas_mes.iterrows():
         r_id = r['id_rutina']
         check = df_seg[(df_seg['id_rutina'] == r_id) & (df_seg['codnadador'] == id_usuario_objetivo)]
-        
         hecho = not check.empty
         fecha_txt = "-"
+        
         if hecho:
             completadas += 1
             fecha_obj = pd.to_datetime(check.iloc[0]['fecha_realizada'])
-            fecha_txt = fecha_obj.strftime("%d/%m/%Y %H:%M")
+            fecha_txt = fecha_obj.strftime("%d/%m")
         
-        datos_tabla.append({
-            "Sesión": f"Sesión {r['nro_sesion']}",
-            "Estado": "✅ Completado" if hecho else "❌ Pendiente",
-            "Fecha Realización": fecha_txt,
-            "_nro": r['nro_sesion']
+        lista_render.append({
+            "nro": r['nro_sesion'],
+            "hecho": hecho,
+            "fecha": fecha_txt
         })
 
     porcentaje = int((completadas / total_rutinas) * 100) if total_rutinas > 0 else 0
     
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Total Sesiones", total_rutinas)
-    c2.metric("Completadas", completadas)
-    c3.metric("Asistencia Global", f"{porcentaje}%")
+    # 1. SCORECARD SUPERIOR
+    st.markdown(f"""
+    <div style="
+        background-color: #262730; 
+        border-radius: 8px; 
+        padding: 15px; 
+        border: 1px solid #444; 
+        text-align: center;
+        margin-bottom: 20px;">
+        <div style="font-size: 14px; color: #aaa; margin-bottom: 5px;">ASISTENCIA GLOBAL</div>
+        <div style="font-size: 36px; font-weight: bold; color: white; line-height: 1;">{porcentaje}%</div>
+        <div style="font-size: 12px; color: #888; margin-top: 5px;">{completadas} de {total_rutinas} sesiones</div>
+    </div>
+    """, unsafe_allow_html=True)
+    
     st.progress(porcentaje / 100)
-    
-    st.divider()
-    
-    df_view = pd.DataFrame(datos_tabla).sort_values('_nro')
-    st.dataframe(
-        df_view[["Sesión", "Estado", "Fecha Realización"]],
-        use_container_width=True,
-        hide_index=True
-    )
+    st.write("") 
+
+    # 2. LISTADO DE SESIONES (DISEÑO LISTA LIMPIA)
+    st.caption(f"DETALLE {obtener_nombre_mes(mes).upper()}")
+
+    for item in lista_render:
+        if item['hecho']:
+            color = "#2E7D32" # Verde
+            icono = "✅"
+            texto_estado = "COMPLETADO"
+            bg_badge = "#1B5E20"
+        else:
+            color = "#555" # Gris
+            icono = "⭕"
+            texto_estado = "PENDIENTE"
+            bg_badge = "#444"
+
+        # HTML Simple y Robusto para cada fila
+        st.markdown(f"""
+        <div style="
+            background-color: #262730;
+            border-radius: 6px;
+            padding: 10px 15px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-left: 4px solid {color};
+        ">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 16px;">{icono}</span>
+                <span style="font-weight: 500; color: white;">Sesión {item['nro']}</span>
+            </div>
+            <div style="text-align: right;">
+                <span style="
+                    background-color: {bg_badge};
+                    color: white;
+                    padding: 3px 8px;
+                    border-radius: 4px;
+                    font-size: 10px;
+                    font-weight: bold;
+                    letter-spacing: 0.5px;
+                ">{texto_estado}</span>
+                <div style="font-size: 11px; color: #aaa; margin-top: 3px;">{item['fecha']}</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
 # ==========================================
 # 7. LÓGICA PRINCIPAL (MAIN)
@@ -415,11 +469,9 @@ st.write("---")
 # ==========================
 if rol in ["M", "P"]:
     
-    # Gestión de Variables de Estado para Carga
     if "g_anio" not in st.session_state: st.session_state.g_anio = datetime.now().year
     if "g_mes" not in st.session_state: st.session_state.g_mes = datetime.now().month
 
-    # Trigger para recalcular el número de sesión
     if st.session_state.get("trigger_calculo", False) or "admin_sesion" not in st.session_state:
         if df_rutinas is not None:
             prox = calcular_proxima_sesion(df_rutinas, st.session_state.g_anio, st.session_state.g_mes)
@@ -483,7 +535,6 @@ if rol in ["M", "P"]:
                         st.error(msg)
                     else:
                         st.success(msg)
-                        # Activamos la bandera para avanzar en la próxima recarga
                         st.session_state.forzar_avance_sesion = True
                         time.sleep(0.5)
                         st.rerun()
