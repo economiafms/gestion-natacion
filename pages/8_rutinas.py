@@ -162,13 +162,13 @@ def render_tarjeta_individual(row, df_seg, key_suffix):
         with c_act:
             st.write("")
             if esta_realizada:
-                # CAMBIO: Botón Texto + Emoji
-                if st.button("❌ Desmarcar", key=f"un_{r_id}_{key_suffix}", help="Marcar como NO realizada"):
+                # CAMBIO: Solo Emoji Cruz
+                if st.button("❌", key=f"un_{r_id}_{key_suffix}", help="Desmarcar (No realizada)"):
                     borrar_seguimiento(r_id, mi_id)
                     st.rerun()
             else:
-                # CAMBIO: Botón Texto + Emoji
-                if st.button("🏊 Completada", key=f"do_{r_id}_{key_suffix}", type="primary", help="Marcar como Completada"):
+                # CAMBIO: Botón "DÍA GANADO"
+                if st.button("🏊 DÍA GANADO", key=f"do_{r_id}_{key_suffix}", type="primary", help="Marcar como Completada"):
                     guardar_seguimiento(r_id, mi_id)
                     st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
