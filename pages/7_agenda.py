@@ -241,12 +241,19 @@ else:
     for _, row in df_view.iterrows():
         comp_id = row['id_competencia']
         
-        # Info Pileta
+        filtro_ins = df_inscripciones[df_inscripciones['id_competencia'] == comp_id]
+        if not filtro_ins.empty:
+            d_full = filtro_ins.merge(df_nadadores, on="codnadador", how="left")
+            d_full['Anio'] = d_full['fechanac'].dt.year
+            d_full['Cat'] = d_full['Anio'].apply(calcular_categoria_master)
+            d_full['Nombre'] = d_full['apellido'] + ", " + d_full['nombre']
+        else:
+            d_full = pd.DataFrame()
+
+        # Visual Evento
         d_pil = df_piletas[df_piletas['codpileta'] == row['cod_pileta']]
         nom_pil = f"{d_pil.iloc[0]['club']} ({d_pil.iloc[0]['medida']})" if not d_pil.empty else row['cod_pileta']
         ubic_pil = d_pil.iloc[0]['ubicacion'] if not d_pil.empty else "-"
-
-        # Fechas y Badge
         f_lim = pd.to_datetime(row['fecha_limite']).date()
         dias_ev = (row['fecha_dt'] - hoy).days
         dias_cie = (f_lim - hoy).days
@@ -256,7 +263,6 @@ else:
         elif dias_cie < 0: badge = "🔒 CERRADA"; bg = "#E30613"; abierta = False
         else: badge = f"🟢 ABIERTA ({dias_cie} días)"; bg = "#2E7D32"
 
-        # Tarjeta Visual
         with st.container():
             st.markdown(f"""
             <div style="background-color: #262730; border: 1px solid #555; border-radius: 8px; padding: 15px; margin-bottom: 10px;">
@@ -276,23 +282,17 @@ else:
                 <div style="font-size:13px; color:#ccc;">{row['descripcion'] or ''}</div>
             </div>""", unsafe_allow_html=True)
 
-            # === A. LISTA PÚBLICA DE INSCRIPTOS (CON CHIPS) ===
+            # === A. LISTA PÚBLICA (CON CHIPS) ===
             with st.expander("📋 Ver Lista de Inscriptos"):
-                f_ins = df_inscripciones[df_inscripciones['id_competencia'] == comp_id]
-                if f_ins.empty:
+                if d_full.empty:
                     st.caption("Aún no hay nadadores inscriptos.")
                 else:
-                    d_full = f_ins.merge(df_nadadores, on="codnadador", how="left")
-                    d_full['Anio'] = d_full['fechanac'].dt.year
-                    d_full['Cat'] = d_full['Anio'].apply(calcular_categoria_master)
-                    
-                    # Generación de Tarjetas con Chips
                     for _, r_pub in d_full.iterrows():
                         nadador_nom = f"{r_pub['apellido']}, {r_pub['nombre']}"
                         
-                        # Chips para Categoría y Género Separados (Color Unificado)
-                        cat_chip = f"<span style='font-size: 12px; font-weight: bold; background-color: #555; padding: 3px 8px; border-radius: 4px; color: #fff; margin-left: 5px;'>{r_pub['Cat']}</span>"
-                        gen_chip = f"<span style='font-size: 12px; font-weight: bold; background-color: #555; padding: 3px 8px; border-radius: 4px; color: #fff; margin-left: 5px;'>Gen. {r_pub['codgenero']}</span>"
+                        # Chips para Categoría y Género Separados (Categoría más grande)
+                        cat_chip = f"<span style='font-size: 14px; font-weight: bold; background-color: #555; padding: 4px 10px; border-radius: 4px; color: #fff; margin-left: 5px;'>{r_pub['Cat']}</span>"
+                        gen_chip = f"<span style='font-size: 11px; font-weight: bold; background-color: #555; padding: 2px 8px; border-radius: 4px; color: #ddd; margin-left: 5px;'>Gen. {r_pub['codgenero']}</span>"
                         
                         # Chips para las pruebas
                         pruebas_lista = [p.strip() for p in str(r_pub['pruebas']).split(",")]
@@ -309,7 +309,7 @@ else:
                             border-left: 4px solid #E30613;">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                                 <div style="font-weight: bold; color: white; font-size: 16px;">{nadador_nom}</div>
-                                <div style="display: flex;">
+                                <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
                                     {cat_chip}
                                     {gen_chip}
                                 </div>
