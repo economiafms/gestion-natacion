@@ -68,16 +68,16 @@ def validar_socio():
             st.error("Número de socio no registrado.")
 
 def cerrar_sesion():
-    for key in st.session_state.keys():
+    for key in list(st.session_state.keys()):
         del st.session_state[key]
     st.rerun()
 
-# --- NUEVA FUNCIÓN: GUÍA DE INSTALACIÓN PWA ---
+# FUNCIÓN NUEVA: INSTRUCCIONES PWA
 def pwa_install_button():
     st.write("---")
     with st.expander("📲 INSTALAR APP EN TU CELULAR"):
         st.markdown("""
-        Esta aplicación se puede instalar para acceder rápido desde tu pantalla de inicio:
+        Puedes agregar esta aplicación a tu pantalla de inicio para un acceso más rápido:
         
         **🤖 Android (Chrome):**
         1. Toca los tres puntos **(⋮)** arriba a la derecha.
@@ -85,9 +85,9 @@ def pwa_install_button():
         
         **🍎 iPhone (Safari):**
         1. Toca el botón **Compartir** (cuadrado con flecha arriba) en la barra inferior.
-        2. Desliza y toca en **'Agregar al inicio'**.
+        2. Desliza hacia abajo y toca en **'Agregar al inicio'**.
         """)
-        st.info("Una vez instalada, la verás con el escudo del club en tu menú de aplicaciones.")
+        st.info("Nota: El acceso directo se verá con el ícono de la aplicación web de Streamlit.")
 
 # --- 5. PANTALLA DE LOGIN ---
 def login_screen():
@@ -133,7 +133,7 @@ def login_screen():
     if st.button("INGRESAR", type="primary", use_container_width=True):
         validar_socio()
     
-    # LLAMADA A LA FUNCIÓN DE INSTALACIÓN
+    # LLAMADA A LAS INSTRUCCIONES
     pwa_install_button()
 
 # --- 6. DEFINICIÓN DE PÁGINAS ---
@@ -151,6 +151,7 @@ if not st.session_state.role:
     pg = st.navigation([pg_login_obj])
     pg.run()
 else:
+    # --- MENÚ PRINCIPAL ---
     menu_pages = {
         "Principal": [pg_inicio, pg_datos, pg_entrenamientos, pg_categoria]
     }
