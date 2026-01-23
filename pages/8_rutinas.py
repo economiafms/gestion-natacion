@@ -8,7 +8,7 @@ import random
 # --- 1. CONFIGURACIÓN ---
 st.set_page_config(page_title="Sesiones de Entrenamiento", layout="centered")
 
-# --- PLANTILLA TEST (TEXTO EXACTO SOLICITADO) ---
+# --- PLANTILLA TEST ---
 PLANTILLA_TEST = """OBJETIVO: EVALUACIÓN
 -
 10’ Ec. Movilidad
@@ -49,7 +49,7 @@ def obtener_nombre_mes(n):
 
 # --- GLOSARIO DE REFERENCIAS ---
 def mostrar_referencias():
-    """Muestra el glosario en un desplegable consultivo."""
+    """Muestra el glosario en un desplegable consultivo UNA SOLA VEZ."""
     with st.expander("📖 Glosario de Referencias y Abreviaturas"):
         st.markdown("""
         | Sigla | Significado | Detalle / Intensidad |
@@ -285,7 +285,7 @@ def render_tarjeta_individual(row, df_seg, key_suffix):
         borde = "#2E7D32"
         bg = "#1B2E1B"
     elif es_test:
-        borde = "#E30613" # Rojo NOB para el Test
+        borde = "#E30613" # Rojo Newells
         bg = "#262730"
     else:
         borde = "#444"
@@ -321,10 +321,6 @@ def render_tarjeta_individual(row, df_seg, key_suffix):
                         guardar_seguimiento(r_id, mi_id)
                     st.rerun()
         
-        # --- AQUÍ ESTÁ EL GLOSARIO DENTRO DE LA TARJETA ---
-        st.markdown("---")
-        mostrar_referencias()
-
         st.markdown("</div>", unsafe_allow_html=True)
 
 def render_feed_activo(df_rut, df_seg, anio_ver, mes_ver, key_suffix=""):
@@ -338,13 +334,13 @@ def render_feed_activo(df_rut, df_seg, anio_ver, mes_ver, key_suffix=""):
         return
 
     # --- ORDENAMIENTO: TEST AL FINAL ---
-    # Creamos columna temporal 'es_test' (True si dice TEST)
     rutinas_filtradas['es_test'] = rutinas_filtradas['texto_rutina'].str.upper().str.contains("TEST")
-    
-    # Ordenamos: Primero por 'es_test' (False antes que True), luego por número de sesión
     rutinas_filtradas.sort_values(by=['es_test', 'nro_sesion'], ascending=[True, True], inplace=True)
 
-    # --- SEPARAR PENDIENTES Y COMPLETADAS (Mantenemos tu lógica de scroll) ---
+    # --- GLOSARIO DE REFERENCIAS (UNICA VEZ, ARRIBA DE LA LISTA) ---
+    mostrar_referencias()
+
+    # --- SEPARAR PENDIENTES Y COMPLETADAS (Scroll vertical) ---
     l_pendientes = []
     l_completadas = []
 
@@ -444,9 +440,6 @@ if rol in ["M", "P"]:
 
 # --- 7. INTERFAZ ---
 st.title("📝 Sesiones de Entrenamiento")
-
-# --- CABECERA LIMPIA (SOLICITUD: SOLO NOMBRE) ---
-st.subheader(f"Hola, {mi_nombre}")
 
 if df_rutinas is None:
     st.error("No se pudieron cargar los datos. Verifica tu conexión.")
