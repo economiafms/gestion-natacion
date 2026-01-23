@@ -40,7 +40,6 @@ LISTA_PRUEBAS = [
 # ==========================================
 
 def actualizar_con_retry(worksheet, data, max_retries=5):
-    """Manejo robusto de la API con reintentos."""
     for i in range(max_retries):
         try:
             conn.update(worksheet=worksheet, data=data)
@@ -54,7 +53,6 @@ def actualizar_con_retry(worksheet, data, max_retries=5):
     return False, "Tiempo de espera agotado."
 
 def calcular_categoria_master(anio_nac):
-    """Calcula la categoría Master completa."""
     if pd.isna(anio_nac) or anio_nac == "": return "-"
     try:
         edad = datetime.now().year - int(anio_nac)
@@ -76,9 +74,7 @@ def calcular_categoria_master(anio_nac):
 
 @st.cache_data(ttl="5s")
 def cargar_datos_agenda():
-    """Carga todas las tablas necesarias."""
     try:
-        # 1. Competencias
         try:
             df_comp = conn.read(worksheet="Competencias").copy()
             if not df_comp.empty:
@@ -88,14 +84,12 @@ def cargar_datos_agenda():
         except:
             df_comp = pd.DataFrame(columns=["id_competencia", "nombre_evento", "fecha_evento", "hora_inicio", "cod_pileta", "fecha_limite", "costo", "descripcion", "pruebas_habilitadas"])
 
-        # 2. Inscripciones
         try:
             df_ins = conn.read(worksheet="Inscripciones").copy()
             if not df_ins.empty: df_ins['codnadador'] = pd.to_numeric(df_ins['codnadador'], errors='coerce').fillna(0).astype(int)
         except:
             df_ins = pd.DataFrame(columns=["id_inscripcion", "id_competencia", "codnadador", "pruebas", "fecha_inscripcion"])
 
-        # 3. Nadadores
         try:
             df_nad = conn.read(worksheet="Nadadores").copy()
             df_nad['codnadador'] = pd.to_numeric(df_nad['codnadador'], errors='coerce').fillna(0).astype(int)
@@ -103,7 +97,6 @@ def cargar_datos_agenda():
         except:
             df_nad = pd.DataFrame(columns=["codnadador", "nombre", "apellido", "fechanac", "codgenero"])
 
-        # 4. Piletas
         try:
             df_pil = conn.read(worksheet="Piletas").copy()
         except:
@@ -117,7 +110,7 @@ def leer_dataset_fresco(worksheet):
     except: return None
 
 # ==========================================
-# 5. FUNCIONES CRUD (LOGICA)
+# 5. FUNCIONES CRUD
 # ==========================================
 
 def guardar_competencia(id_comp, nombre, fecha_ev, hora, cod_pil, fecha_lim, costo, desc, lista_pruebas_hab):
@@ -245,11 +238,9 @@ else:
     for _, row in df_view.iterrows():
         comp_id = row['id_competencia']
         
-        # --- CORRECCIÓN ERROR: DEFINIR FILTRO AL INICIO ---
+        # --- CORRECCIÓN NameError: Definir variables al inicio del loop ---
         filtro_ins = df_inscripciones[df_inscripciones['id_competencia'] == comp_id]
         
-        # Pre-cálculo de datos de inscriptos (OPTIMIZACIÓN DE CÓDIGO)
-        # Se calcula una vez y se usa en la vista pública y en el panel admin
         if not filtro_ins.empty:
             d_full = filtro_ins.merge(df_nadadores, on="codnadador", how="left")
             d_full['Anio'] = d_full['fechanac'].dt.year
@@ -258,12 +249,10 @@ else:
         else:
             d_full = pd.DataFrame()
 
-        # Info Pileta
+        # Datos Visuales Evento
         d_pil = df_piletas[df_piletas['codpileta'] == row['cod_pileta']]
         nom_pil = f"{d_pil.iloc[0]['club']} ({d_pil.iloc[0]['medida']})" if not d_pil.empty else row['cod_pileta']
         ubic_pil = d_pil.iloc[0]['ubicacion'] if not d_pil.empty else "-"
-
-        # Fechas y Badge
         f_lim = pd.to_datetime(row['fecha_limite']).date()
         dias_ev = (row['fecha_dt'] - hoy).days
         dias_cie = (f_lim - hoy).days
@@ -273,7 +262,7 @@ else:
         elif dias_cie < 0: badge = "🔒 CERRADA"; bg = "#E30613"; abierta = False
         else: badge = f"🟢 ABIERTA ({dias_cie} días)"; bg = "#2E7D32"
 
-        # Tarjeta Visual
+        # Tarjeta Evento
         with st.container():
             st.markdown(f"""
             <div style="background-color: #262730; border: 1px solid #555; border-radius: 8px; padding: 15px; margin-bottom: 10px;">
@@ -293,35 +282,30 @@ else:
                 <div style="font-size:13px; color:#ccc;">{row['descripcion'] or ''}</div>
             </div>""", unsafe_allow_html=True)
 
-            # === A. LISTA PÚBLICA (VISUAL MEJORADA) ===
+            # === A. LISTA PÚBLICA (DISEÑO NATIVO MEJORADO) ===
             with st.expander("📋 Ver Lista de Inscriptos"):
                 if d_full.empty:
                     st.caption("Aún no hay nadadores inscriptos.")
                 else:
-                    # Renderizado Visual con Tarjetas (Diseño Oscuro/Separado)
                     for _, r_pub in d_full.iterrows():
-                        nad_nom = r_pub['Nombre']
-                        cat_val = r_pub['Cat']
-                        gen_val = r_pub['codgenero']
-                        
-                        # Chips para pruebas
+                        # Generación de Chips para Pruebas
                         pruebas_lista = [p.strip() for p in str(r_pub['pruebas']).split(",")]
                         chips_html = ""
                         for p in pruebas_lista:
-                            chips_html += f"<span style='background-color:#444; padding:3px 8px; border-radius:10px; font-size:11px; margin-right:4px; display:inline-block; margin-bottom:3px; color:#ddd;'>{p}</span>"
-
-                        st.markdown(f"""
-                        <div style="background-color: #333; padding: 12px; border-radius: 8px; margin-bottom: 8px; border: 1px solid #444;">
-                            <div style="margin-bottom:8px;">
-                                <span style="font-weight:bold; color:white; font-size:15px; display:block; margin-bottom:4px;">{nad_nom}</span>
-                                <div style="display:flex; gap:10px;">
-                                    <span style="font-size:12px; background-color:#111; color:#aaa; padding:2px 8px; border-radius:4px; border:1px solid #555;">{cat_val}</span>
-                                    <span style="font-size:12px; background-color:#111; color:#aaa; padding:2px 8px; border-radius:4px; border:1px solid #555;">{gen_val}</span>
-                                </div>
-                            </div>
-                            <div>{chips_html}</div>
-                        </div>
-                        """, unsafe_allow_html=True)
+                            chips_html += f"<span style='background-color:#444; color:#eee; padding:2px 8px; border-radius:10px; font-size:11px; margin-right:4px; display:inline-block; margin-top:2px;'>{p}</span>"
+                        
+                        # Tarjeta Nativa con separación visual
+                        with st.container(border=True):
+                            c_nom, c_cat, c_gen = st.columns([4, 2, 1])
+                            with c_nom:
+                                st.write(f"**{r_pub['Nombre']}**")
+                                st.markdown(chips_html, unsafe_allow_html=True)
+                            with c_cat:
+                                # Categoría Grande y Azul
+                                st.markdown(f"<h5 style='color:#4DA6FF; margin:0; padding:0;'>{r_pub['Cat']}</h5>", unsafe_allow_html=True)
+                            with c_gen:
+                                # Género Destacado
+                                st.markdown(f"**{r_pub['codgenero']}**")
 
             # === B. INSCRIPCIÓN USUARIO ===
             ins_user = df_inscripciones[(df_inscripciones['id_competencia'] == comp_id) & (df_inscripciones['codnadador'] == mi_id)]
@@ -355,47 +339,35 @@ else:
             elif esta:
                 st.success(f"✅ Inscripto en: {ins_user.iloc[0]['pruebas']}")
 
-            # === C. PANEL ENTRENADOR (TABLA SEPARADA) ===
+            # === C. PANEL ENTRENADOR ===
             if rol in ["M", "P"]:
                 with st.expander(f"🛡️ Panel Entrenador ({row['nombre_evento']})"):
                     t1, t2 = st.tabs(["❌ Gestión Bajas", "⚙️ Editar Evento"])
                     
-                    # 1. Gestión Bajas
                     with t1:
                         if d_full.empty:
                             st.caption("Nada para gestionar.")
                         else:
-                            # Tabla limpia nativa (Separación Cat/Gen)
                             st.dataframe(
                                 d_full[['Nombre', 'codgenero', 'Cat', 'pruebas']].rename(columns={'codgenero':'Gen', 'pruebas':'Pruebas'}),
                                 hide_index=True,
                                 use_container_width=True,
-                                column_config={
-                                    "Pruebas": st.column_config.TextColumn("Pruebas", width="large"),
-                                    "Gen": st.column_config.TextColumn("Gen", width="small"),
-                                    "Cat": st.column_config.TextColumn("Cat", width="medium"),
-                                }
+                                column_config={"Pruebas": st.column_config.TextColumn("Pruebas", width="large")}
                             )
                             
-                            st.divider()
-                            
-                            # --- FIX RESPONSIVE: CONTENEDOR DE BAJA ---
                             st.markdown("##### 🗑️ Zona de Baja")
-                            # Usamos un contenedor con borde para delimitar la zona de acción
+                            # Contenedor Responsive para móviles
                             with st.container(border=True):
-                                # Selector ocupa el ancho disponible (mejor en móvil)
                                 u_del = st.selectbox(
                                     "Seleccionar nadador:", 
                                     d_full['codnadador'].unique(), 
                                     format_func=lambda x: d_full[d_full['codnadador']==x]['Nombre'].values[0],
                                     key=f"s_del_{comp_id}"
                                 )
-                                # Botón full-width
                                 if st.button("Confirmar Eliminación", key=f"b_del_{comp_id}", type="primary", use_container_width=True):
                                     eliminar_inscripcion(comp_id, u_del)
                                     st.rerun()
 
-                    # 2. Edición
                     with t2:
                         l_pre = [x.strip() for x in str(row.get('pruebas_habilitadas', "")).split(",")] if str(row.get('pruebas_habilitadas', "")).strip() else LISTA_PRUEBAS
                         with st.form(f"ed_{comp_id}"):
@@ -405,7 +377,8 @@ else:
                             
                             ce3, ce4 = st.columns(2)
                             nf = ce3.date_input("Fecha", value=pd.to_datetime(row['fecha_dt']), format="DD/MM/YYYY")
-                            nl = ce4.date_input("Cierre", value=pd.to_datetime(f_limite), format="DD/MM/YYYY")
+                            # CORRECCION NameError f_limite -> f_lim
+                            nl = ce4.date_input("Cierre", value=pd.to_datetime(f_lim), format="DD/MM/YYYY")
                             
                             nh = st.multiselect("Pruebas", LISTA_PRUEBAS, default=[x for x in l_pre if x in LISTA_PRUEBAS])
                             nd = st.text_area("Desc.", value=row['descripcion'])
@@ -415,7 +388,7 @@ else:
                                 st.rerun()
                             
                             st.markdown("---")
-                            if st.form_submit_button("⚠️ ELIMINAR EVENTO COMPLETO", type="primary"):
+                            if st.form_submit_button("⚠️ ELIMINAR EVENTO", type="primary"):
                                 eliminar_competencia(comp_id); st.rerun()
             
             st.markdown("</div>", unsafe_allow_html=True)
