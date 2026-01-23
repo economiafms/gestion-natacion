@@ -108,7 +108,7 @@ def leer_dataset_fresco(worksheet):
     try: return conn.read(worksheet=worksheet, ttl=0).copy()
     except: return None
 
-# --- FUNCIONES DE GUARDADO Y BORRADO ---
+# --- FUNCIONES CRUD ---
 
 def guardar_competencia(id_comp, nombre, fecha_ev, hora, cod_pil, fecha_lim, costo, desc, lista_pruebas_hab):
     df_comp = leer_dataset_fresco("Competencias")
@@ -269,8 +269,8 @@ else:
                 <div style="font-size:13px; color:#ccc;">{row['descripcion'] or ''}</div>
             </div>""", unsafe_allow_html=True)
 
-            # LISTA PÚBLICA
-            with st.expander("📋 Ver Inscriptos"):
+            # LISTA PÚBLICA DETALLADA
+            with st.expander("📋 Ver Lista de Inscriptos"):
                 f_ins = df_inscripciones[df_inscripciones['id_competencia'] == comp_id]
                 if f_ins.empty: st.caption("Sin inscriptos.")
                 else:
@@ -278,7 +278,12 @@ else:
                     d_full['Anio'] = d_full['fechanac'].dt.year
                     d_full['Cat'] = d_full['Anio'].apply(calcular_categoria_master)
                     d_full['Nadador'] = d_full['apellido'] + ", " + d_full['nombre']
-                    st.dataframe(d_full[['Nadador', 'codgenero', 'Cat', 'pruebas']].rename(columns={'codgenero':'Gen', 'pruebas':'Pruebas'}), hide_index=True, use_container_width=True)
+                    # Mostrar tabla pública limpia
+                    st.dataframe(
+                        d_full[['Nadador', 'codgenero', 'Cat', 'pruebas']].rename(columns={'codgenero':'Gen', 'pruebas':'Pruebas'}), 
+                        hide_index=True, 
+                        use_container_width=True
+                    )
 
             # INSCRIPCIÓN USUARIO
             ins_user = df_inscripciones[(df_inscripciones['id_competencia'] == comp_id) & (df_inscripciones['codnadador'] == mi_id)]
@@ -310,36 +315,42 @@ else:
             elif esta:
                 st.success(f"✅ Inscripto: {ins_user.iloc[0]['pruebas']}")
 
-            # ADMIN PANEL SIMPLIFICADO
+            # ADMIN PANEL - INTERMEDIO (Filas compactas pero directas)
             if rol in ["M", "P"]:
                 with st.expander(f"🛡️ Administrar ({row['nombre_evento']})"):
-                    # 1. Tabla de gestión
-                    f_ins_adm = df_inscripciones[df_inscripciones['id_competencia'] == comp_id]
-                    if not f_ins_adm.empty:
-                        d_adm = f_ins_adm.merge(df_nadadores, on="codnadador", how="left")
-                        d_adm['Nombre'] = d_adm['apellido'] + ", " + d_adm['nombre']
-                        d_adm['Cat'] = d_adm['fechanac'].dt.year.apply(calcular_categoria_master)
-                        st.markdown("**Listado de Atletas:**")
-                        st.dataframe(d_adm[['Nombre', 'codgenero', 'Cat', 'pruebas']], hide_index=True, use_container_width=True)
-                        
-                        # 2. Selector simple para borrar
-                        c_del1, c_del2 = st.columns([3, 1])
-                        with c_del1:
-                            u_del = st.selectbox("Seleccionar nadador a eliminar:", d_adm['codnadador'].unique(), format_func=lambda x: d_adm[d_adm['codnadador']==x]['Nombre'].values[0], key=f"s_del_{comp_id}")
-                        with c_del2:
-                            st.write("") # Espacio
-                            if st.button("Eliminar", key=f"b_del_{comp_id}"):
-                                eliminar_inscripcion(comp_id, u_del); st.rerun()
-                    else:
-                        st.caption("Sin inscriptos para gestionar.")
-
-                    st.markdown("---")
+                    t1, t2 = st.tabs(["❌ Gestión Bajas", "⚙️ Editar Evento"])
                     
-                    # 3. Edición (Oculta por defecto para limpieza)
-                    with st.expander("✎ Editar Datos del Evento"):
-                        p_act_db = row.get('pruebas_habilitadas', "")
-                        l_pre = [x.strip() for x in str(p_act_db).split(",")] if str(p_act_db).strip() else LISTA_PRUEBAS
-                        
+                    with t1:
+                        if f_ins.empty:
+                            st.caption("Nada para gestionar.")
+                        else:
+                            # Volvemos a generar data si hace falta, pero ya la tenemos arriba en 'd_full'
+                            # Usamos d_full filtrada para este bloque
+                            d_adm = f_ins.merge(df_nadadores, on="codnadador", how="left")
+                            d_adm['Nombre'] = d_adm['apellido'] + " " + d_adm['nombre']
+                            d_adm['Anio'] = d_adm['fechanac'].dt.year
+                            d_adm['Cat'] = d_adm['Anio'].apply(calcular_categoria_master)
+
+                            # CABECERA COMPACTA
+                            c1, c2, c3, c4 = st.columns([3, 1.5, 3, 1])
+                            c1.markdown("**Nadador**")
+                            c2.markdown("**Cat/Gen**")
+                            c3.markdown("**Pruebas**")
+                            c4.markdown("**Acción**")
+                            st.divider()
+
+                            # FILAS COMPACTAS
+                            for _, r_adm in d_adm.iterrows():
+                                rc1, rc2, rc3, rc4 = st.columns([3, 1.5, 3, 1])
+                                with rc1: st.write(f"**{r_adm['Nombre']}**")
+                                with rc2: st.caption(f"{r_adm['Cat']} ({r_adm['codgenero']})")
+                                with rc3: st.caption(r_adm['pruebas'])
+                                with rc4: 
+                                    if st.button("🗑️", key=f"d_{comp_id}_{r_adm['codnadador']}", help="Eliminar"):
+                                        eliminar_inscripcion(comp_id, r_adm['codnadador']); st.rerun()
+
+                    with t2:
+                        l_pre = [x.strip() for x in str(row.get('pruebas_habilitadas', "")).split(",")] if str(row.get('pruebas_habilitadas', "")).strip() else LISTA_PRUEBAS
                         with st.form(f"ed_{comp_id}"):
                             ce1, ce2 = st.columns(2)
                             nn = ce1.text_input("Nombre", value=row['nombre_evento'])
