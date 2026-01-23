@@ -40,6 +40,7 @@ LISTA_PRUEBAS = [
 # ==========================================
 
 def actualizar_con_retry(worksheet, data, max_retries=5):
+    """Manejo robusto de la API con reintentos."""
     for i in range(max_retries):
         try:
             conn.update(worksheet=worksheet, data=data)
@@ -53,27 +54,29 @@ def actualizar_con_retry(worksheet, data, max_retries=5):
     return False, "Tiempo de espera agotado."
 
 def calcular_categoria_master(anio_nac):
+    """Calcula la categoría Master completa."""
     if pd.isna(anio_nac) or anio_nac == "": return "-"
     try:
         edad = datetime.now().year - int(anio_nac)
-        if edad < 20: return "Juv"
-        elif 20 <= edad <= 24: return "Pre"
-        elif 25 <= edad <= 29: return "M-A"
-        elif 30 <= edad <= 34: return "M-B"
-        elif 35 <= edad <= 39: return "M-C"
-        elif 40 <= edad <= 44: return "M-D"
-        elif 45 <= edad <= 49: return "M-E"
-        elif 50 <= edad <= 54: return "M-F"
-        elif 55 <= edad <= 59: return "M-G"
-        elif 60 <= edad <= 64: return "M-H"
-        elif 65 <= edad <= 69: return "M-I"
-        elif 70 <= edad <= 74: return "M-J"
-        elif 75 <= edad <= 79: return "M-K"
-        else: return "M-K+"
+        if edad < 20: return "Juvenil"
+        elif 20 <= edad <= 24: return "Pre-Master"
+        elif 25 <= edad <= 29: return "Master A"
+        elif 30 <= edad <= 34: return "Master B"
+        elif 35 <= edad <= 39: return "Master C"
+        elif 40 <= edad <= 44: return "Master D"
+        elif 45 <= edad <= 49: return "Master E"
+        elif 50 <= edad <= 54: return "Master F"
+        elif 55 <= edad <= 59: return "Master G"
+        elif 60 <= edad <= 64: return "Master H"
+        elif 65 <= edad <= 69: return "Master I"
+        elif 70 <= edad <= 74: return "Master J"
+        elif 75 <= edad <= 79: return "Master K"
+        else: return "Master K+"
     except: return "-"
 
 @st.cache_data(ttl="5s")
 def cargar_datos_agenda():
+    """Carga todas las tablas necesarias."""
     try:
         try:
             df_comp = conn.read(worksheet="Competencias").copy()
@@ -110,7 +113,7 @@ def leer_dataset_fresco(worksheet):
     except: return None
 
 # ==========================================
-# 5. FUNCIONES CRUD
+# 5. FUNCIONES CRUD (LOGICA)
 # ==========================================
 
 def guardar_competencia(id_comp, nombre, fecha_ev, hora, cod_pil, fecha_lim, costo, desc, lista_pruebas_hab):
@@ -238,7 +241,9 @@ else:
     for _, row in df_view.iterrows():
         comp_id = row['id_competencia']
         
+        # Filtrado de inscriptos (Importante hacerlo aquí para que esté disponible para ambos roles)
         filtro_ins = df_inscripciones[df_inscripciones['id_competencia'] == comp_id]
+        
         if not filtro_ins.empty:
             d_full = filtro_ins.merge(df_nadadores, on="codnadador", how="left")
             d_full['Anio'] = d_full['fechanac'].dt.year
@@ -247,7 +252,7 @@ else:
         else:
             d_full = pd.DataFrame()
 
-        # Visual Evento
+        # Datos Visuales Evento
         d_pil = df_piletas[df_piletas['codpileta'] == row['cod_pileta']]
         nom_pil = f"{d_pil.iloc[0]['club']} ({d_pil.iloc[0]['medida']})" if not d_pil.empty else row['cod_pileta']
         ubic_pil = d_pil.iloc[0]['ubicacion'] if not d_pil.empty else "-"
@@ -260,6 +265,7 @@ else:
         elif dias_cie < 0: badge = "🔒 CERRADA"; bg = "#E30613"; abierta = False
         else: badge = f"🟢 ABIERTA ({dias_cie} días)"; bg = "#2E7D32"
 
+        # Tarjeta Visual (Estilo Original)
         with st.container():
             st.markdown(f"""
             <div style="background-color: #262730; border: 1px solid #555; border-radius: 8px; padding: 15px; margin-bottom: 10px;">
@@ -279,22 +285,25 @@ else:
                 <div style="font-size:13px; color:#ccc;">{row['descripcion'] or ''}</div>
             </div>""", unsafe_allow_html=True)
 
-            # === A. LISTA PÚBLICA (Nativa + Headers Grandes) ===
+            # === A. LISTA PÚBLICA (MEJORADA: Cat/Gen Grandes) ===
             with st.expander("📋 Ver Lista de Inscriptos"):
                 if d_full.empty:
                     st.caption("Aún no hay nadadores inscriptos.")
                 else:
                     for _, r_pub in d_full.iterrows():
-                        # Usamos contenedor nativo
+                        # Tarjeta Nativa (Limpia, sin HTML custom raro)
                         with st.container(border=True):
                             c1, c2 = st.columns([3, 1])
                             with c1:
+                                # Nombre
                                 st.write(f"**{r_pub['Nombre']}**")
-                                st.caption(f"🏊 {r_pub['pruebas']}")
+                                # Pruebas con formato limpio
+                                st.caption(f"🏊 {str(r_pub['pruebas']).replace(',', ' • ')}")
                             with c2:
-                                # CATEGORÍA Y GÉNERO GRANDES (Markdown Headers)
-                                st.markdown(f"### {r_pub['Cat']}")
-                                st.markdown(f"#### {r_pub['codgenero']}")
+                                # CATEGORÍA Y GÉNERO: Grandes y destacados usando Headers nativos
+                                # El color azul se aplica nativamente con :blue[]
+                                st.markdown(f"#### :blue[{r_pub['Cat']}]") 
+                                st.markdown(f"##### {r_pub['codgenero']}")
 
             # === B. INSCRIPCIÓN USUARIO ===
             ins_user = df_inscripciones[(df_inscripciones['id_competencia'] == comp_id) & (df_inscripciones['codnadador'] == mi_id)]
@@ -328,37 +337,44 @@ else:
             elif esta:
                 st.success(f"✅ Inscripto en: {ins_user.iloc[0]['pruebas']}")
 
-            # === C. PANEL ENTRENADOR (SOLUCIÓN: CONTAINER CON SCROLL + TACHO) ===
+            # === C. PANEL ENTRENADOR (DINÁMICO + RESPONSIVE) ===
             if rol in ["M", "P"]:
                 with st.expander(f"🛡️ Panel Entrenador ({row['nombre_evento']})"):
                     t1, t2 = st.tabs(["❌ Gestión Bajas", "⚙️ Editar Evento"])
                     
+                    # 1. Gestión Bajas
                     with t1:
                         if d_full.empty:
                             st.caption("Nada para gestionar.")
                         else:
-                            # MARCO CONTENEDOR CON ALTURA FIJA (SCROLL AUTOMÁTICO)
-                            with st.container(height=400, border=True):
-                                # CABECERA SIMPLE
-                                h1, h2 = st.columns([0.85, 0.15])
-                                h1.markdown("**Nadador**")
-                                h2.markdown("🗑️")
-                                st.divider()
+                            # TABLA VISUALIZACIÓN (Para ver el panorama)
+                            st.dataframe(
+                                d_full[['Nombre', 'codgenero', 'Cat', 'pruebas']].rename(columns={'codgenero':'Gen', 'pruebas':'Pruebas'}),
+                                hide_index=True,
+                                use_container_width=True,
+                                column_config={"Pruebas": st.column_config.TextColumn("Pruebas", width="large")}
+                            )
+                            
+                            st.divider()
+                            
+                            # ZONA DE ACCIÓN (RESPONSIVE)
+                            st.markdown("##### 🗑️ Zona de Eliminación")
+                            # Contenedor con borde para separar la acción
+                            with st.container(border=True):
+                                # Diseño APILADO (Stacked) para móviles:
+                                # 1. Selector ocupa todo el ancho
+                                u_del = st.selectbox(
+                                    "Seleccionar nadador para dar de baja:", 
+                                    d_full['codnadador'].unique(), 
+                                    format_func=lambda x: d_full[d_full['codnadador']==x]['Nombre'].values[0],
+                                    key=f"s_del_{comp_id}"
+                                )
+                                # 2. Botón ocupa todo el ancho (Debajo del selector)
+                                if st.button("Confirmar Baja", key=f"b_del_{comp_id}", type="primary", use_container_width=True):
+                                    eliminar_inscripcion(comp_id, u_del)
+                                    st.rerun()
 
-                                # LISTA ROW-BY-ROW BASICA Y GENUINA
-                                for _, r_adm in d_full.iterrows():
-                                    c_info, c_act = st.columns([0.85, 0.15])
-                                    with c_info:
-                                        # Info completa del nadador
-                                        st.write(f"**{r_adm['Nombre']}**")
-                                        st.caption(f"{r_adm['Cat']} | {r_adm['codgenero']} | {r_adm['pruebas']}")
-                                    with c_act:
-                                        # TACHO DE BASURA
-                                        if st.button("🗑️", key=f"d_{comp_id}_{r_adm['codnadador']}"):
-                                            eliminar_inscripcion(comp_id, r_adm['codnadador'])
-                                            st.rerun()
-                                    st.divider()
-
+                    # 2. Edición
                     with t2:
                         l_pre = [x.strip() for x in str(row.get('pruebas_habilitadas', "")).split(",")] if str(row.get('pruebas_habilitadas', "")).strip() else LISTA_PRUEBAS
                         with st.form(f"ed_{comp_id}"):
@@ -368,6 +384,7 @@ else:
                             
                             ce3, ce4 = st.columns(2)
                             nf = ce3.date_input("Fecha", value=pd.to_datetime(row['fecha_dt']), format="DD/MM/YYYY")
+                            # Corrección de variable f_lim
                             nl = ce4.date_input("Cierre", value=pd.to_datetime(f_lim), format="DD/MM/YYYY")
                             
                             nh = st.multiselect("Pruebas", LISTA_PRUEBAS, default=[x for x in l_pre if x in LISTA_PRUEBAS])
