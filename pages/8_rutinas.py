@@ -359,23 +359,33 @@ if rol in ["M", "P"]:
     with tab_seguimiento:
         st.info("Seleccione un alumno para ver su cumplimiento histórico.")
         
-        df_nadadores['NombreCompleto'] = df_nadadores['apellido'] + ", " + df_nadadores['nombre']
-        lista_nads = df_nadadores[['codnadador', 'NombreCompleto']].sort_values('NombreCompleto')
+        # --- CAMBIO APLICADO: FILTRADO DE NADADORES ---
+        # 1. Obtener IDs que tienen registros en rutinas_seguimiento
+        ids_activos = df_seguimiento['codnadador'].unique()
         
-        col_s1, col_s2, col_s3 = st.columns([2, 1, 1])
-        with col_s1:
-            sel_nad_id = st.selectbox(
-                "Alumno", 
-                lista_nads['codnadador'], 
-                format_func=lambda x: lista_nads[lista_nads['codnadador'] == x]['NombreCompleto'].values[0]
-            )
-        with col_s2:
-            sel_a_seg = st.selectbox("Año", v_anios, key="seg_a")
-        with col_s3:
-            sel_m_seg = st.selectbox("Mes", meses_indices, format_func=lambda x: mapa_meses[x], index=meses_indices.index(datetime.now().month), key="seg_m")
+        # 2. Filtrar el dataframe de nadadores
+        df_nad_activos = df_nadadores[df_nadadores['codnadador'].isin(ids_activos)].copy()
+        
+        if df_nad_activos.empty:
+            st.warning("⚠️ Aún no hay alumnos con rutinas completadas.")
+        else:
+            df_nad_activos['NombreCompleto'] = df_nad_activos['apellido'] + ", " + df_nad_activos['nombre']
+            lista_nads = df_nad_activos[['codnadador', 'NombreCompleto']].sort_values('NombreCompleto')
             
-        st.markdown(f"**Reporte para:** {lista_nads[lista_nads['codnadador']==sel_nad_id]['NombreCompleto'].values[0]}")
-        render_historial_compacto(df_rutinas, df_seguimiento, sel_a_seg, sel_m_seg, sel_nad_id)
+            col_s1, col_s2, col_s3 = st.columns([2, 1, 1])
+            with col_s1:
+                sel_nad_id = st.selectbox(
+                    "Alumno (Con registros)", 
+                    lista_nads['codnadador'], 
+                    format_func=lambda x: lista_nads[lista_nads['codnadador'] == x]['NombreCompleto'].values[0]
+                )
+            with col_s2:
+                sel_a_seg = st.selectbox("Año", v_anios, key="seg_a")
+            with col_s3:
+                sel_m_seg = st.selectbox("Mes", meses_indices, format_func=lambda x: mapa_meses[x], index=meses_indices.index(datetime.now().month), key="seg_m")
+                
+            st.markdown(f"**Reporte para:** {lista_nads[lista_nads['codnadador']==sel_nad_id]['NombreCompleto'].values[0]}")
+            render_historial_compacto(df_rutinas, df_seguimiento, sel_a_seg, sel_m_seg, sel_nad_id)
 
 # ==========================
 # ROL: NADADOR (N)
@@ -399,7 +409,7 @@ else:
         
         with c_h1: h_anio = st.selectbox("Año", anios_disp, key="h_a")
         
-        # CAMBIO: Filtrado de meses que SÍ tienen datos
+        # Filtrado de meses que SÍ tienen datos
         meses_en_anio = sorted(df_rutinas[df_rutinas['anio_rutina'] == h_anio]['mes_rutina'].unique().tolist())
         
         if not meses_en_anio:
