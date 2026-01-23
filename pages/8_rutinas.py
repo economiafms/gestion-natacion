@@ -149,7 +149,7 @@ def render_tarjeta_individual(row, df_seg, key_suffix):
     
     with st.container():
         st.markdown(f"""<div style="border: 2px solid {borde}; border-radius: 10px; background-color: {bg}; padding: 15px; margin-bottom: 15px;">""", unsafe_allow_html=True)
-        c_head, c_act = st.columns([5, 1]) # Columna de acción ajustada para emoji
+        c_head, c_act = st.columns([5, 2]) # Ajustamos ancho de columnas para que entren los textos
         with c_head:
             if esta_realizada:
                 st.markdown(f"#### ✅ Sesión {r_sesion} <span style='font-size:14px; color:#888'>({fecha_str})</span>", unsafe_allow_html=True)
@@ -162,19 +162,19 @@ def render_tarjeta_individual(row, df_seg, key_suffix):
         with c_act:
             st.write("")
             if esta_realizada:
-                # CAMBIO: Botón Cruz
-                if st.button("❌", key=f"un_{r_id}_{key_suffix}", help="Desmarcar (No realizada)"):
+                # CAMBIO: Botón Texto + Emoji
+                if st.button("❌ Desmarcar", key=f"un_{r_id}_{key_suffix}", help="Marcar como NO realizada"):
                     borrar_seguimiento(r_id, mi_id)
                     st.rerun()
             else:
-                # CAMBIO: Botón Nadador
-                if st.button("🏊", key=f"do_{r_id}_{key_suffix}", type="primary", help="Marcar como Completada"):
+                # CAMBIO: Botón Texto + Emoji
+                if st.button("🏊 Completada", key=f"do_{r_id}_{key_suffix}", type="primary", help="Marcar como Completada"):
                     guardar_seguimiento(r_id, mi_id)
                     st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
 
 def render_feed_activo(df_rut, df_seg, anio_ver, mes_ver, key_suffix=""):
-    """Muestra las tarjetas con lógica de colapsado para las completadas."""
+    """Muestra las tarjetas con lógica de reordenamiento (Completadas arriba)."""
     rutinas_filtradas = df_rut[
         (df_rut['anio_rutina'] == anio_ver) & 
         (df_rut['mes_rutina'] == mes_ver)
@@ -196,21 +196,23 @@ def render_feed_activo(df_rut, df_seg, anio_ver, mes_ver, key_suffix=""):
         else:
             l_pendientes.append(row)
 
-    # 1. Mostrar Pendientes (Siempre visibles y arriba)
+    # 1. MOSTRAR COMPLETADAS (ARRIBA - COLAPSADAS)
+    if l_completadas:
+        with st.expander(f"✅ Historial: {len(l_completadas)} Sesiones Completadas", expanded=False):
+            # Invertimos el orden para ver la última completada primero
+            for row in reversed(l_completadas):
+                render_tarjeta_individual(row, df_seg, key_suffix)
+        st.write("---")
+
+    # 2. MOSTRAR PENDIENTES (ABAJO - EXPANDIDAS)
     if l_pendientes:
-        st.caption("Próximas Sesiones")
+        st.markdown("#### 🚀 Próximas Sesiones")
         for row in l_pendientes:
             render_tarjeta_individual(row, df_seg, key_suffix)
     else:
-        st.success("¡Todo al día! No tienes sesiones pendientes este mes.")
-
-    # 2. Mostrar Completadas (Colapsadas al final)
-    if l_completadas:
-        st.write("")
-        with st.expander(f"✅ Ver Sesiones Completadas ({len(l_completadas)})", expanded=False):
-            # Invertimos el orden para ver la última completada arriba dentro del expander
-            for row in reversed(l_completadas):
-                render_tarjeta_individual(row, df_seg, key_suffix)
+        # Si no hay pendientes y sí había completadas
+        if l_completadas:
+            st.success("¡Excelente! Has completado todas las sesiones del mes. 🏆")
 
 def render_historial_compacto(df_rut, df_seg, anio, mes, id_usuario_objetivo):
     """Muestra tabla de cumplimiento SIN TEXTO."""
