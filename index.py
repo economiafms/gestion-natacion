@@ -137,9 +137,9 @@ if not st.session_state.role:
     pg.run()
 else:
     # --- MENÚ PRINCIPAL ---
-    # REORDENADO: Agenda y Rutinas antes de Entrenamientos
+    # REORDENADO: Agenda movida al final, Rutinas se mantiene antes de Entrenamientos
     menu_pages = {
-        "Principal": [pg_inicio, pg_datos, pg_agenda, pg_rutinas, pg_entrenamientos, pg_categoria]
+        "Principal": [pg_inicio, pg_datos, pg_rutinas, pg_entrenamientos, pg_categoria, pg_agenda]
     }
     
     # --- MENÚ HERRAMIENTAS ---
