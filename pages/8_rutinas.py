@@ -5,25 +5,52 @@ from datetime import datetime, date, timedelta
 import time
 import random
 
-# ==========================================
-# 1. CONFIGURACIÓN
-# ==========================================
+# --- 1. CONFIGURACIÓN ---
 st.set_page_config(page_title="Sesiones de Entrenamiento", layout="centered")
 
-# --- PLANTILLA DE TEST (Para carga rápida) ---
-PLANTILLA_TEST = """OBJETIVO: EVALUACIÓN MENSUAL
-------------------------------------------------
-Ec: 400m (200m crol + 200m estilos)
-Act: 5 min fuera del agua
-------------------------------------------------
-T: TEST (Detallar protocolo: 30 min / 2000m / etc)
-------------------------------------------------
-Vuelta a la calma: 200m suaves"""
+# --- PLANTILLA TEST (TEXTO EXACTO SOLICITADO) ---
+PLANTILLA_TEST = """OBJETIVO: EVALUACIÓN
+-
+10’ Ec. Movilidad
+-
+10’ Ec. Tensor
+-
+Ec. 500 suaves ( 200 crol + 100 CT + 200 estilos a elección)
+-
+6 x 15m Pat Ph c/20"p
+-
+6 x 15m f1 c/10"p
+-
+200 f3 + 2' o 3' p est.
+-
+Realizar Test (partida parte profunda)
+-
+200 Afloje + Flexibilidad"""
 
-# --- FUNCIÓN NUEVA: GLOSARIO CONSULTIVO ---
+# --- 2. SEGURIDAD ---
+if "role" not in st.session_state or not st.session_state.role:
+    st.switch_page("index.py")
+
+rol = st.session_state.role
+mi_id = st.session_state.user_id
+mi_nombre = st.session_state.user_name
+
+# --- 3. CONEXIÓN ---
+conn = st.connection("gsheets", type=GSheetsConnection)
+
+# --- 4. FUNCIONES AUXILIARES ---
+def obtener_nombre_mes(n):
+    meses = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", 
+             "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+    try:
+        return meses[int(n)]
+    except:
+        return "Desconocido"
+
+# --- GLOSARIO DE REFERENCIAS ---
 def mostrar_referencias():
-    """Desplegable que no interrumpe la visual, solo se abre si se consulta."""
-    with st.expander("📖 Glosario de Referencias y Abreviaturas (Clic para abrir)"):
+    """Muestra el glosario en un desplegable consultivo."""
+    with st.expander("📖 Glosario de Referencias y Abreviaturas"):
         st.markdown("""
         | Sigla | Significado | Detalle / Intensidad |
         | :--- | :--- | :--- |
@@ -37,8 +64,8 @@ def mostrar_referencias():
         | **F3** | Sub Aeróbico | Intensidad 70% |
         | **Ec** | Entrada en Calor | Nado suave inicial |
         | **EcT** | Ec Tensor | Bíceps/Tríceps/Dorsales/Hombros/Pecho |
-        | **EcM** | Ec Movilidad | Fuera del agua (Articulaciones) |
-        | **Act** | Activación | Fuera del agua (Piernas/Core) |
+        | **EcM** | Ec Movilidad | Fuera del agua (Brazos/Cintura/Piernas) |
+        | **Act** | Activación | Fuera del agua (Piernas/Brazos/Core) |
         | **m** | Metros | Distancia |
         | **p** | Pausa estática | Descanso quieto |
         | **p act**| Pausa Activa | Descanso en movimiento suave |
@@ -50,33 +77,6 @@ def mostrar_referencias():
         | **PB** | Pull Brazada | Uso de pullboy (c/e/p/m) |
         | **CT** | Corrección Técnica| Foco en el estilo |
         """)
-        st.info("ℹ️ Estas referencias te ayudarán a interpretar la intensidad y técnica.")
-
-# ==========================================
-# 2. SEGURIDAD
-# ==========================================
-if "role" not in st.session_state or not st.session_state.role:
-    st.switch_page("index.py")
-
-rol = st.session_state.role
-mi_id = st.session_state.user_id
-mi_nombre = st.session_state.user_name
-
-# ==========================================
-# 3. CONEXIÓN
-# ==========================================
-conn = st.connection("gsheets", type=GSheetsConnection)
-
-# ==========================================
-# 4. FUNCIONES AUXILIARES (BACKEND)
-# ==========================================
-def obtener_nombre_mes(n):
-    meses = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", 
-             "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
-    try:
-        return meses[int(n)]
-    except:
-        return "Desconocido"
 
 # --- FUNCIÓN DE RETRY ---
 def actualizar_con_retry(worksheet, data, max_retries=5):
@@ -263,15 +263,16 @@ def guardar_sesion_admin(anio, mes, sesion, texto):
 def activar_calculo_auto():
     st.session_state.trigger_calculo = True
 
-# ==========================================
-# 5. COMPONENTES DE VISUALIZACIÓN
-# ==========================================
+# --- COMPONENTES DE VISUALIZACIÓN ---
 
 def render_tarjeta_individual(row, df_seg, key_suffix):
     r_id = row['id_rutina']
     r_sesion = row['nro_sesion']
     r_texto = row['texto_rutina']
     
+    # Check si es test (para estilo visual)
+    es_test = "TEST" in r_texto.upper()
+
     check = df_seg[(df_seg['id_rutina'] == r_id) & (df_seg['codnadador'] == mi_id)]
     esta_realizada = not check.empty
     fecha_str = ""
@@ -279,25 +280,26 @@ def render_tarjeta_individual(row, df_seg, key_suffix):
         fecha_obj = pd.to_datetime(check.iloc[0]['fecha_realizada'])
         fecha_str = fecha_obj.strftime("%d/%m")
 
-    # Detectar si es TEST para cambiar estilo
-    es_test = "TEST" in r_texto.upper()
-    
-    if es_test:
-        borde = "#E30613" # Rojo Newells
-        titulo_card = f"🧬 EVALUACIÓN / TEST (Sesión {r_sesion})"
+    # Colores: Verde si está hecha, Rojo si es Test, Gris default
+    if esta_realizada:
+        borde = "#2E7D32"
+        bg = "#1B2E1B"
+    elif es_test:
+        borde = "#E30613" # Rojo NOB para el Test
+        bg = "#262730"
     else:
-        borde = "#2E7D32" if esta_realizada else "#444"
-        titulo_card = f"Sesión {r_sesion}"
-        
-    bg = "#1B2E1B" if esta_realizada else "#262730"
+        borde = "#444"
+        bg = "#262730"
     
+    titulo_display = f"EVALUACIÓN / TEST" if es_test else f"Sesión {r_sesion}"
+
     with st.container():
         st.markdown(f"""<div style="border: 2px solid {borde}; border-radius: 10px; background-color: {bg}; padding: 15px; margin-bottom: 15px;">""", unsafe_allow_html=True)
         
         if esta_realizada:
             c_head, c_act = st.columns([8, 1])
             with c_head:
-                st.markdown(f"#### ✅ {titulo_card} <span style='font-size:14px; color:#888'>({fecha_str})</span>", unsafe_allow_html=True)
+                st.markdown(f"#### ✅ {titulo_display} <span style='font-size:14px; color:#888'>({fecha_str})</span>", unsafe_allow_html=True)
                 st.markdown(f"<div style='text-decoration: line-through; color: #aaa;'>", unsafe_allow_html=True)
                 st.markdown(r_texto)
                 st.markdown("</div>", unsafe_allow_html=True)
@@ -310,7 +312,7 @@ def render_tarjeta_individual(row, df_seg, key_suffix):
         else:
             c_head, c_act = st.columns([5, 2])
             with c_head:
-                st.markdown(f"#### ⭕ {titulo_card}")
+                st.markdown(f"#### ⭕ {titulo_display}")
                 st.markdown(r_texto)
             with c_act:
                 st.write("") 
@@ -318,18 +320,14 @@ def render_tarjeta_individual(row, df_seg, key_suffix):
                     with st.spinner("Guardando..."):
                         guardar_seguimiento(r_id, mi_id)
                     st.rerun()
-
-        # AQUÍ ESTÁ LA MAGIA: GLOSARIO CONSULTIVO DENTRO DE LA TARJETA
+        
+        # --- AQUÍ ESTÁ EL GLOSARIO DENTRO DE LA TARJETA ---
         st.markdown("---")
         mostrar_referencias()
-        
+
         st.markdown("</div>", unsafe_allow_html=True)
 
 def render_feed_activo(df_rut, df_seg, anio_ver, mes_ver, key_suffix=""):
-    """
-    Renderiza las rutinas del mes seleccionado.
-    MODIFICADO: Muestra botones en grilla de 3 columnas y ordena TEST al final.
-    """
     rutinas_filtradas = df_rut[
         (df_rut['anio_rutina'] == anio_ver) & 
         (df_rut['mes_rutina'] == mes_ver)
@@ -339,50 +337,38 @@ def render_feed_activo(df_rut, df_seg, anio_ver, mes_ver, key_suffix=""):
         st.info(f"No hay sesiones cargadas para {obtener_nombre_mes(mes_ver)} {anio_ver}.")
         return
 
-    # --- 1. ORDENAMIENTO (TEST AL FINAL) ---
-    # Creamos columna temporal para saber si es test
+    # --- ORDENAMIENTO: TEST AL FINAL ---
+    # Creamos columna temporal 'es_test' (True si dice TEST)
     rutinas_filtradas['es_test'] = rutinas_filtradas['texto_rutina'].str.upper().str.contains("TEST")
     
-    # Ordenamos: Primero por es_test (False=0, True=1), luego por nro_sesion
+    # Ordenamos: Primero por 'es_test' (False antes que True), luego por número de sesión
     rutinas_filtradas.sort_values(by=['es_test', 'nro_sesion'], ascending=[True, True], inplace=True)
 
-    # --- 2. GRID DE BOTONES ---
-    st.write(f"##### Rutinas Disponibles ({len(rutinas_filtradas)})")
-    
-    # State para saber cual mostrar
-    k_sel = f"selected_rutina_{key_suffix}"
-    if k_sel not in st.session_state: 
-        st.session_state[k_sel] = None
+    # --- SEPARAR PENDIENTES Y COMPLETADAS (Mantenemos tu lógica de scroll) ---
+    l_pendientes = []
+    l_completadas = []
 
-    # Creamos 3 columnas para los botones
-    cols = st.columns(3)
-    
-    for idx, (i, row) in enumerate(rutinas_filtradas.iterrows()):
-        r_id = row['id_rutina']
-        
-        # Etiqueta del boton
-        check = df_seg[(df_seg['id_rutina'] == r_id) & (df_seg['codnadador'] == mi_id)]
-        icon = "✅" if not check.empty else "📄"
-        
-        label = "TEST" if row['es_test'] else f"Sesión {row['nro_sesion']}"
-        
-        # Botón en la columna correspondiente (modulo 3)
-        with cols[idx % 3]:
-            # Si el usuario hace click, actualizamos el estado
-            if st.button(f"{icon} {label}", key=f"btn_sel_{r_id}_{key_suffix}", use_container_width=True):
-                st.session_state[k_sel] = r_id
-    
-    st.divider()
+    for index, row in rutinas_filtradas.iterrows():
+        check = df_seg[(df_seg['id_rutina'] == row['id_rutina']) & (df_seg['codnadador'] == mi_id)]
+        if not check.empty:
+            l_completadas.append(row)
+        else:
+            l_pendientes.append(row)
 
-    # --- 3. MOSTRAR DETALLE SELECCIONADO ---
-    if st.session_state[k_sel]:
-        # Buscar la fila seleccionada
-        row_sel = rutinas_filtradas[rutinas_filtradas['id_rutina'] == st.session_state[k_sel]]
-        if not row_sel.empty:
-            render_tarjeta_individual(row_sel.iloc[0], df_seg, key_suffix)
+    if l_completadas:
+        with st.expander(f"✅ Historial: {len(l_completadas)} Sesiones Completadas", expanded=False):
+            # Mostramos las completadas en orden inverso (la última hecha arriba)
+            for row in reversed(l_completadas):
+                render_tarjeta_individual(row, df_seg, key_suffix)
+        st.write("---")
+
+    if l_pendientes:
+        st.markdown("#### 🚀 Próximas Sesiones")
+        for row in l_pendientes:
+            render_tarjeta_individual(row, df_seg, key_suffix)
     else:
-        st.caption("👆 Selecciona una sesión arriba para ver el entrenamiento.")
-
+        if l_completadas:
+            st.success("¡Excelente! Has completado todas las sesiones del mes. 🏆")
 
 def render_historial_compacto(df_rut, df_seg, anio, mes, id_usuario_objetivo):
     """Muestra tabla de cumplimiento SIN TEXTO."""
@@ -440,10 +426,10 @@ def render_historial_compacto(df_rut, df_seg, anio, mes, id_usuario_objetivo):
         }
     )
 
-# --- 6. LÓGICA DE CARGA DE DATOS PARA LA VISTA ---
+# --- 5. LÓGICA DE CARGA DE DATOS PARA LA VISTA ---
 df_rutinas, df_seguimiento, df_nadadores = cargar_datos_rutinas_view()
 
-# --- 7. GESTIÓN DE ESTADO (SOLO ADMINS) ---
+# --- 6. GESTIÓN DE ESTADO (SOLO ADMINS) ---
 if rol in ["M", "P"]:
     if "g_anio" not in st.session_state: st.session_state.g_anio = datetime.now().year
     if "g_mes" not in st.session_state: st.session_state.g_mes = datetime.now().month
@@ -456,11 +442,11 @@ if rol in ["M", "P"]:
             st.session_state.admin_sesion = 1
         st.session_state.trigger_calculo = False
 
-# ==========================================
-# 8. INTERFAZ PRINCIPAL
-# ==========================================
+# --- 7. INTERFAZ ---
 st.title("📝 Sesiones de Entrenamiento")
-st.markdown(f"👤 **Conectado como:** {mi_nombre} (ID: {mi_id})")
+
+# --- CABECERA LIMPIA (SOLICITUD: SOLO NOMBRE) ---
+st.subheader(f"Hola, {mi_nombre}")
 
 if df_rutinas is None:
     st.error("No se pudieron cargar los datos. Verifica tu conexión.")
@@ -476,12 +462,12 @@ if rol in ["M", "P"]:
     with st.expander("⚙️ Gestión de Sesiones (Crear/Editar)", expanded=False):
         st.markdown("##### Editor de Sesiones")
         
-        # --- BOTÓN NUEVO: CARGAR PLANTILLA TEST ---
-        if st.button("➕ Cargar Plantilla TEST", help="Pre-llena el formulario con la estructura de Test"):
-            st.session_state['temp_texto'] = PLANTILLA_TEST
-            st.session_state['trigger_calculo'] = True # Para que refresque
+        # --- BOTÓN CARGA RÁPIDA TEST ---
+        if st.button("➕ Cargar Plantilla TEST"):
+            st.session_state.temp_texto = PLANTILLA_TEST
+            st.session_state.trigger_calculo = True
             st.rerun()
-            
+
         c1, c2, c3 = st.columns([1, 1, 1])
         
         anio_actual = datetime.now().year
@@ -502,11 +488,10 @@ if rol in ["M", "P"]:
         # --- LÓGICA DE BOTONES CONDICIONALES ---
         es_edicion = not row_existente.empty
         
-        # Prioridad: Si hay texto temporal (del botón test), úsalo. Si no, usa el de la DB.
+        # Si apretamos el botón de TEST, usamos esa plantilla
         if 'temp_texto' in st.session_state:
-            texto_previo = st.session_state['temp_texto']
-            # Limpiamos el temporal para la próxima
-            del st.session_state['temp_texto']
+            texto_previo = st.session_state.temp_texto
+            del st.session_state.temp_texto
         else:
             texto_previo = row_existente.iloc[0]['texto_rutina'] if es_edicion else ""
         
