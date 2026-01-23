@@ -38,10 +38,6 @@ def obtener_nombre_mes(n):
         return "Desconocido"
 
 def mostrar_referencias():
-    """
-    Muestra el glosario de referencias en un desplegable.
-    Usamos Markdown listas para evitar que se rompa en móviles (responsive).
-    """
     with st.expander("📖 Glosario de Referencias (Clic para ver)"):
         st.markdown("""
         **INTENSIDADES**
@@ -92,7 +88,7 @@ def actualizar_con_retry(worksheet, data, max_retries=5):
     return False, "Tiempo de espera agotado (API ocupada)."
 
 # --- LECTURA DE DATOS (CON CACHÉ) ---
-@st.cache_data(ttl="10s")
+@st.cache_data(ttl="5s") # TTL bajo para refrescar rápido
 def cargar_datos_rutinas_view():
     try:
         try:
@@ -249,6 +245,11 @@ def guardar_sesion_admin(anio, mes, sesion, texto):
         msg = "✅ Sesión actualizada correctamente."
         
     exito, error = actualizar_con_retry("Rutinas", df_rut)
+    
+    # IMPORTANTE: LIMPIAR CACHÉ PARA VER EL CAMBIO
+    if exito:
+        st.cache_data.clear()
+    
     return msg if exito else f"❌ Error al escribir: {error}"
 
 def activar_calculo_auto():
@@ -259,9 +260,6 @@ def activar_calculo_auto():
 # ==========================================
 
 def render_tarjeta_individual(row, df_seg, key_suffix):
-    """
-    Renderiza una tarjeta de entrenamiento individual.
-    """
     r_id = row['id_rutina']
     r_sesion = row['nro_sesion']
     r_texto = row['texto_rutina']
@@ -273,7 +271,6 @@ def render_tarjeta_individual(row, df_seg, key_suffix):
         fecha_obj = pd.to_datetime(check.iloc[0]['fecha_realizada'])
         fecha_str = fecha_obj.strftime("%d/%m")
 
-    # Estilos visuales condicionales
     if esta_realizada:
         borde = "#2E7D32" # Verde
         bg = "#1B2E1B"
@@ -282,7 +279,6 @@ def render_tarjeta_individual(row, df_seg, key_suffix):
         bg = "#262730"
     
     with st.container():
-        # Usamos HTML/CSS inline seguro para el recuadro
         st.markdown(f"""<div style="border: 2px solid {borde}; border-radius: 10px; background-color: {bg}; padding: 15px; margin-bottom: 15px;">""", unsafe_allow_html=True)
         
         if esta_realizada:
@@ -312,9 +308,6 @@ def render_tarjeta_individual(row, df_seg, key_suffix):
         st.markdown("</div>", unsafe_allow_html=True)
 
 def render_feed_activo(df_rut, df_seg, anio_ver, mes_ver, key_suffix=""):
-    """
-    Lista las rutinas del mes en formato vertical (scroll).
-    """
     rutinas_filtradas = df_rut[
         (df_rut['anio_rutina'] == anio_ver) & 
         (df_rut['mes_rutina'] == mes_ver)
@@ -324,13 +317,10 @@ def render_feed_activo(df_rut, df_seg, anio_ver, mes_ver, key_suffix=""):
         st.info(f"No hay sesiones cargadas para {obtener_nombre_mes(mes_ver)} {anio_ver}.")
         return
 
-    # Ordenamiento estándar por número de sesión
     rutinas_filtradas.sort_values(by='nro_sesion', ascending=True, inplace=True)
     
-    # 1. MOSTRAR GLOSARIO (Arriba de todo)
     mostrar_referencias()
 
-    # 2. SEPARAR PENDIENTES Y COMPLETADAS
     l_pendientes = []
     l_completadas = []
 
@@ -341,15 +331,12 @@ def render_feed_activo(df_rut, df_seg, anio_ver, mes_ver, key_suffix=""):
         else:
             l_pendientes.append(row)
 
-    # 3. RENDERIZAR COMPLETADAS (Colapsables)
     if l_completadas:
         with st.expander(f"✅ Historial Completado ({len(l_completadas)})", expanded=False):
-            # Orden inverso para ver la última hecha arriba
             for row in reversed(l_completadas):
                 render_tarjeta_individual(row, df_seg, key_suffix)
         st.write("---")
 
-    # 4. RENDERIZAR PENDIENTES (Expandidas)
     if l_pendientes:
         st.markdown("#### 🚀 Próximas Sesiones")
         for row in l_pendientes:
@@ -359,9 +346,6 @@ def render_feed_activo(df_rut, df_seg, anio_ver, mes_ver, key_suffix=""):
             st.success("¡Excelente! Has completado todas las sesiones del mes. 🏆")
 
 def render_historial_compacto(df_rut, df_seg, anio, mes, id_usuario_objetivo):
-    """
-    Muestra tabla de cumplimiento (Standard Dataframe).
-    """
     rutinas_mes = df_rut[
         (df_rut['anio_rutina'] == anio) & 
         (df_rut['mes_rutina'] == mes)
@@ -371,7 +355,6 @@ def render_historial_compacto(df_rut, df_seg, anio, mes, id_usuario_objetivo):
         st.info("No hay planificación cargada para este mes.")
         return
 
-    # Preparar datos
     datos_tabla = []
     total_rutinas = len(rutinas_mes)
     completadas = 0
@@ -396,7 +379,6 @@ def render_historial_compacto(df_rut, df_seg, anio, mes, id_usuario_objetivo):
 
     porcentaje = int((completadas / total_rutinas) * 100) if total_rutinas > 0 else 0
     
-    # Métricas superiores
     c1, c2, c3 = st.columns(3)
     c1.metric("Total Sesiones", total_rutinas)
     c2.metric("Completadas", completadas)
@@ -405,7 +387,6 @@ def render_historial_compacto(df_rut, df_seg, anio, mes, id_usuario_objetivo):
     
     st.divider()
     
-    # Tabla estándar
     df_view = pd.DataFrame(datos_tabla).sort_values('_nro')
     st.dataframe(
         df_view[["Sesión", "Estado", "Fecha Realización"]],
@@ -417,26 +398,11 @@ def render_historial_compacto(df_rut, df_seg, anio, mes, id_usuario_objetivo):
 # 7. LÓGICA PRINCIPAL (MAIN)
 # ==========================================
 
-# Carga de datos
 df_rutinas, df_seguimiento, df_nadadores = cargar_datos_rutinas_view()
-
-# Gestión del estado para Admin (Calculo de próxima sesión)
-if rol in ["M", "P"]:
-    if "g_anio" not in st.session_state: st.session_state.g_anio = datetime.now().year
-    if "g_mes" not in st.session_state: st.session_state.g_mes = datetime.now().month
-
-    # Trigger para recalcular el número de sesión (Carga inicial)
-    if st.session_state.get("trigger_calculo", False) or "admin_sesion" not in st.session_state:
-        if df_rutinas is not None:
-            prox = calcular_proxima_sesion(df_rutinas, st.session_state.g_anio, st.session_state.g_mes)
-            st.session_state.admin_sesion = min(prox, 31)
-        else:
-            st.session_state.admin_sesion = 1
-        st.session_state.trigger_calculo = False
 
 # --- INTERFAZ DE USUARIO ---
 st.title("📝 Sesiones de Entrenamiento")
-st.subheader(f"{mi_nombre}") # Solo nombre
+st.subheader(f"{mi_nombre}")
 
 if df_rutinas is None:
     st.error("No se pudieron cargar los datos. Verifica tu conexión.")
@@ -449,15 +415,27 @@ st.write("---")
 # ==========================
 if rol in ["M", "P"]:
     
+    # Gestión de Variables de Estado para Carga
+    if "g_anio" not in st.session_state: st.session_state.g_anio = datetime.now().year
+    if "g_mes" not in st.session_state: st.session_state.g_mes = datetime.now().month
+
+    # Trigger para recalcular el número de sesión
+    if st.session_state.get("trigger_calculo", False) or "admin_sesion" not in st.session_state:
+        if df_rutinas is not None:
+            prox = calcular_proxima_sesion(df_rutinas, st.session_state.g_anio, st.session_state.g_mes)
+            st.session_state.admin_sesion = min(prox, 31)
+        else:
+            st.session_state.admin_sesion = 1
+        st.session_state.trigger_calculo = False
+
+    # Lógica de avance manual (Flag)
+    if st.session_state.get("forzar_avance_sesion", False):
+        if "admin_sesion" in st.session_state and st.session_state.admin_sesion < 31:
+             st.session_state.admin_sesion += 1
+        st.session_state.forzar_avance_sesion = False
+
     with st.expander("⚙️ Gestión de Sesiones (Crear/Editar)", expanded=False):
         st.markdown("##### Editor de Sesiones")
-
-        # --- FIX: LOGICA DE AVANCE SEGURO (SE EJECUTA AL RERUN) ---
-        if st.session_state.get("forzar_avance_sesion", False):
-            if "admin_sesion" in st.session_state and st.session_state.admin_sesion < 31:
-                st.session_state.admin_sesion += 1
-            st.session_state.forzar_avance_sesion = False
-        # ----------------------------------------------------------
         
         c1, c2, c3 = st.columns([1, 1, 1])
         
@@ -473,7 +451,6 @@ if rol in ["M", "P"]:
         with c3: 
             st.number_input("Nro Sesión", min_value=1, max_value=31, key="admin_sesion")
             
-        # Verificar existencia
         id_busqueda = f"{st.session_state.g_anio}-{st.session_state.g_mes:02d}-S{st.session_state.admin_sesion:02d}"
         row_existente = df_rutinas[df_rutinas['id_rutina'] == id_busqueda]
         
@@ -484,7 +461,8 @@ if rol in ["M", "P"]:
         st.caption(f"ID: {id_busqueda} | {estado_txt}")
         
         with st.form("form_rutina"):
-            f_texto = st.text_area("Contenido", value=texto_previo, height=200)
+            # TRUCO: Cambiar el KEY dinámicamente fuerza a Streamlit a limpiar el input al cambiar de sesión
+            f_texto = st.text_area("Contenido", value=texto_previo, height=200, key=f"editor_texto_{id_busqueda}")
             
             if es_edicion:
                 c_del, c_save = st.columns([1, 2])
@@ -505,7 +483,7 @@ if rol in ["M", "P"]:
                         st.error(msg)
                     else:
                         st.success(msg)
-                        # Activar flag y recargar para que se ejecute al inicio
+                        # Activamos la bandera para avanzar en la próxima recarga
                         st.session_state.forzar_avance_sesion = True
                         time.sleep(0.5)
                         st.rerun()
