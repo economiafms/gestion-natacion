@@ -149,7 +149,7 @@ def render_tarjeta_individual(row, df_seg, key_suffix):
     
     with st.container():
         st.markdown(f"""<div style="border: 2px solid {borde}; border-radius: 10px; background-color: {bg}; padding: 15px; margin-bottom: 15px;">""", unsafe_allow_html=True)
-        c_head, c_act = st.columns([3, 1])
+        c_head, c_act = st.columns([5, 1]) # Columna de acción ajustada para emoji
         with c_head:
             if esta_realizada:
                 st.markdown(f"#### ✅ Sesión {r_sesion} <span style='font-size:14px; color:#888'>({fecha_str})</span>", unsafe_allow_html=True)
@@ -162,11 +162,13 @@ def render_tarjeta_individual(row, df_seg, key_suffix):
         with c_act:
             st.write("")
             if esta_realizada:
-                if st.button("Desmarcar", key=f"un_{r_id}_{key_suffix}"):
+                # CAMBIO: Botón Cruz
+                if st.button("❌", key=f"un_{r_id}_{key_suffix}", help="Desmarcar (No realizada)"):
                     borrar_seguimiento(r_id, mi_id)
                     st.rerun()
             else:
-                if st.button("COMPLETADO", key=f"do_{r_id}_{key_suffix}", type="primary"):
+                # CAMBIO: Botón Nadador
+                if st.button("🏊", key=f"do_{r_id}_{key_suffix}", type="primary", help="Marcar como Completada"):
                     guardar_seguimiento(r_id, mi_id)
                     st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
@@ -202,7 +204,7 @@ def render_feed_activo(df_rut, df_seg, anio_ver, mes_ver, key_suffix=""):
     else:
         st.success("¡Todo al día! No tienes sesiones pendientes este mes.")
 
-    # 2. Mostrar Completadas (Colapsadas)
+    # 2. Mostrar Completadas (Colapsadas al final)
     if l_completadas:
         st.write("")
         with st.expander(f"✅ Ver Sesiones Completadas ({len(l_completadas)})", expanded=False):
@@ -341,8 +343,6 @@ if rol in ["M", "P"]:
         with col_v1: sel_a = st.selectbox("Año", v_anios, key="adm_v_a")
         with col_v2: sel_m = st.selectbox("Mes", meses_indices, format_func=lambda x: mapa_meses[x], index=meses_indices.index(datetime.now().month), key="adm_v_m")
         
-        # En vista Admin, no usamos colapsado porque el profe quiere revisar contenido
-        # Así que pasamos todas
         render_feed_activo(df_rutinas, df_seguimiento, sel_a, sel_m, key_suffix="admin_view")
 
     with tab_seguimiento:
