@@ -124,6 +124,8 @@ pg_ranking = st.Page("pages/4_ranking.py", title="Ranking", icon="🏆")
 pg_simulador = st.Page("pages/3_simulador.py", title="Simulador", icon="⏱️")
 pg_entrenamientos = st.Page("pages/5_entrenamientos.py", title="Entrenamientos", icon="🏋️")
 pg_categoria = st.Page("pages/6_mi_categoria.py", title="Mi Categoría", icon="🏅")
+pg_agenda = st.Page("pages/7_agenda.py", title="Agenda", icon="📅")
+pg_rutinas = st.Page("pages/8_rutinas.py", title="Rutinas", icon="📝")
 pg_carga = st.Page("pages/1_cargar_datos.py", title="Carga de Datos", icon="⚙️")
 pg_login_obj = st.Page(login_screen, title="Acceso", icon="🔒")
 
@@ -134,7 +136,7 @@ if not st.session_state.role:
 else:
     # --- MENÚ PRINCIPAL ---
     menu_pages = {
-        "Principal": [pg_inicio, pg_datos, pg_entrenamientos, pg_categoria]
+        "Principal": [pg_inicio, pg_datos, pg_entrenamientos, pg_categoria, pg_agenda, pg_rutinas]
     }
     
     # --- MENÚ HERRAMIENTAS ---
