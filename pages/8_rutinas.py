@@ -38,10 +38,6 @@ def obtener_nombre_mes(n):
         return "Desconocido"
 
 def mostrar_referencias():
-    """
-    Muestra el glosario de referencias en un desplegable.
-    Usamos Markdown listas para evitar que se rompa en móviles (responsive).
-    """
     with st.expander("📖 Glosario de Referencias (Clic para ver)"):
         st.markdown("""
         **INTENSIDADES**
@@ -128,7 +124,6 @@ def cargar_datos_rutinas_view():
         return None, None, None
 
 def leer_dataset_fresco(worksheet):
-    """Lee datos sin usar caché para asegurar consistencia en escrituras."""
     try:
         df = conn.read(worksheet=worksheet, ttl=0).copy()
         return df
@@ -137,14 +132,13 @@ def leer_dataset_fresco(worksheet):
         return None
 
 def calcular_proxima_sesion(df, anio, mes):
-    """Calcula el siguiente número de sesión disponible."""
     if df is None or df.empty: return 1
     filtro = df[(df['anio_rutina'] == anio) & (df['mes_rutina'] == mes)]
     if filtro.empty: return 1
     return int(filtro['nro_sesion'].max()) + 1
 
 # ==========================================
-# 5. FUNCIONES DE ESCRITURA (ADMIN & USER)
+# 5. FUNCIONES DE ESCRITURA
 # ==========================================
 
 def guardar_seguimiento(id_rutina, id_nadador):
@@ -200,7 +194,6 @@ def eliminar_sesion_admin(id_rutina):
     if rutina_a_borrar.empty:
         return "⚠️ La sesión no existe."
     
-    # Validar que sea la última para no romper secuencia
     r_anio = rutina_a_borrar.iloc[0]['anio_rutina']
     r_mes = rutina_a_borrar.iloc[0]['mes_rutina']
     r_sesion = rutina_a_borrar.iloc[0]['nro_sesion']
@@ -249,10 +242,8 @@ def guardar_sesion_admin(anio, mes, sesion, texto):
         msg = "✅ Sesión actualizada correctamente."
         
     exito, error = actualizar_con_retry("Rutinas", df_rut)
-    
     if exito:
         st.cache_data.clear()
-    
     return msg if exito else f"❌ Error al escribir: {error}"
 
 def activar_calculo_auto():
@@ -274,7 +265,6 @@ def render_tarjeta_individual(row, df_seg, key_suffix):
         fecha_obj = pd.to_datetime(check.iloc[0]['fecha_realizada'])
         fecha_str = fecha_obj.strftime("%d/%m")
 
-    # Estilos visuales condicionales
     if esta_realizada:
         borde = "#2E7D32" # Verde
         bg = "#1B2E1B"
@@ -322,7 +312,6 @@ def render_feed_activo(df_rut, df_seg, anio_ver, mes_ver, key_suffix=""):
         return
 
     rutinas_filtradas.sort_values(by='nro_sesion', ascending=True, inplace=True)
-    
     mostrar_referencias()
 
     l_pendientes = []
@@ -349,7 +338,7 @@ def render_feed_activo(df_rut, df_seg, anio_ver, mes_ver, key_suffix=""):
         if l_completadas:
             st.success("¡Excelente! Has completado todas las sesiones del mes. 🏆")
 
-# --- HISTORIAL VISUAL MEJORADO (SIN DATAFRAME FEO) ---
+# --- HISTORIAL VISUAL MEJORADO ---
 def render_historial_compacto(df_rut, df_seg, anio, mes, id_usuario_objetivo):
     rutinas_mes = df_rut[
         (df_rut['anio_rutina'] == anio) & 
@@ -360,7 +349,6 @@ def render_historial_compacto(df_rut, df_seg, anio, mes, id_usuario_objetivo):
         st.info("No hay planificación cargada para este mes.")
         return
 
-    # Preparar datos
     total_rutinas = len(rutinas_mes)
     completadas = 0
     lista_render = []
@@ -383,33 +371,39 @@ def render_historial_compacto(df_rut, df_seg, anio, mes, id_usuario_objetivo):
         })
 
     porcentaje = int((completadas / total_rutinas) * 100) if total_rutinas > 0 else 0
+    nombre_mes = obtener_nombre_mes(mes).upper()
     
-    # 1. SCORECARD SUPERIOR
+    # 1. SCORECARD DIVIDIDO (DISEÑO SOLICITADO)
     st.markdown(f"""
-    <div style="
-        background-color: #262730; 
-        border-radius: 8px; 
-        padding: 15px; 
-        border: 1px solid #444; 
-        text-align: center;
-        margin-bottom: 20px;">
-        <div style="font-size: 14px; color: #aaa; margin-bottom: 5px;">ASISTENCIA GLOBAL</div>
-        <div style="font-size: 36px; font-weight: bold; color: white; line-height: 1;">{porcentaje}%</div>
-        <div style="font-size: 12px; color: #888; margin-top: 5px;">{completadas} de {total_rutinas} sesiones</div>
+    <div style="background-color: #262730; border-radius: 8px; padding: 20px; border: 1px solid #444; margin-bottom: 20px;">
+        <div style="color: #aaa; font-size: 13px; font-weight: bold; margin-bottom: 12px; letter-spacing: 1px;">
+            ASISTENCIA {nombre_mes}
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <span style="font-size: 42px; font-weight: bold; color: white;">{porcentaje}%</span>
+            </div>
+            <div style="text-align: right;">
+                <div style="font-size: 24px; font-weight: bold; color: #ddd; line-height: 1;">
+                    {completadas} <span style="font-size: 16px; color: #888;">de</span> {total_rutinas}
+                </div>
+                <div style="font-size: 11px; color: #888; margin-top: 4px; letter-spacing: 0.5px;">SESIONES COMPLETADAS</div>
+            </div>
+        </div>
     </div>
     """, unsafe_allow_html=True)
     
     st.progress(porcentaje / 100)
     st.write("") 
 
-    # 2. LISTADO DE SESIONES (DISEÑO LISTA LIMPIA)
-    st.caption(f"DETALLE {obtener_nombre_mes(mes).upper()}")
+    # 2. LISTADO DE SESIONES
+    st.caption(f"DETALLE DE ACTIVIDAD")
 
     for item in lista_render:
         if item['hecho']:
             color = "#2E7D32" # Verde
             icono = "✅"
-            texto_estado = "COMPLETADO"
+            texto_estado = "NADADO" # <--- CAMBIO SOLICITADO
             bg_badge = "#1B5E20"
         else:
             color = "#555" # Gris
@@ -417,7 +411,6 @@ def render_historial_compacto(df_rut, df_seg, anio, mes, id_usuario_objetivo):
             texto_estado = "PENDIENTE"
             bg_badge = "#444"
 
-        # HTML Simple y Robusto para cada fila
         st.markdown(f"""
         <div style="
             background-color: #262730;
@@ -472,6 +465,7 @@ if rol in ["M", "P"]:
     if "g_anio" not in st.session_state: st.session_state.g_anio = datetime.now().year
     if "g_mes" not in st.session_state: st.session_state.g_mes = datetime.now().month
 
+    # Trigger de cálculo inicial
     if st.session_state.get("trigger_calculo", False) or "admin_sesion" not in st.session_state:
         if df_rutinas is not None:
             prox = calcular_proxima_sesion(df_rutinas, st.session_state.g_anio, st.session_state.g_mes)
@@ -480,7 +474,7 @@ if rol in ["M", "P"]:
             st.session_state.admin_sesion = 1
         st.session_state.trigger_calculo = False
 
-    # Lógica de avance manual (Flag)
+    # Lógica de avance manual seguro
     if st.session_state.get("forzar_avance_sesion", False):
         if "admin_sesion" in st.session_state and st.session_state.admin_sesion < 31:
              st.session_state.admin_sesion += 1
@@ -513,7 +507,7 @@ if rol in ["M", "P"]:
         st.caption(f"ID: {id_busqueda} | {estado_txt}")
         
         with st.form("form_rutina"):
-            # TRUCO: Cambiar el KEY dinámicamente fuerza a Streamlit a limpiar el input al cambiar de sesión
+            # KEY DINÁMICO para limpiar el input
             f_texto = st.text_area("Contenido", value=texto_previo, height=200, key=f"editor_texto_{id_busqueda}")
             
             if es_edicion:
