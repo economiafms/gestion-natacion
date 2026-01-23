@@ -72,6 +72,7 @@ def cerrar_sesion():
         del st.session_state[key]
     st.rerun()
 
+# --- NUEVA FUNCIÓN: INSTRUCCIONES DE INSTALACIÓN ---
 def pwa_install_button():
     st.write("---")
     with st.expander("📲 INSTALAR APP EN TU CELULAR"):
@@ -131,6 +132,8 @@ def login_screen():
     st.text_input("Ingrese Nro de Socio", key="input_socio", placeholder="Ej: 123456-01", label_visibility="collapsed")
     if st.button("INGRESAR", type="primary", use_container_width=True):
         validar_socio()
+    
+    # AGREGADO: Llamada a la función de instrucciones
     pwa_install_button()
 
 # --- 6. DEFINICIÓN DE PÁGINAS ---
@@ -141,6 +144,7 @@ pg_simulador = st.Page("pages/3_simulador.py", title="Simulador", icon="⏱️")
 pg_entrenamientos = st.Page("pages/5_entrenamientos.py", title="Entrenamientos", icon="🏋️")
 pg_categoria = st.Page("pages/6_mi_categoria.py", title="Mi Categoría", icon="🏅")
 pg_agenda = st.Page("pages/7_agenda.py", title="Agenda", icon="📅")
+pg_rutinas = st.Page("pages/8_rutinas.py", title="Rutinas", icon="📝")
 pg_carga = st.Page("pages/1_cargar_datos.py", title="Carga de Datos", icon="⚙️")
 pg_login_obj = st.Page(login_screen, title="Acceso", icon="🔒")
 
@@ -150,23 +154,22 @@ if not st.session_state.role:
     pg.run()
 else:
     # --- MENÚ PRINCIPAL ---
-    # Se agrega pg_agenda aquí para que todos los usuarios la vean
     menu_pages = {
-        "Principal": [pg_inicio, pg_datos, pg_entrenamientos, pg_categoria, pg_agenda]
+        "Principal": [pg_inicio, pg_datos, pg_rutinas, pg_entrenamientos, pg_categoria, pg_agenda]
     }
-    
-    # Herramientas para Master (M) o Profe (P)
+
+    # --- MENÚ HERRAMIENTAS ---
     if st.session_state.role in ["M", "P"]:
         menu_pages["Herramientas"] = [pg_ranking, pg_simulador]
-        
+
         if st.session_state.admin_unlocked:
             menu_pages["Administración"] = [pg_carga]
-            
+
     pg = st.navigation(menu_pages)
-    
+
     with st.sidebar:
-        st.write(f"**Usuario:** {st.session_state.user_name}") 
+        st.write("") 
         if st.button("Cerrar Sesión", type="secondary", use_container_width=True):
             cerrar_sesion()
-            
+
     pg.run()
