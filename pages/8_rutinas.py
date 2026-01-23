@@ -27,29 +27,27 @@ def obtener_nombre_mes(n):
     except:
         return "Desconocido"
 
+# --- LECTURA PARA VISUALIZACIÓN (Caché permitida) ---
 @st.cache_data(ttl="10s")
-def cargar_datos_rutinas():
+def cargar_datos_rutinas_view():
     try:
-        # Rutinas
+        # Intentamos leer con copia para evitar mutaciones de caché
         try:
-            # CORRECCIÓN 1: .copy() al leer para evitar problemas con la caché de conexión
             df_rut = conn.read(worksheet="Rutinas").copy()
         except:
             df_rut = pd.DataFrame(columns=["id_rutina", "anio_rutina", "mes_rutina", "nro_sesion", "texto_rutina"])
         
-        # Seguimiento
         try:
             df_seg = conn.read(worksheet="Rutinas_Seguimiento").copy()
         except:
             df_seg = pd.DataFrame(columns=["id_rutina", "codnadador", "fecha_realizada"])
 
-        # Nadadores
         try:
             df_nad = conn.read(worksheet="Nadadores").copy()
         except:
             df_nad = pd.DataFrame(columns=["codnadador", "nombre", "apellido"])
             
-        # Asegurar tipos de datos
+        # Normalización de tipos
         if not df_rut.empty:
             df_rut['anio_rutina'] = pd.to_numeric(df_rut['anio_rutina'], errors='coerce').fillna(0).astype(int)
             df_rut['mes_rutina'] = pd.to_numeric(df_rut['mes_rutina'], errors='coerce').fillna(0).astype(int)
@@ -63,48 +61,95 @@ def cargar_datos_rutinas():
             
         return df_rut, df_seg, df_nad
     except Exception as e:
-        st.error(f"Error al cargar datos: {e}")
+        st.error(f"Error visual: {e}")
         return None, None, None
 
+# --- LECTURA SEGURA PARA ESCRITURA (Sin caché, Sin fallos silenciosos) ---
+def leer_dataset_fresco(worksheet):
+    """Lee la hoja asegurando datos frescos. Si falla, levanta excepción."""
+    try:
+        # ttl=0 fuerza lectura real desde Google
+        df = conn.read(worksheet=worksheet, ttl=0).copy()
+        return df
+    except Exception as e:
+        # Si la hoja no existe (primer uso), devolvemos DF vacío estructura correcta
+        # Pero si es error de conexión, esto podría ser peligroso. 
+        # Asumimos que si falla la lectura, NO DEBEMOS escribir.
+        # Retornamos None para indicar fallo crítico.
+        st.error(f"Error de conexión con {worksheet}: {e}")
+        return None
+
 def calcular_proxima_sesion(df, anio, mes):
-    """Devuelve el número de sesión siguiente al último cargado para ese mes."""
     if df is None or df.empty: return 1
     filtro = df[(df['anio_rutina'] == anio) & (df['mes_rutina'] == mes)]
     if filtro.empty: return 1
     return int(filtro['nro_sesion'].max()) + 1
 
+# --- FUNCIONES DE GUARDADO BLINDADAS ---
+
 def guardar_seguimiento(id_rutina, id_nadador):
-    df_rut, df_seg, df_nad = cargar_datos_rutinas()
+    # 1. Lectura fresca
+    df_seg = leer_dataset_fresco("Rutinas_Seguimiento")
+    if df_seg is None: return False # Abortar si no hay lectura
+    
+    # Asegurar tipos en el DF fresco
+    if not df_seg.empty:
+        df_seg['codnadador'] = pd.to_numeric(df_seg['codnadador'], errors='coerce').fillna(0).astype(int)
+
+    # 2. Lógica
     existe = df_seg[(df_seg['id_rutina'] == id_rutina) & (df_seg['codnadador'] == id_nadador)]
     
     if existe.empty:
-        # AJUSTE HORARIO: Restamos 3 horas para Argentina
         hora_arg = datetime.now() - timedelta(hours=3)
-        
         nuevo_registro = pd.DataFrame([{
             "id_rutina": id_rutina,
             "codnadador": id_nadador,
             "fecha_realizada": hora_arg.strftime("%Y-%m-%d %H:%M:%S")
         }])
         df_final = pd.concat([df_seg, nuevo_registro], ignore_index=True)
-        conn.update(worksheet="Rutinas_Seguimiento", data=df_final)
-        st.cache_data.clear()
-        return True
+        
+        # 3. Escritura
+        try:
+            conn.update(worksheet="Rutinas_Seguimiento", data=df_final)
+            st.cache_data.clear() # Solo limpiar si éxito
+            return True
+        except Exception as e:
+            st.error(f"Error al guardar: {e}")
+            return False
     return False
 
 def borrar_seguimiento(id_rutina, id_nadador):
-    df_rut, df_seg, df_nad = cargar_datos_rutinas()
+    df_seg = leer_dataset_fresco("Rutinas_Seguimiento")
+    if df_seg is None: return False
+    
+    if not df_seg.empty:
+        df_seg['codnadador'] = pd.to_numeric(df_seg['codnadador'], errors='coerce').fillna(0).astype(int)
+
     df_final = df_seg[~((df_seg['id_rutina'] == id_rutina) & (df_seg['codnadador'] == id_nadador))]
-    conn.update(worksheet="Rutinas_Seguimiento", data=df_final)
-    st.cache_data.clear()
-    return True
+    
+    try:
+        conn.update(worksheet="Rutinas_Seguimiento", data=df_final)
+        st.cache_data.clear()
+        return True
+    except Exception as e:
+        st.error(f"Error al guardar: {e}")
+        return False
 
 def guardar_rutina_admin(anio, mes, sesion, texto):
-    df_rut, df_seg, df_nad = cargar_datos_rutinas()
+    # 1. Lectura fresca BLINDADA
+    df_rut = leer_dataset_fresco("Rutinas")
     
-    # CORRECCIÓN 2: Crear copia explícita antes de modificar
-    df_rut = df_rut.copy()
-    
+    # Si df_rut es None, hubo error de conexión -> STOP TOTAL
+    if df_rut is None:
+        return "❌ Error CRÍTICO de conexión. No se guardó para evitar pérdida de datos."
+
+    # Normalización preventiva
+    if not df_rut.empty:
+        df_rut['anio_rutina'] = pd.to_numeric(df_rut['anio_rutina'], errors='coerce').fillna(0).astype(int)
+        df_rut['mes_rutina'] = pd.to_numeric(df_rut['mes_rutina'], errors='coerce').fillna(0).astype(int)
+        df_rut['nro_sesion'] = pd.to_numeric(df_rut['nro_sesion'], errors='coerce').fillna(0).astype(int)
+
+    # 2. Lógica
     nuevo_id = f"{anio}-{mes:02d}-S{sesion:02d}"
     mask = df_rut['id_rutina'] == nuevo_id
     
@@ -118,17 +163,21 @@ def guardar_rutina_admin(anio, mes, sesion, texto):
     
     if df_rut[mask].empty:
         df_rut = pd.concat([df_rut, pd.DataFrame([nueva_fila])], ignore_index=True)
-        msg = "Rutina creada correctamente."
+        msg = "✅ Rutina creada correctamente."
     else:
         df_rut.loc[mask, "texto_rutina"] = texto
         df_rut.loc[mask, "anio_rutina"] = int(anio)
         df_rut.loc[mask, "mes_rutina"] = int(mes)
         df_rut.loc[mask, "nro_sesion"] = int(sesion)
-        msg = "Rutina actualizada correctamente."
+        msg = "✅ Rutina actualizada correctamente."
         
-    conn.update(worksheet="Rutinas", data=df_rut)
-    st.cache_data.clear()
-    return msg
+    # 3. Escritura
+    try:
+        conn.update(worksheet="Rutinas", data=df_rut)
+        st.cache_data.clear() # Limpiar caché para que la vista se actualice
+        return msg
+    except Exception as e:
+        return f"❌ Error al escribir en Google Sheets: {e}"
 
 def activar_calculo_auto():
     st.session_state.trigger_calculo = True
@@ -140,7 +189,6 @@ def render_tarjeta_individual(row, df_seg, key_suffix):
     r_sesion = row['nro_sesion']
     r_texto = row['texto_rutina']
     
-    # Verificar estado
     check = df_seg[(df_seg['id_rutina'] == r_id) & (df_seg['codnadador'] == mi_id)]
     esta_realizada = not check.empty
     fecha_str = ""
@@ -148,47 +196,38 @@ def render_tarjeta_individual(row, df_seg, key_suffix):
         fecha_obj = pd.to_datetime(check.iloc[0]['fecha_realizada'])
         fecha_str = fecha_obj.strftime("%d/%m")
 
-    # Estilos
     borde = "#2E7D32" if esta_realizada else "#444" 
     bg = "#1B2E1B" if esta_realizada else "#262730"
     
     with st.container():
         st.markdown(f"""<div style="border: 2px solid {borde}; border-radius: 10px; background-color: {bg}; padding: 15px; margin-bottom: 15px;">""", unsafe_allow_html=True)
         
-        # --- COLUMNAS DINÁMICAS ---
         if esta_realizada:
-            # Si está completada, damos mucho espacio al texto (8) y poco al botón (1) para pegarlo a la derecha
             c_head, c_act = st.columns([8, 1])
-            
             with c_head:
                 st.markdown(f"#### ✅ Sesión {r_sesion} <span style='font-size:14px; color:#888'>({fecha_str})</span>", unsafe_allow_html=True)
                 st.markdown(f"<div style='text-decoration: line-through; color: #aaa;'>", unsafe_allow_html=True)
                 st.markdown(r_texto)
                 st.markdown("</div>", unsafe_allow_html=True)
-            
             with c_act:
-                st.write("") # Alineación vertical
-                if st.button("❌", key=f"un_{r_id}_{key_suffix}", help="Desmarcar (No realizada)"):
+                st.write("") 
+                if st.button("❌", key=f"un_{r_id}_{key_suffix}", help="Desmarcar"):
                     borrar_seguimiento(r_id, mi_id)
                     st.rerun()
         else:
-            # Si está pendiente, mantenemos espacio para el botón grande "DÍA GANADO"
             c_head, c_act = st.columns([5, 2])
-            
             with c_head:
                 st.markdown(f"#### ⭕ Sesión {r_sesion}")
                 st.markdown(r_texto)
-            
             with c_act:
-                st.write("") # Alineación vertical
-                if st.button("🏊 DÍA GANADO", key=f"do_{r_id}_{key_suffix}", type="primary", help="Marcar como Completada"):
+                st.write("") 
+                if st.button("🏊 DÍA GANADO", key=f"do_{r_id}_{key_suffix}", type="primary"):
                     guardar_seguimiento(r_id, mi_id)
                     st.rerun()
 
         st.markdown("</div>", unsafe_allow_html=True)
 
 def render_feed_activo(df_rut, df_seg, anio_ver, mes_ver, key_suffix=""):
-    """Muestra las tarjetas con lógica de reordenamiento (Completadas arriba)."""
     rutinas_filtradas = df_rut[
         (df_rut['anio_rutina'] == anio_ver) & 
         (df_rut['mes_rutina'] == mes_ver)
@@ -199,7 +238,6 @@ def render_feed_activo(df_rut, df_seg, anio_ver, mes_ver, key_suffix=""):
         st.info(f"No hay rutinas cargadas para {obtener_nombre_mes(mes_ver)} {anio_ver}.")
         return
 
-    # Separar en Pendientes y Completadas
     l_pendientes = []
     l_completadas = []
 
@@ -210,27 +248,21 @@ def render_feed_activo(df_rut, df_seg, anio_ver, mes_ver, key_suffix=""):
         else:
             l_pendientes.append(row)
 
-    # 1. MOSTRAR COMPLETADAS (ARRIBA - COLAPSADAS)
     if l_completadas:
         with st.expander(f"✅ Historial: {len(l_completadas)} Sesiones Completadas", expanded=False):
-            # Invertimos el orden para ver la última completada primero
             for row in reversed(l_completadas):
                 render_tarjeta_individual(row, df_seg, key_suffix)
         st.write("---")
 
-    # 2. MOSTRAR PENDIENTES (ABAJO - EXPANDIDAS)
     if l_pendientes:
         st.markdown("#### 🚀 Próximas Sesiones")
         for row in l_pendientes:
             render_tarjeta_individual(row, df_seg, key_suffix)
     else:
-        # Si no hay pendientes y sí había completadas
         if l_completadas:
             st.success("¡Excelente! Has completado todas las sesiones del mes. 🏆")
 
 def render_historial_compacto(df_rut, df_seg, anio, mes, id_usuario_objetivo):
-    """Muestra tabla de cumplimiento SIN TEXTO."""
-    
     rutinas_mes = df_rut[
         (df_rut['anio_rutina'] == anio) & 
         (df_rut['mes_rutina'] == mes)
@@ -283,15 +315,16 @@ def render_historial_compacto(df_rut, df_seg, anio, mes, id_usuario_objetivo):
         }
     )
 
-# --- 5. LÓGICA DE CARGA ---
-df_rutinas, df_seguimiento, df_nadadores = cargar_datos_rutinas()
+# --- 5. LÓGICA DE CARGA DE DATOS PARA LA VISTA ---
+df_rutinas, df_seguimiento, df_nadadores = cargar_datos_rutinas_view()
 
-# Inicializar gestión (Solo Admins)
+# --- 6. GESTIÓN DE ESTADO (SOLO ADMINS) ---
 if rol in ["M", "P"]:
     if "g_anio" not in st.session_state: st.session_state.g_anio = datetime.now().year
     if "g_mes" not in st.session_state: st.session_state.g_mes = datetime.now().month
 
     if st.session_state.get("trigger_calculo", False) or "admin_sesion" not in st.session_state:
+        # Usamos el df de la vista para calcular el siguiente ID, es seguro
         if df_rutinas is not None:
             prox = calcular_proxima_sesion(df_rutinas, st.session_state.g_anio, st.session_state.g_mes)
             st.session_state.admin_sesion = min(prox, 31)
@@ -299,10 +332,11 @@ if rol in ["M", "P"]:
             st.session_state.admin_sesion = 1
         st.session_state.trigger_calculo = False
 
-# --- 6. INTERFAZ ---
+# --- 7. INTERFAZ ---
 st.title("📝 Rutinas de Entrenamiento")
 
 if df_rutinas is None:
+    st.error("No se pudieron cargar los datos. Verifica tu conexión.")
     st.stop()
 
 st.write("---")
@@ -341,11 +375,14 @@ if rol in ["M", "P"]:
                 if f_texto.strip() == "":
                     st.error("Texto vacío.")
                 else:
-                    guardar_rutina_admin(st.session_state.g_anio, st.session_state.g_mes, st.session_state.admin_sesion, f_texto)
-                    st.success("Guardado.")
-                    st.session_state.trigger_calculo = True
-                    time.sleep(0.5)
-                    st.rerun()
+                    msg = guardar_rutina_admin(st.session_state.g_anio, st.session_state.g_mes, st.session_state.admin_sesion, f_texto)
+                    if "Error" in msg:
+                        st.error(msg)
+                    else:
+                        st.success(msg)
+                        st.session_state.trigger_calculo = True
+                        time.sleep(0.5)
+                        st.rerun()
 
     st.divider()
 
@@ -364,11 +401,7 @@ if rol in ["M", "P"]:
     with tab_seguimiento:
         st.info("Seleccione un alumno para ver su cumplimiento histórico.")
         
-        # --- CAMBIO APLICADO: FILTRADO DE NADADORES ---
-        # 1. Obtener IDs que tienen registros en rutinas_seguimiento
         ids_activos = df_seguimiento['codnadador'].unique()
-        
-        # 2. Filtrar el dataframe de nadadores
         df_nad_activos = df_nadadores[df_nadadores['codnadador'].isin(ids_activos)].copy()
         
         if df_nad_activos.empty:
@@ -399,7 +432,6 @@ else:
     tab_curso, tab_hist = st.tabs(["📅 Mes en Curso", "📜 Historial / Registro"])
     
     with tab_curso:
-        # Fijo a fecha actual
         hoy = datetime.now()
         st.markdown(f"### Rutinas de {obtener_nombre_mes(hoy.month)} {hoy.year}")
         render_feed_activo(df_rutinas, df_seguimiento, hoy.year, hoy.month, key_suffix="nad_curso")
@@ -414,7 +446,6 @@ else:
         
         with c_h1: h_anio = st.selectbox("Año", anios_disp, key="h_a")
         
-        # Filtrado de meses que SÍ tienen datos
         meses_en_anio = sorted(df_rutinas[df_rutinas['anio_rutina'] == h_anio]['mes_rutina'].unique().tolist())
         
         if not meses_en_anio:
