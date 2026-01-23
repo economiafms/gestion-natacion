@@ -37,7 +37,7 @@ LISTA_PRUEBAS = [
 ]
 
 # ==========================================
-# 4. FUNCIONES AUXILIARES (BACKEND)
+# 4. FUNCIONES AUXILIARES
 # ==========================================
 
 def actualizar_con_retry(worksheet, data, max_retries=5):
@@ -53,6 +53,32 @@ def actualizar_con_retry(worksheet, data, max_retries=5):
                 return False, e
     return False, "Tiempo de espera agotado."
 
+def calcular_categoria_master(anio_nac):
+    """Calcula la categoría basada en la edad al 31/12 del año actual."""
+    if pd.isna(anio_nac) or anio_nac == "":
+        return "-"
+    
+    try:
+        anio_actual = datetime.now().year
+        edad = anio_actual - int(anio_nac)
+        
+        if edad < 20: return "Juvenil"
+        elif 20 <= edad <= 24: return "PRE"
+        elif 25 <= edad <= 29: return "A"
+        elif 30 <= edad <= 34: return "B"
+        elif 35 <= edad <= 39: return "C"
+        elif 40 <= edad <= 44: return "D"
+        elif 45 <= edad <= 49: return "E"
+        elif 50 <= edad <= 54: return "F"
+        elif 55 <= edad <= 59: return "G"
+        elif 60 <= edad <= 64: return "H"
+        elif 65 <= edad <= 69: return "I"
+        elif 70 <= edad <= 74: return "J"
+        elif 75 <= edad <= 79: return "K"
+        else: return "K+"
+    except:
+        return "-"
+
 @st.cache_data(ttl="5s")
 def cargar_datos_agenda():
     try:
@@ -60,12 +86,10 @@ def cargar_datos_agenda():
         try:
             df_comp = conn.read(worksheet="Competencias").copy()
             if not df_comp.empty:
-                # Normalizar Fechas
                 if 'fecha_evento' in df_comp.columns:
                     df_comp['fecha_evento'] = pd.to_datetime(df_comp['fecha_evento']).dt.date
                 if 'fecha_limite' in df_comp.columns:
                     df_comp['fecha_limite'] = pd.to_datetime(df_comp['fecha_limite']).dt.date
-                # Asegurar que exista la columna nueva
                 if 'pruebas_habilitadas' not in df_comp.columns:
                     df_comp['pruebas_habilitadas'] = ""
         except:
@@ -79,12 +103,14 @@ def cargar_datos_agenda():
         except:
             df_ins = pd.DataFrame(columns=["id_inscripcion", "id_competencia", "codnadador", "pruebas", "fecha_inscripcion"])
 
-        # 3. Nadadores
+        # 3. Nadadores (Incluimos Fecha Nac y Genero)
         try:
             df_nad = conn.read(worksheet="Nadadores").copy()
             df_nad['codnadador'] = pd.to_numeric(df_nad['codnadador'], errors='coerce').fillna(0).astype(int)
+            # Asegurar fecha nacimiento para cálculo
+            df_nad['fechanac'] = pd.to_datetime(df_nad['fechanac'], errors='coerce')
         except:
-            df_nad = pd.DataFrame(columns=["codnadador", "nombre", "apellido"])
+            df_nad = pd.DataFrame(columns=["codnadador", "nombre", "apellido", "fechanac", "codgenero"])
 
         # 4. Piletas
         try:
@@ -228,7 +254,6 @@ if rol in ["M", "P"]:
             c1, c2 = st.columns(2)
             nombre_in = c1.text_input("Nombre del Evento")
             
-            # Selector de Piletas
             opciones_piletas = df_piletas['codpileta'].tolist() if not df_piletas.empty else []
             def format_pileta(cod):
                 row = df_piletas[df_piletas['codpileta']==cod].iloc[0]
@@ -245,9 +270,8 @@ if rol in ["M", "P"]:
             fecha_lim_in = c5.date_input("Fecha Límite Inscripción", min_value=datetime.today(), format="DD/MM/YYYY")
             costo_in = c6.number_input("Costo Inscripción ($)", min_value=0, step=1000)
             
-            # --- PRESELECCIÓN DE PRUEBAS ---
             st.markdown("##### Definir Programa de Pruebas")
-            pruebas_hab_in = st.multiselect("Seleccione las pruebas que se nadarán en este torneo:", LISTA_PRUEBAS, default=LISTA_PRUEBAS)
+            pruebas_hab_in = st.multiselect("Seleccione las pruebas habilitadas:", LISTA_PRUEBAS, default=LISTA_PRUEBAS)
             
             desc_in = st.text_area("Descripción (Reglamento, info de pago, etc.)")
             
@@ -278,33 +302,24 @@ else:
     for idx, row in df_view.iterrows():
         comp_id = row['id_competencia']
         
-        # Datos Pileta
         datos_pil = df_piletas[df_piletas['codpileta'] == row['cod_pileta']]
         if not datos_pil.empty:
             nom_pil = f"{datos_pil.iloc[0]['club']} ({datos_pil.iloc[0]['medida']})"
             ubic_pil = datos_pil.iloc[0]['ubicacion']
         else:
-            nom_pil = row['cod_pileta']
-            ubic_pil = "-"
+            nom_pil = row['cod_pileta']; ubic_pil = "-"
 
-        # Fechas
         f_limite = pd.to_datetime(row['fecha_limite']).date()
         dias_para_torneo = (row['fecha_dt'] - hoy).days
         dias_para_cierre = (f_limite - hoy).days
         
-        # Badge Estado
         inscripcion_abierta = True
         if dias_para_torneo < 0:
-            badge = "🔴 FINALIZADO"
-            badge_bg = "#333"
-            inscripcion_abierta = False
+            badge = "🔴 FINALIZADO"; badge_bg = "#333"; inscripcion_abierta = False
         elif dias_para_cierre < 0:
-            badge = "🔒 CERRADA"
-            badge_bg = "#E30613"
-            inscripcion_abierta = False
+            badge = "🔒 CERRADA"; badge_bg = "#E30613"; inscripcion_abierta = False
         else:
-            badge = f"🟢 ABIERTA ({dias_para_cierre} días)"
-            badge_bg = "#2E7D32"
+            badge = f"🟢 ABIERTA ({dias_para_cierre} días)"; badge_bg = "#2E7D32"
 
         # --- TARJETA VISUAL ---
         with st.container():
@@ -331,6 +346,27 @@ else:
             </div>
             """, unsafe_allow_html=True)
 
+            # --- LISTADO PÚBLICO DE INSCRIPTOS (NUEVO REQUERIMIENTO) ---
+            with st.expander("📋 Ver Lista de Inscriptos"):
+                filtro_ins = df_inscripciones[df_inscripciones['id_competencia'] == comp_id]
+                
+                if filtro_ins.empty:
+                    st.caption("Aún no hay nadadores inscriptos.")
+                else:
+                    # Cruzar datos con Nadadores
+                    data_full = filtro_ins.merge(df_nadadores, on="codnadador", how="left")
+                    
+                    # Calcular categorías y armar datos visuales
+                    data_full['AnioNac'] = data_full['fechanac'].dt.year
+                    data_full['Categoria'] = data_full['AnioNac'].apply(calcular_categoria_master)
+                    data_full['Nadador'] = data_full['apellido'] + " " + data_full['nombre']
+                    data_full['Genero'] = data_full['codgenero']
+                    
+                    # Seleccionar columnas limpias
+                    df_display = data_full[['Nadador', 'Genero', 'Categoria', 'pruebas']].rename(columns={'pruebas': 'Pruebas Inscriptas'})
+                    
+                    st.dataframe(df_display, hide_index=True, use_container_width=True)
+
             # --- LÓGICA USUARIO (INSCRIPCIÓN) ---
             inscripcion_user = df_inscripciones[
                 (df_inscripciones['id_competencia'] == comp_id) & 
@@ -346,7 +382,7 @@ else:
                 opciones_usuario = [p.strip() for p in str(pruebas_disponibles_str).split(",")]
 
             if permiso_editar:
-                exp_label = "✅ Gestionar Inscripción" if esta_inscripto else "📝 Inscribirse"
+                exp_label = "✅ Gestionar mi Inscripción" if esta_inscripto else "📝 Inscribirme"
                 with st.expander(exp_label):
                     pruebas_sel_usuario = []
                     if esta_inscripto:
@@ -354,10 +390,10 @@ else:
                         if pd.notna(raw_p): pruebas_sel_usuario = [p.strip() for p in raw_p.split(",")]
 
                     with st.form(f"ins_{comp_id}"):
-                        st.caption("Selecciona las pruebas en las que vas a participar:")
+                        st.write("**Selecciona las pruebas en las que vas a participar:**")
                         
+                        # SOLO MULTISELECT DE OPCIONES HABILITADAS (SIN CAMPO "OTROS")
                         sel = st.multiselect("Pruebas Habilitadas", opciones_usuario, default=[p for p in pruebas_sel_usuario if p in opciones_usuario])
-                        otro = st.text_input("Otras Pruebas (Solo si autoriza el entrenador)", value=", ".join([p for p in pruebas_sel_usuario if p not in opciones_usuario]))
                         
                         c_s, c_d = st.columns([3, 1])
                         with c_s: submitted = st.form_submit_button("💾 Confirmar Inscripción")
@@ -366,12 +402,9 @@ else:
                             if esta_inscripto: eliminar = st.form_submit_button("🗑️ Baja", type="secondary")
                         
                         if submitted:
-                            final = sel.copy()
-                            if otro: final.extend([x.strip() for x in otro.split(",") if x.strip()])
-                            
-                            if not final: st.error("Selecciona al menos una prueba.")
+                            if not sel: st.error("Selecciona al menos una prueba.")
                             else:
-                                ok, m = gestionar_inscripcion(comp_id, mi_id, final)
+                                ok, m = gestionar_inscripcion(comp_id, mi_id, sel)
                                 if ok: st.success(m); time.sleep(1); st.rerun()
                         
                         if eliminar:
@@ -379,43 +412,33 @@ else:
                             if ok: st.warning(m); time.sleep(1); st.rerun()
             else:
                 if esta_inscripto:
-                    st.success(f"✅ Inscripto en: {inscripcion_user.iloc[0]['pruebas']}")
+                    st.success(f"✅ Tu inscripción: {inscripcion_user.iloc[0]['pruebas']}")
 
-            # --- LÓGICA ADMIN (PLANILLA Y EDICIÓN) ---
+            # --- LÓGICA ADMIN (EDICIÓN Y BAJAS) ---
             if rol in ["M", "P"]:
                 with st.expander(f"🛡️ Panel Entrenador ({row['nombre_evento']})"):
-                    t1, t2 = st.tabs(["📋 Inscriptos", "⚙️ Editar Evento"])
+                    t1, t2 = st.tabs(["❌ Gestión Bajas", "⚙️ Editar Evento"])
                     
-                    # --- PESTAÑA 1: LISTA PROLIJA DE INSCRIPTOS ---
                     with t1:
-                        filtro_ins = df_inscripciones[df_inscripciones['id_competencia'] == comp_id]
+                        # Reutilizamos filtro_ins
                         if filtro_ins.empty:
-                            st.caption("Sin inscriptos.")
+                            st.caption("Nada para gestionar.")
                         else:
-                            data_full = filtro_ins.merge(df_nadadores, on="codnadador", how="left")
-                            
-                            # Cabecera de la lista
-                            h1, h2, h3 = st.columns([3, 4, 1])
-                            h1.markdown("**Nadador**")
-                            h2.markdown("**Pruebas**")
-                            h3.markdown("**Baja**")
-                            st.divider()
+                            # Re-creamos data_full si no se creó arriba (aunque ya debería estar)
+                            if 'data_full' not in locals():
+                                data_full = filtro_ins.merge(df_nadadores, on="codnadador", how="left")
+                                data_full['Nadador'] = data_full['apellido'] + " " + data_full['nombre']
 
-                            # Filas dinámicas
+                            # LISTA CON BOTONES X (SOLICITUD ANTERIOR MANTENIDA)
                             for idx_nad, r_nad in data_full.iterrows():
                                 n_col1, n_col2, n_col3 = st.columns([3, 4, 1])
-                                with n_col1:
-                                    st.write(f"{r_nad['apellido']}, {r_nad['nombre']}")
-                                with n_col2:
-                                    st.caption(r_nad['pruebas'])
+                                with n_col1: st.write(f"{r_nad['Nadador']}")
+                                with n_col2: st.caption(r_nad['pruebas'])
                                 with n_col3:
-                                    # Botón "X" limpio alineado
                                     if st.button("❌", key=f"del_{comp_id}_{r_nad['codnadador']}", help="Eliminar inscripción"):
-                                        eliminar_inscripcion(comp_id, r_nad['codnadador'])
-                                        st.rerun()
-                                st.markdown("<hr style='margin: 5px 0; border-color: #333;'>", unsafe_allow_html=True)
+                                        eliminar_inscripcion(comp_id, r_nad['codnadador']); st.rerun()
+                                st.markdown("<hr style='margin: 5px 0; border-color: #444;'>", unsafe_allow_html=True)
 
-                    # --- PESTAÑA 2: EDITAR EVENTO ---
                     with t2:
                         pruebas_actuales_db = row.get('pruebas_habilitadas', "")
                         lista_pre = [p.strip() for p in str(pruebas_actuales_db).split(",")] if pd.notna(pruebas_actuales_db) and str(pruebas_actuales_db).strip() != "" else LISTA_PRUEBAS
