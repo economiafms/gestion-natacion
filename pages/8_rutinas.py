@@ -3,7 +3,7 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime, date, timedelta
 import time
-import random  # Importamos random para variar el tiempo de espera
+import random
 
 # --- 1. CONFIGURACIÓN ---
 st.set_page_config(page_title="Rutinas", layout="centered")
@@ -309,35 +309,11 @@ def render_historial_compacto(df_rut, df_seg, anio, mes, id_usuario_objetivo):
 
     porcentaje = int((completadas / total_rutinas) * 100) if total_rutinas > 0 else 0
     
-    # --- CAMBIO: DISEÑO HORIZONTAL FORZADO (HTML/CSS) ---
-    st.markdown(f"""
-    <div style="
-        display: flex; 
-        flex-direction: row; 
-        justify-content: space-between; 
-        align-items: center; 
-        background-color: #262730; 
-        padding: 15px; 
-        border-radius: 10px; 
-        margin-bottom: 20px;
-        border: 1px solid #444;
-    ">
-        <div style="text-align: center; flex: 1;">
-            <div style="font-size: 14px; color: #aaa; margin-bottom: 5px;">Total</div>
-            <div style="font-size: 18px; font-weight: bold; color: #fff;">{total_rutinas}</div>
-        </div>
-        <div style="height: 30px; border-left: 1px solid #555;"></div>
-        <div style="text-align: center; flex: 1;">
-            <div style="font-size: 14px; color: #aaa; margin-bottom: 5px;">Completadas</div>
-            <div style="font-size: 18px; font-weight: bold; color: #4CAF50;">{completadas}</div>
-        </div>
-        <div style="height: 30px; border-left: 1px solid #555;"></div>
-        <div style="text-align: center; flex: 1;">
-            <div style="font-size: 14px; color: #aaa; margin-bottom: 5px;">Asistencia</div>
-            <div style="font-size: 18px; font-weight: bold; color: #fff;">{porcentaje}%</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    # --- VOLVEMOS AL DISEÑO NATIVO DE STREAMLIT ---
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Total Sesiones", total_rutinas)
+    c2.metric("Completadas", completadas)
+    c3.metric("Asistencia", f"{porcentaje}%")
 
     st.progress(porcentaje / 100)
     
