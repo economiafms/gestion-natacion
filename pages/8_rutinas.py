@@ -6,7 +6,7 @@ import time
 import random
 
 # --- 1. CONFIGURACIÓN ---
-st.set_page_config(page_title="Rutinas", layout="centered")
+st.set_page_config(page_title="Sesiones de Entrenamiento", layout="centered")
 
 # --- 2. SEGURIDAD ---
 if "role" not in st.session_state or not st.session_state.role:
@@ -63,6 +63,7 @@ def cargar_datos_rutinas_view():
         except:
             df_nad = pd.DataFrame(columns=["codnadador", "nombre", "apellido"])
             
+        # Normalización
         if not df_rut.empty:
             df_rut['anio_rutina'] = pd.to_numeric(df_rut['anio_rutina'], errors='coerce').fillna(0).astype(int)
             df_rut['mes_rutina'] = pd.to_numeric(df_rut['mes_rutina'], errors='coerce').fillna(0).astype(int)
@@ -141,43 +142,37 @@ def borrar_seguimiento(id_rutina, id_nadador):
         st.error(f"Error al borrar: {error}")
         return False
 
-# --- ELIMINAR RUTINA (CON VALIDACIÓN DE SECUENCIA) ---
-def eliminar_rutina_admin(id_rutina):
+# --- ELIMINAR SESIÓN (CON VALIDACIÓN DE SECUENCIA) ---
+def eliminar_sesion_admin(id_rutina):
     df_rut = leer_dataset_fresco("Rutinas")
     if df_rut is None: return "❌ Error de conexión."
     
-    # 1. Buscar la rutina a eliminar
     rutina_a_borrar = df_rut[df_rut['id_rutina'] == id_rutina]
     
     if rutina_a_borrar.empty:
-        return "⚠️ La rutina no existe, no se puede eliminar."
+        return "⚠️ La sesión no existe, no se puede eliminar."
     
-    # 2. Obtener datos de esa rutina (Año, Mes, Sesión)
     r_anio = rutina_a_borrar.iloc[0]['anio_rutina']
     r_mes = rutina_a_borrar.iloc[0]['mes_rutina']
     r_sesion = rutina_a_borrar.iloc[0]['nro_sesion']
     
-    # 3. Verificar si hay sesiones MAYORES en ese mismo mes
-    # Filtramos todas las rutinas de ese mes/año
     rutinas_mes = df_rut[(df_rut['anio_rutina'] == r_anio) & (df_rut['mes_rutina'] == r_mes)]
     max_sesion = rutinas_mes['nro_sesion'].max()
     
-    # 4. Validar
     if r_sesion < max_sesion:
-        return f"🚫 No se puede eliminar la Sesión {r_sesion} porque existe la Sesión {max_sesion}. Solo se permite eliminar la última sesión para evitar huecos. Si deseas cambiar el contenido, utiliza el botón 'Guardar' para sobrescribirla."
+        return f"🚫 No se puede eliminar la Sesión {r_sesion} porque existe la Sesión {max_sesion}. Solo se permite eliminar la última sesión del mes."
 
-    # 5. Si es la última, procedemos a borrar
     df_rut_final = df_rut[df_rut['id_rutina'] != id_rutina]
     
     exito, error = actualizar_con_retry("Rutinas", df_rut_final)
     
     if exito:
         st.cache_data.clear()
-        return "🗑️ Rutina eliminada correctamente."
+        return "🗑️ Sesión eliminada correctamente."
     else:
         return f"❌ Error al eliminar: {error}"
 
-def guardar_rutina_admin(anio, mes, sesion, texto):
+def guardar_sesion_admin(anio, mes, sesion, texto):
     df_rut = leer_dataset_fresco("Rutinas")
     if df_rut is None: return "❌ Error CRÍTICO de conexión."
 
@@ -199,13 +194,13 @@ def guardar_rutina_admin(anio, mes, sesion, texto):
     
     if df_rut[mask].empty:
         df_rut = pd.concat([df_rut, pd.DataFrame([nueva_fila])], ignore_index=True)
-        msg = "✅ Rutina creada correctamente."
+        msg = "✅ Sesión creada correctamente."
     else:
         df_rut.loc[mask, "texto_rutina"] = texto
         df_rut.loc[mask, "anio_rutina"] = int(anio)
         df_rut.loc[mask, "mes_rutina"] = int(mes)
         df_rut.loc[mask, "nro_sesion"] = int(sesion)
-        msg = "✅ Rutina actualizada correctamente."
+        msg = "✅ Sesión actualizada correctamente."
         
     exito, error = actualizar_con_retry("Rutinas", df_rut)
     
@@ -248,7 +243,7 @@ def render_tarjeta_individual(row, df_seg, key_suffix):
             with c_act:
                 st.write("") 
                 if st.button("❌", key=f"un_{r_id}_{key_suffix}", help="Desmarcar"):
-                    with st.spinner("Desmarcando..."):
+                    with st.spinner("Procesando..."):
                         borrar_seguimiento(r_id, mi_id)
                     st.rerun()
         else:
@@ -273,7 +268,7 @@ def render_feed_activo(df_rut, df_seg, anio_ver, mes_ver, key_suffix=""):
     rutinas_filtradas.sort_values(by='nro_sesion', ascending=True, inplace=True)
 
     if rutinas_filtradas.empty:
-        st.info(f"No hay rutinas cargadas para {obtener_nombre_mes(mes_ver)} {anio_ver}.")
+        st.info(f"No hay sesiones cargadas para {obtener_nombre_mes(mes_ver)} {anio_ver}.")
         return
 
     l_pendientes = []
@@ -309,7 +304,7 @@ def render_historial_compacto(df_rut, df_seg, anio, mes, id_usuario_objetivo):
     ].sort_values('nro_sesion')
 
     if rutinas_mes.empty:
-        st.info("No hay rutinas definidas para este mes.")
+        st.info("No hay sesiones definidas para este mes.")
         return
 
     datos_tabla = []
@@ -373,8 +368,7 @@ if rol in ["M", "P"]:
         st.session_state.trigger_calculo = False
 
 # --- 7. INTERFAZ ---
-st.title("📝 Rutinas de Entrenamiento")
-# --- NUEVO: IDENTIFICACIÓN DEL USUARIO ---
+st.title("📝 Sesiones de Entrenamiento")
 st.markdown(f"👤 **Conectado como:** {mi_nombre} (ID: {mi_id})")
 
 if df_rutinas is None:
@@ -388,8 +382,8 @@ st.write("---")
 # ==========================
 if rol in ["M", "P"]:
     
-    with st.expander("⚙️ Gestión de Rutinas (Crear/Editar)", expanded=False):
-        st.markdown("##### Editor de Rutinas")
+    with st.expander("⚙️ Gestión de Sesiones (Crear/Editar)", expanded=False):
+        st.markdown("##### Editor de Sesiones")
         c1, c2, c3 = st.columns([1, 1, 1])
         
         anio_actual = datetime.now().year
@@ -406,24 +400,33 @@ if rol in ["M", "P"]:
             
         id_busqueda = f"{st.session_state.g_anio}-{st.session_state.g_mes:02d}-S{st.session_state.admin_sesion:02d}"
         row_existente = df_rutinas[df_rutinas['id_rutina'] == id_busqueda]
-        texto_previo = row_existente.iloc[0]['texto_rutina'] if not row_existente.empty else ""
         
-        st.caption(f"ID: {id_busqueda} | {'✏️ Editando' if not row_existente.empty else '✨ Nueva'}")
+        # --- LÓGICA DE BOTONES CONDICIONALES ---
+        es_edicion = not row_existente.empty
+        texto_previo = row_existente.iloc[0]['texto_rutina'] if es_edicion else ""
+        
+        estado_txt = "✏️ Editando Existente" if es_edicion else "✨ Nueva Sesión"
+        st.caption(f"ID: {id_busqueda} | {estado_txt}")
         
         with st.form("form_rutina"):
             f_texto = st.text_area("Contenido", value=texto_previo, height=200, key=f"txt_{id_busqueda}")
             
-            c_save, c_del = st.columns([1, 1])
-            with c_save:
-                submitted = st.form_submit_button("💾 Guardar Rutina")
-            with c_del:
-                delete_btn = st.form_submit_button("🗑️ Eliminar Rutina")
+            # Layout condicional de botones
+            if es_edicion:
+                c_del, c_save = st.columns([1, 2])
+                with c_del:
+                    delete_btn = st.form_submit_button("🗑️ Eliminar Sesión", type="secondary")
+                with c_save:
+                    submitted = st.form_submit_button("💾 Actualizar Sesión", type="primary")
+            else:
+                submitted = st.form_submit_button("💾 Crear Sesión", type="primary")
+                delete_btn = False
 
             if submitted:
                 if f_texto.strip() == "":
                     st.error("Texto vacío.")
                 else:
-                    msg = guardar_rutina_admin(st.session_state.g_anio, st.session_state.g_mes, st.session_state.admin_sesion, f_texto)
+                    msg = guardar_sesion_admin(st.session_state.g_anio, st.session_state.g_mes, st.session_state.admin_sesion, f_texto)
                     if "Error" in msg:
                         st.error(msg)
                     else:
@@ -433,7 +436,7 @@ if rol in ["M", "P"]:
                         st.rerun()
             
             if delete_btn:
-                msg = eliminar_rutina_admin(id_busqueda)
+                msg = eliminar_sesion_admin(id_busqueda)
                 if "Error" in msg or "No se puede" in msg:
                     st.error(msg)
                 else:
@@ -444,7 +447,7 @@ if rol in ["M", "P"]:
 
     st.divider()
 
-    tab_explorar, tab_seguimiento = st.tabs(["📖 Explorar Rutinas (Textos)", "📊 Seguimiento Alumnos"])
+    tab_explorar, tab_seguimiento = st.tabs(["📖 Explorar Sesiones (Textos)", "📊 Seguimiento Alumnos"])
     
     with tab_explorar:
         col_v1, col_v2 = st.columns(2)
@@ -471,7 +474,7 @@ if rol in ["M", "P"]:
         df_nad_activos = df_nadadores[df_nadadores['codnadador'].isin(ids_activos)].copy()
         
         if df_nad_activos.empty:
-            st.warning("⚠️ Aún no hay alumnos con rutinas completadas.")
+            st.warning("⚠️ Aún no hay alumnos con sesiones completadas.")
         else:
             df_nad_activos['NombreCompleto'] = df_nad_activos['apellido'] + ", " + df_nad_activos['nombre']
             lista_nads = df_nad_activos[['codnadador', 'NombreCompleto']].sort_values('NombreCompleto')
@@ -507,7 +510,7 @@ else:
     
     with tab_curso:
         hoy = datetime.now()
-        st.markdown(f"### Rutinas de {obtener_nombre_mes(hoy.month)} {hoy.year}")
+        st.markdown(f"### Sesiones de {obtener_nombre_mes(hoy.month)} {hoy.year}")
         render_feed_activo(df_rutinas, df_seguimiento, hoy.year, hoy.month, key_suffix="nad_curso")
         
     with tab_hist:
