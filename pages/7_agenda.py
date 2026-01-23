@@ -40,6 +40,7 @@ LISTA_PRUEBAS = [
 # ==========================================
 
 def actualizar_con_retry(worksheet, data, max_retries=5):
+    """Manejo robusto de la API con reintentos."""
     for i in range(max_retries):
         try:
             conn.update(worksheet=worksheet, data=data)
@@ -53,6 +54,7 @@ def actualizar_con_retry(worksheet, data, max_retries=5):
     return False, "Tiempo de espera agotado."
 
 def calcular_categoria_master(anio_nac):
+    """Calcula la categoría Master completa."""
     if pd.isna(anio_nac) or anio_nac == "": return "-"
     try:
         edad = datetime.now().year - int(anio_nac)
@@ -74,6 +76,7 @@ def calcular_categoria_master(anio_nac):
 
 @st.cache_data(ttl="5s")
 def cargar_datos_agenda():
+    """Carga todas las tablas necesarias."""
     try:
         try:
             df_comp = conn.read(worksheet="Competencias").copy()
@@ -279,33 +282,36 @@ else:
                 <div style="font-size:13px; color:#ccc;">{row['descripcion'] or ''}</div>
             </div>""", unsafe_allow_html=True)
 
-            # === A. LISTA PÚBLICA (MEJORADA: Chips + Color Específico) ===
+            # === A. LISTA PÚBLICA (Chips + Etiquetas Categoría/Género) ===
             with st.expander("📋 Ver Lista de Inscriptos"):
                 if d_full.empty:
                     st.caption("Aún no hay nadadores inscriptos.")
                 else:
                     for _, r_pub in d_full.iterrows():
-                        # Generar Chips para las pruebas
-                        p_list = [p.strip() for p in str(r_pub['pruebas']).split(",")]
-                        chips = ""
-                        for p in p_list:
-                            chips += f"<span style='background-color:#444; color:#eee; padding:2px 8px; border-radius:12px; font-size:11px; margin-right:4px; display:inline-block; margin-top:4px;'>{p}</span>"
+                        nadador_nom = f"{r_pub['apellido']}, {r_pub['nombre']}"
+                        # Unificación de color y prefijo "Gen."
+                        cat_gen_text = f"{r_pub['Cat']} • Gen. {r_pub['codgenero']}"
                         
-                        # Determinar color de Categoría (Master C Rojo, resto Azul)
-                        cat_val = r_pub['Cat']
-                        color_cat = "#FF8A80" if cat_val == "Master C" else "#64B5F6"
+                        # Chips para las pruebas
+                        p_list = [p.strip() for p in str(r_pub['pruebas']).split(",")]
+                        chips_html = ""
+                        for p in p_list:
+                            chips_html += f"<span style='background-color:#444; color:#eee; padding:2px 8px; border-radius:12px; font-size:11px; margin-right:4px; display:inline-block; margin-top:4px;'>{p}</span>"
 
-                        # Tarjeta Nativa
-                        with st.container(border=True):
-                            c1, c2 = st.columns([3, 1])
-                            with c1:
-                                st.write(f"**{r_pub['Nombre']}**")
-                                # Renderizamos los chips
-                                st.markdown(chips, unsafe_allow_html=True)
-                            with c2:
-                                # Categoría con color dinámico
-                                st.markdown(f"<h4 style='margin:0; padding:0; color:{color_cat};'>{cat_val}</h4>", unsafe_allow_html=True)
-                                st.markdown(f"##### {r_pub['codgenero']}")
+                        st.markdown(f"""
+                        <div style="
+                            background-color: #383940; 
+                            padding: 12px; 
+                            border-radius: 8px; 
+                            margin-bottom: 8px; 
+                            border-left: 4px solid #E30613;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <div style="font-weight: bold; color: white; font-size: 16px;">{nadador_nom}</div>
+                                <div style="font-size: 13px; font-weight: bold; background-color: #555; padding: 4px 10px; border-radius: 4px; color: #fff;">{cat_gen_text}</div>
+                            </div>
+                            <div>{chips_html}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
 
             # === B. INSCRIPCIÓN USUARIO ===
             ins_user = df_inscripciones[(df_inscripciones['id_competencia'] == comp_id) & (df_inscripciones['codnadador'] == mi_id)]
@@ -339,7 +345,7 @@ else:
             elif esta:
                 st.success(f"✅ Inscripto en: {ins_user.iloc[0]['pruebas']}")
 
-            # === C. PANEL ENTRENADOR (CONTAINER SCROLL + TACHO) ===
+            # === C. PANEL ENTRENADOR (Mejorado + Responsive) ===
             if rol in ["M", "P"]:
                 with st.expander(f"🛡️ Panel Entrenador ({row['nombre_evento']})"):
                     t1, t2 = st.tabs(["❌ Gestión Bajas", "⚙️ Editar Evento"])
@@ -348,32 +354,28 @@ else:
                         if d_full.empty:
                             st.caption("Nada para gestionar.")
                         else:
-                            # MARCO CONTENEDOR CON ALTURA FIJA (SCROLL)
-                            with st.container(height=400, border=True):
-                                # CABECERA
-                                h1, h2 = st.columns([0.85, 0.15])
-                                h1.markdown("**Nadador**")
-                                h2.markdown("🗑️")
-                                st.divider()
-
-                                # LISTA ROW-BY-ROW
-                                for _, r_adm in d_full.iterrows():
-                                    c_info, c_act = st.columns([0.85, 0.15])
-                                    with c_info:
-                                        # Info completa
-                                        st.write(f"**{r_adm['Nombre']}**")
-                                        # Chips visuales también para el admin
-                                        p_list_adm = [p.strip() for p in str(r_adm['pruebas']).split(",")]
-                                        chips_adm = ""
-                                        for p in p_list_adm:
-                                            chips_adm += f"<span style='background-color:#333; border:1px solid #555; color:#aaa; padding:1px 6px; border-radius:10px; font-size:10px; margin-right:3px; display:inline-block;'>{p}</span>"
-                                        
-                                        st.markdown(f"{r_adm['Cat']} | {r_adm['codgenero']} <br> {chips_adm}", unsafe_allow_html=True)
-                                    with c_act:
-                                        if st.button("🗑️", key=f"d_{comp_id}_{r_adm['codnadador']}"):
-                                            eliminar_inscripcion(comp_id, r_adm['codnadador'])
-                                            st.rerun()
-                                    st.divider()
+                            st.markdown("##### 🏊‍♂️ Nómina de Nadadores")
+                            st.dataframe(
+                                d_full[['Nombre', 'codgenero', 'Cat', 'pruebas']].rename(columns={'codgenero':'Gen', 'pruebas':'Pruebas Inscriptas'}),
+                                hide_index=True,
+                                use_container_width=True,
+                                column_config={
+                                    "Pruebas Inscriptas": st.column_config.TextColumn("Pruebas Inscriptas", width="large")
+                                }
+                            )
+                            
+                            st.divider()
+                            st.markdown("##### ⚠️ Eliminar Inscripción")
+                            with st.container(border=True):
+                                u_del = st.selectbox(
+                                    "Seleccionar nadador para dar de baja:", 
+                                    d_full['codnadador'].unique(), 
+                                    format_func=lambda x: d_full[d_full['codnadador']==x]['Nombre'].values[0],
+                                    key=f"s_del_{comp_id}"
+                                )
+                                if st.button("Confirmar Baja", key=f"b_del_{comp_id}", type="primary", use_container_width=True):
+                                    eliminar_inscripcion(comp_id, u_del)
+                                    st.rerun()
 
                     with t2:
                         l_pre = [x.strip() for x in str(row.get('pruebas_habilitadas', "")).split(",")] if str(row.get('pruebas_habilitadas', "")).strip() else LISTA_PRUEBAS
