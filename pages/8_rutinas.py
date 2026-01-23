@@ -152,7 +152,8 @@ if rol in ["M", "P"]:
             c1, c2, c3 = st.columns([1, 1, 1])
             with c1: f_anio = st.number_input("Año", value=sel_anio, min_value=2020, max_value=2030)
             with c2: f_mes = st.selectbox("Mes", meses_indices, format_func=lambda x: mapa_meses[x], index=meses_indices.index(sel_mes))
-            with c3: f_sesion = st.number_input("Nro Sesión", min_value=1, max_value=31, value=1)
+            # CAMBIO: Agregado key 'ui_sesion' para controlarlo programáticamente
+            with c3: f_sesion = st.number_input("Nro Sesión", min_value=1, max_value=31, value=1, key="ui_sesion")
             
             # Buscar si ya existe texto para precargar
             id_busqueda = f"{f_anio}-{f_mes:02d}-S{f_sesion:02d}"
@@ -162,7 +163,8 @@ if rol in ["M", "P"]:
                 texto_previo = row_existente.iloc[0]['texto_rutina']
                 st.info(f"Editando rutina existente: {id_busqueda}")
             
-            f_texto = st.text_area("Detalle del Entrenamiento", value=texto_previo, height=200)
+            # CAMBIO: Key dinámica basada en sesión para forzar limpieza/recarga
+            f_texto = st.text_area("Detalle del Entrenamiento", value=texto_previo, height=200, key=f"txt_rut_{f_anio}_{f_mes}_{f_sesion}")
             
             btn_guardar = st.form_submit_button("Guardar Rutina")
             
@@ -172,6 +174,11 @@ if rol in ["M", "P"]:
                 else:
                     res = guardar_rutina_admin(f_anio, f_mes, f_sesion, f_texto)
                     st.success(res)
+                    
+                    # CAMBIO: Auto-incrementar sesión si es menor a 31 para agilizar carga
+                    if st.session_state.ui_sesion < 31:
+                        st.session_state.ui_sesion += 1
+                        
                     time.sleep(1)
                     st.rerun()
 
