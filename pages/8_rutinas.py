@@ -123,7 +123,7 @@ def activar_calculo_auto():
 # --- 5. LOGICA PREVIA AL RENDERIZADO (FIX PARA EL ERROR) ---
 df_rutinas, df_seguimiento = cargar_datos_rutinas()
 
-# Inicializar valores de gestión si no existen
+# Inicializar valores de gestión si no existen (Valores por defecto)
 if "g_anio" not in st.session_state: st.session_state.g_anio = datetime.now().year
 if "g_mes" not in st.session_state: st.session_state.g_mes = datetime.now().month
 
@@ -132,7 +132,6 @@ if "g_mes" not in st.session_state: st.session_state.g_mes = datetime.now().mont
 if st.session_state.get("trigger_calculo", False) or "admin_sesion" not in st.session_state:
     if df_rutinas is not None:
         prox = calcular_proxima_sesion(df_rutinas, st.session_state.g_anio, st.session_state.g_mes)
-        # Limitamos a 31
         st.session_state.admin_sesion = min(prox, 31)
     else:
         st.session_state.admin_sesion = 1
@@ -157,18 +156,20 @@ if rol in ["M", "P"]:
         # 1. CONTROLES DE SELECCIÓN (Con callbacks para auto-actualizar sesión)
         c1, c2, c3 = st.columns([1, 1, 1])
         
+        # Datos para los selectores
         anio_actual = datetime.now().year
         anios_gest = sorted(list(set(df_rutinas['anio_rutina'].unique().tolist() + [anio_actual])), reverse=True)
-        mes_actual = datetime.now().month
         meses_indices = list(range(1, 13))
         mapa_meses = {i: obtener_nombre_mes(i) for i in meses_indices}
 
         with c1: 
-            st.number_input("Año Gestión", value=anio_actual, min_value=2020, max_value=2030, key="g_anio", on_change=activar_calculo_auto)
+            # FIX APLICADO: Eliminado argumento 'value=' porque ya existe 'key' en session_state
+            st.number_input("Año Gestión", min_value=2020, max_value=2030, key="g_anio", on_change=activar_calculo_auto)
         with c2: 
-            st.selectbox("Mes Gestión", meses_indices, format_func=lambda x: mapa_meses[x], index=meses_indices.index(mes_actual), key="g_mes", on_change=activar_calculo_auto)
+            # FIX APLICADO: Eliminado argumento 'index=' porque ya existe 'key' en session_state
+            st.selectbox("Mes Gestión", meses_indices, format_func=lambda x: mapa_meses[x], key="g_mes", on_change=activar_calculo_auto)
         with c3: 
-            # El input está linkeado a 'admin_sesion', que ya fue actualizado arriba si era necesario
+            # FIX APLICADO: Eliminado 'value='
             st.number_input("Nro Sesión", min_value=1, max_value=31, key="admin_sesion")
             
         # Valores actuales para buscar
@@ -188,9 +189,23 @@ if rol in ["M", "P"]:
             
         st.caption(f"{msg_estado}: {id_busqueda}")
 
-        # 3. FORMULARIO
+        # 3. HERRAMIENTAS DE FORMATO (RICH TEXT HELPER)
+        with st.expander("🛠️ Herramientas de Formato (Negrita, Listas, etc.)"):
+            st.markdown("""
+            <small>Utilice estos códigos en el texto para dar formato:</small>
+            
+            | Estilo | Código a escribir | Resultado visual |
+            | :--- | :--- | :--- |
+            | **Negrita** | `**Texto**` | **Texto** |
+            | *Cursiva* | `*Texto*` | *Texto* |
+            | Título | `### Título` | <h3>Título</h3> |
+            | Lista | `- Item` | <ul><li>Item</li></ul> |
+            | Separador | `---` | Línea horizontal |
+            """, unsafe_allow_html=True)
+
+        # 4. FORMULARIO
         with st.form("form_rutina"):
-            f_texto = st.text_area("Detalle del Entrenamiento", value=texto_previo, height=200, key=f"txt_{id_busqueda}")
+            f_texto = st.text_area("Detalle del Entrenamiento", value=texto_previo, height=200, key=f"txt_{id_busqueda}", placeholder="Escriba aquí la rutina...")
             
             btn_guardar = st.form_submit_button("Guardar Rutina")
             
@@ -268,10 +283,14 @@ else:
             with c_header:
                 if esta_realizada:
                     st.markdown(f"#### ✅ Sesión {r_sesion} <span style='font-size:14px; color:#888'>({fecha_realizacion})</span>", unsafe_allow_html=True)
-                    st.markdown(f"<div style='text-decoration: line-through; color: #aaa;'>{r_texto}</div>", unsafe_allow_html=True)
+                    # Renderizamos el texto como Markdown pero tachado visualmente si está hecha
+                    st.markdown(f"<div style='text-decoration: line-through; color: #aaa;'>", unsafe_allow_html=True)
+                    st.markdown(r_texto)
+                    st.markdown("</div>", unsafe_allow_html=True)
                 else:
                     st.markdown(f"#### ⭕ Sesión {r_sesion}")
-                    st.write(r_texto)
+                    # Renderizado Markdown normal para ver negritas, listas, etc.
+                    st.markdown(r_texto)
             
             with c_action:
                 st.write("") 
