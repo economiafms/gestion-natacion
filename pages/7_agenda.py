@@ -280,7 +280,7 @@ else:
                 <div style="font-size:13px; color:#ccc;">{row['descripcion'] or ''}</div>
             </div>""", unsafe_allow_html=True)
 
-            # === A. LISTA PÚBLICA DE INSCRIPTOS (CON CHIPS) ===
+            # === A. LISTA PÚBLICA DE INSCRIPTOS (CON CATEGORIAS GRANDES) ===
             with st.expander("📋 Ver Lista de Inscriptos"):
                 f_ins = df_inscripciones[df_inscripciones['id_competencia'] == comp_id]
                 if f_ins.empty:
@@ -290,27 +290,23 @@ else:
                     d_full['Anio'] = d_full['fechanac'].dt.year
                     d_full['Cat'] = d_full['Anio'].apply(calcular_categoria_master)
                     
-                    # Generación de Tarjetas con Chips (UX Mejorada)
+                    # Generación visual de filas con Chips y Categoría Destacada
                     for _, r_pub in d_full.iterrows():
-                        nadador_nom = f"{r_pub['apellido']}, {r_pub['nombre']}"
-                        cat_full = f"{r_pub['Cat']} ({r_pub['codgenero']})"
+                        nad_nom = f"{r_pub['apellido']}, {r_pub['nombre']}"
+                        cat_gen = f"{r_pub['Cat']} ({r_pub['codgenero']})"
                         
-                        # Crear Chips HTML para cada prueba
+                        # Chips para pruebas
                         pruebas_lista = [p.strip() for p in str(r_pub['pruebas']).split(",")]
                         chips_html = ""
                         for p in pruebas_lista:
-                            chips_html += f"<span style='background-color:#444; padding:2px 6px; border-radius:4px; font-size:11px; margin-right:4px; display:inline-block; margin-bottom:2px; color:#eee;'>{p}</span>"
+                            chips_html += f"<span style='background-color:#444; padding:3px 8px; border-radius:10px; font-size:11px; margin-right:4px; display:inline-block; margin-bottom:3px; color:#eee;'>{p}</span>"
 
+                        # HTML MEJORADO: Categoría más grande y color azul vibrante
                         st.markdown(f"""
-                        <div style="
-                            background-color: #383940; 
-                            padding: 10px 12px; 
-                            border-radius: 6px; 
-                            margin-bottom: 6px; 
-                            border-left: 3px solid #E30613;">
-                            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px;">
-                                <div style="font-weight: bold; color: white; font-size: 14px;">{nadador_nom}</div>
-                                <div style="font-size: 11px; background-color: #555; padding: 1px 5px; border-radius: 3px; color: #ddd;">{cat_full}</div>
+                        <div style="background-color: #383940; padding: 12px; border-radius: 8px; margin-bottom: 8px; border-left: 4px solid #007bff;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                                <span style="font-weight:bold; color:white; font-size:15px;">{nad_nom}</span>
+                                <span style="font-size:13px; background-color:#007bff; color:white; padding:4px 8px; border-radius:6px; font-weight:bold;">{cat_gen}</span>
                             </div>
                             <div>{chips_html}</div>
                         </div>
@@ -328,7 +324,9 @@ else:
                 with st.expander(label):
                     prev = [x.strip() for x in str(ins_user.iloc[0]['pruebas']).split(",")] if esta else []
                     with st.form(f"f_{comp_id}"):
+                        st.write("**Selecciona las pruebas:**")
                         sel = st.multiselect("Pruebas Habilitadas", p_hab, default=[x for x in prev if x in p_hab])
+                        
                         c_ok, c_no = st.columns([3, 1])
                         with c_ok: sub = st.form_submit_button("💾 Guardar")
                         with c_no: 
@@ -336,7 +334,7 @@ else:
                             if esta: delt = st.form_submit_button("🗑️ Baja", type="secondary")
                         
                         if sub:
-                            if not sel: st.error("Selecciona pruebas.")
+                            if not sel: st.error("Selecciona al menos una prueba.")
                             else:
                                 ok, m = gestionar_inscripcion(comp_id, mi_id, sel)
                                 if ok: st.success(m); time.sleep(1); st.rerun()
@@ -346,14 +344,14 @@ else:
             elif esta:
                 st.success(f"✅ Inscripto en: {ins_user.iloc[0]['pruebas']}")
 
-            # === C. PANEL ENTRENADOR (TABLA + SELECTOR) ===
+            # === C. PANEL ENTRENADOR (RESPONSIVE FIX) ===
             if rol in ["M", "P"]:
                 with st.expander(f"🛡️ Panel Entrenador ({row['nombre_evento']})"):
                     t1, t2 = st.tabs(["❌ Gestión Bajas", "⚙️ Editar Evento"])
                     
                     # 1. Gestión Bajas
                     with t1:
-                        if f_ins.empty:
+                        if filtro_ins.empty:
                             st.caption("Nada para gestionar.")
                         else:
                             if 'd_full' not in locals():
@@ -363,7 +361,7 @@ else:
                             
                             d_full['Nombre'] = d_full['apellido'] + ", " + d_full['nombre']
                             
-                            # Tabla limpia configurada
+                            # Tabla limpia
                             st.dataframe(
                                 d_full[['Nombre', 'codgenero', 'Cat', 'pruebas']].rename(columns={'codgenero':'Gen', 'pruebas':'Pruebas Inscriptas'}),
                                 hide_index=True,
@@ -375,18 +373,17 @@ else:
                             
                             st.divider()
                             
-                            # Selector de baja
-                            c_del1, c_del2 = st.columns([3, 1])
-                            with c_del1:
+                            # --- FIX RESPONSIVE: CONTENEDOR DE BORRADO ---
+                            st.markdown("##### 🗑️ Zona de Baja")
+                            with st.container(border=True):
                                 u_del = st.selectbox(
-                                    "Seleccionar nadador para dar de baja:", 
+                                    "Seleccionar nadador:", 
                                     d_full['codnadador'].unique(), 
                                     format_func=lambda x: d_full[d_full['codnadador']==x]['Nombre'].values[0],
                                     key=f"s_del_{comp_id}"
                                 )
-                            with c_del2:
-                                st.write("") 
-                                if st.button("Eliminar", key=f"b_del_{comp_id}", type="primary"):
+                                # Botón full-width para móviles
+                                if st.button("Confirmar Eliminación", key=f"b_del_{comp_id}", type="primary", use_container_width=True):
                                     eliminar_inscripcion(comp_id, u_del)
                                     st.rerun()
 
@@ -409,7 +406,8 @@ else:
                                 guardar_competencia(comp_id, nn, nf, row['hora_inicio'], row['cod_pileta'], nl, nc, nd, nh)
                                 st.rerun()
                             
-                            if st.form_submit_button("⚠️ ELIMINAR EVENTO", type="primary"):
+                            st.markdown("---")
+                            if st.form_submit_button("⚠️ ELIMINAR EVENTO COMPLETO", type="primary"):
                                 eliminar_competencia(comp_id); st.rerun()
             
             st.markdown("</div>", unsafe_allow_html=True)
