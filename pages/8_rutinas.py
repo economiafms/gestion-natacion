@@ -141,16 +141,32 @@ def borrar_seguimiento(id_rutina, id_nadador):
         st.error(f"Error al borrar: {error}")
         return False
 
-# --- NUEVA FUNCIÓN: ELIMINAR RUTINA (ADMIN) ---
+# --- ELIMINAR RUTINA (CON VALIDACIÓN DE SECUENCIA) ---
 def eliminar_rutina_admin(id_rutina):
     df_rut = leer_dataset_fresco("Rutinas")
     if df_rut is None: return "❌ Error de conexión."
     
-    # Verificar si existe
-    if df_rut[df_rut['id_rutina'] == id_rutina].empty:
+    # 1. Buscar la rutina a eliminar
+    rutina_a_borrar = df_rut[df_rut['id_rutina'] == id_rutina]
+    
+    if rutina_a_borrar.empty:
         return "⚠️ La rutina no existe, no se puede eliminar."
-        
-    # Filtrar para eliminar
+    
+    # 2. Obtener datos de esa rutina (Año, Mes, Sesión)
+    r_anio = rutina_a_borrar.iloc[0]['anio_rutina']
+    r_mes = rutina_a_borrar.iloc[0]['mes_rutina']
+    r_sesion = rutina_a_borrar.iloc[0]['nro_sesion']
+    
+    # 3. Verificar si hay sesiones MAYORES en ese mismo mes
+    # Filtramos todas las rutinas de ese mes/año
+    rutinas_mes = df_rut[(df_rut['anio_rutina'] == r_anio) & (df_rut['mes_rutina'] == r_mes)]
+    max_sesion = rutinas_mes['nro_sesion'].max()
+    
+    # 4. Validar
+    if r_sesion < max_sesion:
+        return f"🚫 No se puede eliminar la Sesión {r_sesion} porque existe la Sesión {max_sesion}. Solo se permite eliminar la última sesión para evitar huecos. Si deseas cambiar el contenido, utiliza el botón 'Guardar' para sobrescribirla."
+
+    # 5. Si es la última, procedemos a borrar
     df_rut_final = df_rut[df_rut['id_rutina'] != id_rutina]
     
     exito, error = actualizar_con_retry("Rutinas", df_rut_final)
@@ -285,7 +301,7 @@ def render_feed_activo(df_rut, df_seg, anio_ver, mes_ver, key_suffix=""):
             st.success("¡Excelente! Has completado todas las sesiones del mes. 🏆")
 
 def render_historial_compacto(df_rut, df_seg, anio, mes, id_usuario_objetivo):
-    """Muestra tabla de cumplimiento SIN TEXTO y con diseño horizontal forzado en móvil."""
+    """Muestra tabla de cumplimiento SIN TEXTO."""
     
     rutinas_mes = df_rut[
         (df_rut['anio_rutina'] == anio) & 
@@ -323,61 +339,10 @@ def render_historial_compacto(df_rut, df_seg, anio, mes, id_usuario_objetivo):
 
     porcentaje = int((completadas / total_rutinas) * 100) if total_rutinas > 0 else 0
     
-    # --- CAMBIO: DISEÑO HORIZONTAL CON CSS FLEXBOX ---
-    # Esto fuerza que se vean en fila incluso en pantallas pequeñas
-    st.markdown(f"""
-    <style>
-        .metric-container {{
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background-color: #262730;
-            padding: 15px;
-            border-radius: 10px;
-            margin-bottom: 20px;
-            border: 1px solid #444;
-        }}
-        .metric-box {{
-            flex: 1;
-            text-align: center;
-        }}
-        .metric-label {{
-            font-size: 12px;
-            color: #aaa;
-            margin-bottom: 4px;
-            text-transform: uppercase;
-        }}
-        .metric-value {{
-            font-size: 20px;
-            font-weight: bold;
-            color: white;
-        }}
-        .metric-separator {{
-            width: 1px;
-            height: 30px;
-            background-color: #555;
-            margin: 0 10px;
-        }}
-        .highlight {{ color: #4CAF50; }}
-    </style>
-
-    <div class="metric-container">
-        <div class="metric-box">
-            <div class="metric-label">Total</div>
-            <div class="metric-value">{total_rutinas}</div>
-        </div>
-        <div class="metric-separator"></div>
-        <div class="metric-box">
-            <div class="metric-label">Hechas</div>
-            <div class="metric-value highlight">{completadas}</div>
-        </div>
-        <div class="metric-separator"></div>
-        <div class="metric-box">
-            <div class="metric-label">Asistencia</div>
-            <div class="metric-value">{porcentaje}%</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Total Sesiones", total_rutinas)
+    c2.metric("Completadas", completadas)
+    c3.metric("Asistencia", f"{porcentaje}%")
 
     st.progress(porcentaje / 100)
     
@@ -409,6 +374,8 @@ if rol in ["M", "P"]:
 
 # --- 7. INTERFAZ ---
 st.title("📝 Rutinas de Entrenamiento")
+# --- NUEVO: IDENTIFICACIÓN DEL USUARIO ---
+st.markdown(f"👤 **Conectado como:** {mi_nombre} (ID: {mi_id})")
 
 if df_rutinas is None:
     st.error("No se pudieron cargar los datos. Verifica tu conexión.")
@@ -446,13 +413,10 @@ if rol in ["M", "P"]:
         with st.form("form_rutina"):
             f_texto = st.text_area("Contenido", value=texto_previo, height=200, key=f"txt_{id_busqueda}")
             
-            # --- BOTONES DE GUARDAR Y ELIMINAR ---
             c_save, c_del = st.columns([1, 1])
             with c_save:
                 submitted = st.form_submit_button("💾 Guardar Rutina")
             with c_del:
-                # El botón de eliminar NO es primario (rojo) porque Streamlit no tiene color rojo nativo en botones
-                # Pero lo ponemos separado.
                 delete_btn = st.form_submit_button("🗑️ Eliminar Rutina")
 
             if submitted:
@@ -469,12 +433,11 @@ if rol in ["M", "P"]:
                         st.rerun()
             
             if delete_btn:
-                # Ejecutar borrado
                 msg = eliminar_rutina_admin(id_busqueda)
-                if "Error" in msg:
+                if "Error" in msg or "No se puede" in msg:
                     st.error(msg)
                 else:
-                    st.warning(msg) # Warning sale en amarillo/naranja, acorde a borrar
+                    st.warning(msg)
                     st.session_state.trigger_calculo = True
                     time.sleep(1)
                     st.rerun()
