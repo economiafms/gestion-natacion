@@ -68,7 +68,7 @@ def cargar_datos_agenda():
                 if 'fecha_limite' in df_comp.columns:
                     df_comp['fecha_limite'] = pd.to_datetime(df_comp['fecha_limite']).dt.date
         except:
-            # Estructura Nueva: Usamos 'descripcion' en lugar de 'observaciones'
+            # Estructura Nueva
             df_comp = pd.DataFrame(columns=["id_competencia", "nombre_evento", "fecha_evento", "hora_inicio", "cod_pileta", "fecha_limite", "costo", "descripcion"])
 
         # 2. Inscripciones
@@ -122,7 +122,7 @@ def guardar_competencia(id_comp, nombre, fecha_ev, hora, cod_pil, fecha_lim, cos
         "cod_pileta": cod_pil,
         "fecha_limite": fecha_lim,
         "costo": costo,
-        "descripcion": desc  # Usamos descripcion
+        "descripcion": desc
     }
 
     if id_comp and not df_comp.empty and id_comp in df_comp['id_competencia'].values:
@@ -289,7 +289,8 @@ else:
             ubic_pil = "-"
 
         # Fechas y Estados
-        f_limite = pd.to_datetime(row['fecha_limite']).dt.date
+        # --- CORRECCIÓN AQUÍ: .dt.date ELIMINADO PORQUE ES UN SCALAR ---
+        f_limite = pd.to_datetime(row['fecha_limite']).date()
         dias_para_torneo = (row['fecha_dt'] - hoy).days
         dias_para_cierre = (f_limite - hoy).days
         
