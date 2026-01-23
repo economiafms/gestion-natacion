@@ -76,79 +76,41 @@ def intentar_desbloqueo():
 # --- VISUALIZACIÓN ---
 
 # // NUEVO: 1️⃣ Guía rápida (con texto original y emojis para M)
-if st.session_state.role == "N":
-    with st.expander("📖 Guía rápida de uso – Perfil Nadador", expanded=False):
-        st.markdown("""
-        Este sistema está diseñado para que cada nadador gestione y registre su propia información deportiva.
+with st.expander(f"📖 Guía rápida de uso – Perfil {'Nadador' if st.session_state.role == 'N' else 'Manager'}", expanded=False):
+    st.markdown(f"""
+    Este sistema está diseñado para que cada nadador gestione y registre su propia información deportiva.
 
-        Cuantos más datos cargues, mejor vas a poder analizar tu rendimiento y evolución en el tiempo.
-        
-        **Ficha**
-        Encontrás todo lo relacionado a tu perfil deportivo: competencias, mejores tiempos, historial y relevos.
+    Cuantos más datos cargues, mejor vas a poder analizar tu rendimiento y evolución en el tiempo.
+    
+    **👤 Ficha**
+    Encontrás todo lo relacionado a tu perfil deportivo: competencias, mejores tiempos, historial y relevos.
 
-        También podés consultar la ficha de un compañero si conocés su DNI.
-        
-        **Rutinas**
-        Accedés a las rutinas mensuales del entrenador, con una barra de progreso para saber en qué sesión estás y llevar un registro ordenado de tus entrenamientos.
-        
-        **Entrenamientos**
-        Este módulo se utiliza para cargar los test de rendimiento.
+    También podés consultar la ficha de un compañero si conocés su DNI.
+    
+    **📝 Rutinas**
+    Accedés a las rutinas mensuales del entrenador, con una barra de progreso para saber en qué sesión estás y llevar un registro ordenado de tus entrenamientos.
+    
+    **⏱️ Entrenamientos**
+    Este módulo se utiliza para cargar los test de rendimiento.
 
-        Los test pueden incluir parciales, divididos en cuatro tramos según la distancia de la prueba.
+    Los test pueden incluir parciales, divididos en cuatro tramos según la distancia de la prueba.
 
-        Las pruebas de 50 metros no tienen parciales.
+    Las pruebas de 50 metros no tienen parciales.
 
-        Si no contás con los parciales, podés cargar el test sin ese detalle.
-        
-        **Mi categoría**
-        Visualizás los valores promedio de tu categoría y los nadadores que la integran, para comparar tus tiempos y rendimiento en competencias.
-        
-        **Agenda**
-        Encontrás las próximas competencias del equipo y podés registrarte de forma simple, reemplazando el registro en Excel por un sistema más dinámico.
-        
-        **Aclaraciones importantes**
-        * La información es autogestionada por el nadador
-        * El entrenador no carga ni corrige datos
-        * Cada registro suma para tu mejora futura
-        * Uso personal, voluntario y a libre demanda
-        """)
-elif st.session_state.role == "M":
-    with st.expander("📖 Guía rápida de uso – Perfil Manager", expanded=False):
-        st.markdown("""
-        Este sistema está diseñado para que cada nadador gestione y registre su propia información deportiva.
-
-        Cuantos más datos cargues, mejor vas a poder analizar tu rendimiento y evolución en el tiempo.
-        
-        **🧾 Ficha**
-        Encontrás todo lo relacionado a tu perfil deportivo: competencias, mejores tiempos, historial y relevos.
-
-        También podés consultar la ficha de un compañero si conocés su DNI.
-        
-        **🏋️ Rutinas**
-        Accedés a las rutinas mensuales del entrenador, con una barra de progreso para saber en qué sesión estás y llevar un registro ordenado de tus entrenamientos.
-        
-        **⏱️ Entrenamientos**
-        Este módulo se utiliza para cargar los test de rendimiento.
-
-        Los test pueden incluir parciales, divididos en cuatro tramos según la distancia de la prueba.
-
-        Las pruebas de 50 metros no tienen parciales.
-
-        Si no contás con los parciales, podés cargar el test sin ese detalle.
-        
-        **🧩 Mi categoría**
-        Visualizás los valores promedio de tu categoría y los nadadores que la integran, para comparar tus tiempos y rendimiento en competencias.
-        
-        **📅 Agenda**
-        Encontrás las próximas competencias del equipo y podés registrarte de forma simple, reemplazando el registro en Excel por un sistema más dinámico.
-        
-        **Aclaraciones importantes**
-        * La información es autogestionada por el nadador
-        * El entrenador no carga ni corrige datos
-        * Cada registro suma para tu mejora futura
-        * Uso personal, voluntario y a libre demanda
-        """)
-
+    Si no contás con los parciales, podés cargar el test sin ese detalle.
+    
+    **🏅 Mi categoría**
+    Visualizás los valores promedio de tu categoría y los nadadores que la integran, para comparar tus tiempos y rendimiento en competencias.
+    
+    **📅 Agenda**
+    Encontrás las próximas competencias del equipo y podés registrarte de forma simple, reemplazando el registro en Excel por un sistema más dinámico.
+    
+    **⚠️ Aclaraciones importantes**
+    * La información es autogestionada por el nadador
+    * El entrenador no carga ni corrige datos
+    * Cada registro suma para tu mejora futura
+    * Uso personal, voluntario y a libre demanda
+    """)
 # // EXISTENTE (sin modificar)
 # BANNER TÍTULO
 st.markdown("""
