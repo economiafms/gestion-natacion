@@ -150,7 +150,7 @@ def render_tarjeta_individual(row, df_seg, key_suffix):
     with st.container():
         st.markdown(f"""<div style="border: 2px solid {borde}; border-radius: 10px; background-color: {bg}; padding: 15px; margin-bottom: 15px;">""", unsafe_allow_html=True)
         
-        # --- CAMBIO: COLUMNAS DINÁMICAS PARA FIJAR EL BOTÓN X AL FINAL ---
+        # --- COLUMNAS DINÁMICAS ---
         if esta_realizada:
             # Si está completada, damos mucho espacio al texto (8) y poco al botón (1) para pegarlo a la derecha
             c_head, c_act = st.columns([8, 1])
@@ -397,10 +397,19 @@ else:
         anios_disp = sorted(list(set(df_rutinas['anio_rutina'].unique())), reverse=True)
         if not anios_disp: anios_disp = [datetime.now().year]
         
-        meses_indices = list(range(1, 13))
-        mapa_meses = {i: obtener_nombre_mes(i) for i in meses_indices}
-
         with c_h1: h_anio = st.selectbox("Año", anios_disp, key="h_a")
-        with c_h2: h_mes = st.selectbox("Mes", meses_indices, format_func=lambda x: mapa_meses[x], key="h_m")
+        
+        # CAMBIO: Filtrado de meses que SÍ tienen datos
+        meses_en_anio = sorted(df_rutinas[df_rutinas['anio_rutina'] == h_anio]['mes_rutina'].unique().tolist())
+        
+        if not meses_en_anio:
+            with c_h2: 
+                st.warning("Sin datos.")
+                h_mes = None
+        else:
+            mapa_meses = {i: obtener_nombre_mes(i) for i in meses_en_anio}
+            with c_h2: 
+                h_mes = st.selectbox("Mes", meses_en_anio, format_func=lambda x: mapa_meses[x], key="h_m")
             
-        render_historial_compacto(df_rutinas, df_seguimiento, h_anio, h_mes, mi_id)
+        if h_mes:
+            render_historial_compacto(df_rutinas, df_seguimiento, h_anio, h_mes, mi_id)
