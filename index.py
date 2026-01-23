@@ -72,6 +72,23 @@ def cerrar_sesion():
         del st.session_state[key]
     st.rerun()
 
+# --- NUEVA FUNCIÓN: GUÍA DE INSTALACIÓN PWA ---
+def pwa_install_button():
+    st.write("---")
+    with st.expander("📲 INSTALAR APP EN TU CELULAR"):
+        st.markdown("""
+        Esta aplicación se puede instalar para acceder rápido desde tu pantalla de inicio:
+        
+        **🤖 Android (Chrome):**
+        1. Toca los tres puntos **(⋮)** arriba a la derecha.
+        2. Selecciona **'Instalar aplicación'** o 'Agregar a la pantalla de inicio'.
+        
+        **🍎 iPhone (Safari):**
+        1. Toca el botón **Compartir** (cuadrado con flecha arriba) en la barra inferior.
+        2. Desliza y toca en **'Agregar al inicio'**.
+        """)
+        st.info("Una vez instalada, la verás con el escudo del club en tu menú de aplicaciones.")
+
 # --- 5. PANTALLA DE LOGIN ---
 def login_screen():
     st.markdown("""<style>[data-testid="stSidebar"] {display: none;}</style>""", unsafe_allow_html=True)
@@ -115,19 +132,17 @@ def login_screen():
     st.text_input("Ingrese Nro de Socio", key="input_socio", placeholder="Ej: 123456-01", label_visibility="collapsed")
     if st.button("INGRESAR", type="primary", use_container_width=True):
         validar_socio()
+    
+    # LLAMADA A LA FUNCIÓN DE INSTALACIÓN
+    pwa_install_button()
 
 # --- 6. DEFINICIÓN DE PÁGINAS ---
 pg_inicio = st.Page("pages/1_inicio.py", title="Inicio", icon="🏠")
-# CAMBIO AQUÍ: "Base de Datos" -> "Fichero"
 pg_datos = st.Page("pages/2_visualizar_datos.py", title="Fichero", icon="🗃️")
 pg_ranking = st.Page("pages/4_ranking.py", title="Ranking", icon="🏆")
 pg_simulador = st.Page("pages/3_simulador.py", title="Simulador", icon="⏱️")
 pg_entrenamientos = st.Page("pages/5_entrenamientos.py", title="Entrenamientos", icon="🏋️")
 pg_categoria = st.Page("pages/6_mi_categoria.py", title="Mi Categoría", icon="🏅")
-# --- NUEVAS PÁGINAS (DEFINICIÓN) ---
-pg_agenda = st.Page("pages/7_agenda.py", title="Agenda", icon="📅")
-pg_rutinas = st.Page("pages/8_rutinas.py", title="Rutinas", icon="📝")
-# -----------------------------------
 pg_carga = st.Page("pages/1_cargar_datos.py", title="Carga de Datos", icon="⚙️")
 pg_login_obj = st.Page(login_screen, title="Acceso", icon="🔒")
 
@@ -136,13 +151,10 @@ if not st.session_state.role:
     pg = st.navigation([pg_login_obj])
     pg.run()
 else:
-    # --- MENÚ PRINCIPAL ---
-    # REORDENADO: Agenda movida al final, Rutinas se mantiene antes de Entrenamientos
     menu_pages = {
-        "Principal": [pg_inicio, pg_datos, pg_rutinas, pg_entrenamientos, pg_categoria, pg_agenda]
+        "Principal": [pg_inicio, pg_datos, pg_entrenamientos, pg_categoria]
     }
     
-    # --- MENÚ HERRAMIENTAS ---
     if st.session_state.role in ["M", "P"]:
         menu_pages["Herramientas"] = [pg_ranking, pg_simulador]
         
