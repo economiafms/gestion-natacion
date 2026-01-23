@@ -26,7 +26,7 @@ mi_nombre = st.session_state.user_name
 # ==========================================
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# --- DEFINICIÓN DE PRUEBAS ESTÁNDAR ---
+# --- DEFINICIÓN GLOBAL DE PRUEBAS ---
 LISTA_PRUEBAS = [
     "50m Libre", "100m Libre", "200m Libre", "400m Libre", "800m Libre", "1500m Libre",
     "50m Espalda", "100m Espalda", "200m Espalda",
@@ -41,7 +41,6 @@ LISTA_PRUEBAS = [
 # ==========================================
 
 def actualizar_con_retry(worksheet, data, max_retries=5):
-    """Intenta actualizar la hoja de cálculo con reintentos."""
     for i in range(max_retries):
         try:
             conn.update(worksheet=worksheet, data=data)
@@ -56,18 +55,21 @@ def actualizar_con_retry(worksheet, data, max_retries=5):
 
 @st.cache_data(ttl="5s")
 def cargar_datos_agenda():
-    """Carga Competencias, Inscripciones, Nadadores y Piletas."""
     try:
         # 1. Competencias
         try:
             df_comp = conn.read(worksheet="Competencias").copy()
             if not df_comp.empty:
+                # Normalizar Fechas
                 if 'fecha_evento' in df_comp.columns:
                     df_comp['fecha_evento'] = pd.to_datetime(df_comp['fecha_evento']).dt.date
                 if 'fecha_limite' in df_comp.columns:
                     df_comp['fecha_limite'] = pd.to_datetime(df_comp['fecha_limite']).dt.date
+                # Asegurar que exista la columna nueva
+                if 'pruebas_habilitadas' not in df_comp.columns:
+                    df_comp['pruebas_habilitadas'] = ""
         except:
-            df_comp = pd.DataFrame(columns=["id_competencia", "nombre_evento", "fecha_evento", "hora_inicio", "cod_pileta", "fecha_limite", "costo", "descripcion"])
+            df_comp = pd.DataFrame(columns=["id_competencia", "nombre_evento", "fecha_evento", "hora_inicio", "cod_pileta", "fecha_limite", "costo", "descripcion", "pruebas_habilitadas"])
 
         # 2. Inscripciones
         try:
@@ -104,39 +106,39 @@ def leer_dataset_fresco(worksheet):
 
 # --- GESTIÓN DE COMPETENCIAS (ADMIN) ---
 
-def guardar_competencia(id_comp, nombre, fecha_ev, hora, cod_pil, fecha_lim, costo, desc):
+def guardar_competencia(id_comp, nombre, fecha_ev, hora, cod_pil, fecha_lim, costo, desc, lista_pruebas_hab):
     df_comp = leer_dataset_fresco("Competencias")
     if df_comp is None:
-        df_comp = pd.DataFrame(columns=["id_competencia", "nombre_evento", "fecha_evento", "hora_inicio", "cod_pileta", "fecha_limite", "costo", "descripcion"])
+        df_comp = pd.DataFrame(columns=["id_competencia", "nombre_evento", "fecha_evento", "hora_inicio", "cod_pileta", "fecha_limite", "costo", "descripcion", "pruebas_habilitadas"])
     
-    if not df_comp.empty and 'fecha_evento' in df_comp.columns:
-        df_comp['fecha_evento'] = pd.to_datetime(df_comp['fecha_evento']).dt.date
+    # Asegurar columna nueva
+    if 'pruebas_habilitadas' not in df_comp.columns:
+        df_comp['pruebas_habilitadas'] = ""
+
+    # Convertir lista a string
+    str_pruebas = ", ".join(lista_pruebas_hab) if lista_pruebas_hab else ""
 
     nuevo_registro = {
         "id_competencia": id_comp if id_comp else str(uuid.uuid4()),
         "nombre_evento": nombre,
-        "fecha_evento": fecha_ev,
+        "fecha_evento": str(fecha_ev), # Guardar como string directo
         "hora_inicio": str(hora),
         "cod_pileta": cod_pil,
-        "fecha_limite": fecha_lim,
+        "fecha_limite": str(fecha_lim), # Guardar como string directo
         "costo": costo,
-        "descripcion": desc
+        "descripcion": desc,
+        "pruebas_habilitadas": str_pruebas
     }
 
     if id_comp and not df_comp.empty and id_comp in df_comp['id_competencia'].values:
         idx = df_comp.index[df_comp['id_competencia'] == id_comp].tolist()[0]
         for key, val in nuevo_registro.items():
             df_comp.at[idx, key] = val
-        msg = "✅ Evento actualizado."
+        msg = "✅ Evento actualizado correctamente."
     else:
         df_comp = pd.concat([df_comp, pd.DataFrame([nuevo_registro])], ignore_index=True)
-        msg = "✅ Evento creado."
+        msg = "✅ Evento creado correctamente."
 
-    # Convertir fechas a string para guardar
-    df_comp['fecha_evento'] = df_comp['fecha_evento'].astype(str)
-    df_comp['fecha_limite'] = df_comp['fecha_limite'].astype(str)
-    df_comp['hora_inicio'] = df_comp['hora_inicio'].astype(str)
-    
     exito, err = actualizar_con_retry("Competencias", df_comp)
     if exito:
         st.cache_data.clear()
@@ -215,7 +217,6 @@ def eliminar_inscripcion(id_comp, id_nadador):
 # 5. UI PRINCIPAL
 # ==========================================
 
-# Carga
 df_competencias, df_inscripciones, df_nadadores, df_piletas = cargar_datos_agenda()
 
 st.title("📅 Agenda de Torneos")
@@ -225,7 +226,7 @@ st.markdown(f"Usuario: **{mi_nombre}**")
 if rol in ["M", "P"]:
     with st.expander("🛠️ Crear Nuevo Evento", expanded=False):
         with st.form("form_crear_comp"):
-            st.markdown("##### Datos del Evento")
+            st.markdown("##### Datos Principales")
             c1, c2 = st.columns(2)
             nombre_in = c1.text_input("Nombre del Evento")
             
@@ -238,21 +239,23 @@ if rol in ["M", "P"]:
             cod_pil_in = c2.selectbox("Sede / Pileta", opciones_piletas, format_func=format_pileta if opciones_piletas else str)
             
             c3, c4 = st.columns(2)
-            # --- FIX FECHA FORMATO DD/MM/YYYY ---
             fecha_in = c3.date_input("Fecha del Torneo", min_value=datetime.today(), format="DD/MM/YYYY")
             hora_in = c4.time_input("Hora Inicio", value=datetime.strptime("08:30", "%H:%M").time())
             
-            st.markdown("##### Configuración de Inscripción")
+            st.markdown("##### Configuración")
             c5, c6 = st.columns(2)
-            # --- FIX FECHA FORMATO DD/MM/YYYY ---
             fecha_lim_in = c5.date_input("Fecha Límite Inscripción", min_value=datetime.today(), format="DD/MM/YYYY")
             costo_in = c6.number_input("Costo Inscripción ($)", min_value=0, step=1000)
+            
+            # --- NUEVO: PRESELECCIÓN DE PRUEBAS ---
+            st.markdown("##### Definir Programa de Pruebas")
+            pruebas_hab_in = st.multiselect("Seleccione las pruebas que se nadarán en este torneo:", LISTA_PRUEBAS, default=LISTA_PRUEBAS)
             
             desc_in = st.text_area("Descripción (Reglamento, info de pago, etc.)")
             
             if st.form_submit_button("Guardar Evento en Agenda"):
                 if nombre_in and cod_pil_in:
-                    ok, msg = guardar_competencia(None, nombre_in, fecha_in, hora_in, cod_pil_in, fecha_lim_in, costo_in, desc_in)
+                    ok, msg = guardar_competencia(None, nombre_in, fecha_in, hora_in, cod_pil_in, fecha_lim_in, costo_in, desc_in, pruebas_hab_in)
                     if ok: st.success(msg); time.sleep(1); st.rerun()
                     else: st.error(msg)
                 else:
@@ -286,8 +289,7 @@ else:
             nom_pil = row['cod_pileta']
             ubic_pil = "-"
 
-        # Fechas y Estados
-        # --- FIX ERROR ATTRIBUTE: Usar .date() directo sobre el valor, no .dt ---
+        # Fechas
         f_limite = pd.to_datetime(row['fecha_limite']).date()
         dias_para_torneo = (row['fecha_dt'] - hoy).days
         dias_para_cierre = (f_limite - hoy).days
@@ -299,17 +301,15 @@ else:
             badge_bg = "#333"
             inscripcion_abierta = False
         elif dias_para_cierre < 0:
-            badge = "🔒 INSCRIPCIÓN CERRADA"
+            badge = "🔒 CERRADA"
             badge_bg = "#E30613"
             inscripcion_abierta = False
         else:
-            badge = f"🟢 ABIERTA (Cierra en {dias_para_cierre} días)"
+            badge = f"🟢 ABIERTA ({dias_para_cierre} días)"
             badge_bg = "#2E7D32"
 
-        # --- ARQUITECTURA VISUAL SIN HTML PARTIDO ---
-        # 1. Contenedor principal para cada evento
+        # --- TARJETA VISUAL (SIN HTML PARTIDO) ---
         with st.container():
-            # 2. Bloque HTML de información (Cerrado)
             st.markdown(f"""
             <div style="background-color: #262730; border: 1px solid #555; border-radius: 10px; padding: 15px; margin-bottom: 10px;">
                 <div style="display:flex; justify-content:space-between; align-items:start;">
@@ -323,22 +323,17 @@ else:
                         {badge}
                     </span>
                 </div>
-                
                 <hr style="border-color:#444; margin:10px 0;">
-                
                 <div style="display:flex; gap:20px; color:#ddd; font-size:14px; margin-bottom:10px;">
-                    <div>📍 <strong>Sede:</strong> {nom_pil}</div>
-                    <div>🏙️ <strong>Ciudad:</strong> {ubic_pil}</div>
-                    <div>💰 <strong>Costo:</strong> ${row['costo']}</div>
+                    <div>📍 {nom_pil}</div>
+                    <div>🏙️ {ubic_pil}</div>
+                    <div>💰 ${row['costo']}</div>
                 </div>
-                
                 <div style="background-color:#333; padding:10px; border-radius:5px; font-size:13px; color:#ccc; white-space: pre-wrap;">{row['descripcion'] if row['descripcion'] else 'Sin información adicional.'}</div>
             </div>
             """, unsafe_allow_html=True)
 
-            # 3. Widgets de Streamlit debajo del HTML (Sin estar envueltos en div)
-            
-            # --- LÓGICA USUARIO ---
+            # --- LÓGICA USUARIO (INSCRIPCIÓN) ---
             inscripcion_user = df_inscripciones[
                 (df_inscripciones['id_competencia'] == comp_id) & 
                 (df_inscripciones['codnadador'] == mi_id)
@@ -346,21 +341,30 @@ else:
             esta_inscripto = not inscripcion_user.empty
             permiso_editar = inscripcion_abierta or rol in ["M", "P"]
             
+            # DETERMINAR PRUEBAS DISPONIBLES PARA ESTE TORNEO
+            pruebas_disponibles_str = row.get('pruebas_habilitadas', "")
+            if pd.isna(pruebas_disponibles_str) or str(pruebas_disponibles_str).strip() == "":
+                opciones_usuario = LISTA_PRUEBAS # Default si está vacío
+            else:
+                opciones_usuario = [p.strip() for p in str(pruebas_disponibles_str).split(",")]
+
             if permiso_editar:
-                exp_label = "✅ Gestionar mi Inscripción" if esta_inscripto else "📝 Inscribirme al Torneo"
+                exp_label = "✅ Gestionar Inscripción" if esta_inscripto else "📝 Inscribirse"
                 with st.expander(exp_label):
-                    pruebas_sel = []
+                    pruebas_sel_usuario = []
                     if esta_inscripto:
                         raw_p = inscripcion_user.iloc[0]['pruebas']
-                        if pd.notna(raw_p): pruebas_sel = [p.strip() for p in raw_p.split(",")]
+                        if pd.notna(raw_p): pruebas_sel_usuario = [p.strip() for p in raw_p.split(",")]
 
                     with st.form(f"ins_{comp_id}"):
-                        st.write("**Selecciona tus pruebas:**")
-                        sel = st.multiselect("Pruebas Oficiales", LISTA_PRUEBAS, default=[p for p in pruebas_sel if p in LISTA_PRUEBAS])
-                        otro = st.text_input("Otras Pruebas", value=", ".join([p for p in pruebas_sel if p not in LISTA_PRUEBAS]))
+                        st.caption("Selecciona las pruebas en las que vas a participar:")
+                        
+                        # MULTISELECT FILTRADO POR LO QUE DEFINIÓ EL PROFE
+                        sel = st.multiselect("Pruebas Habilitadas", opciones_usuario, default=[p for p in pruebas_sel_usuario if p in opciones_usuario])
+                        otro = st.text_input("Otras Pruebas (Solo si autoriza el entrenador)", value=", ".join([p for p in pruebas_sel_usuario if p not in opciones_usuario]))
                         
                         c_s, c_d = st.columns([3, 1])
-                        with c_s: submitted = st.form_submit_button("💾 Guardar Inscripción")
+                        with c_s: submitted = st.form_submit_button("💾 Confirmar Inscripción")
                         with c_d:
                             eliminar = False
                             if esta_inscripto: eliminar = st.form_submit_button("🗑️ Baja", type="secondary")
@@ -379,12 +383,12 @@ else:
                             if ok: st.warning(m); time.sleep(1); st.rerun()
             else:
                 if esta_inscripto:
-                    st.success(f"✅ Estás inscripto en: {inscripcion_user.iloc[0]['pruebas']}")
+                    st.success(f"✅ Inscripto en: {inscripcion_user.iloc[0]['pruebas']}")
 
-            # --- LÓGICA ADMIN ---
+            # --- LÓGICA ADMIN (PLANILLA Y EDICIÓN) ---
             if rol in ["M", "P"]:
-                with st.expander(f"🛡️ Gestión Entrenador ({row['nombre_evento']})"):
-                    t1, t2 = st.tabs(["📋 Inscriptos", "⚙️ Editar"])
+                with st.expander(f"🛡️ Panel Entrenador ({row['nombre_evento']})"):
+                    t1, t2 = st.tabs(["📋 Inscriptos", "⚙️ Editar Evento"])
                     
                     with t1:
                         filtro_ins = df_inscripciones[df_inscripciones['id_competencia'] == comp_id]
@@ -395,26 +399,42 @@ else:
                             data_full['Nadador'] = data_full['apellido'] + " " + data_full['nombre']
                             st.dataframe(data_full[['Nadador', 'pruebas']], hide_index=True, use_container_width=True)
                             
+                            # Borrar alumno
                             c_b1, c_b2 = st.columns([3, 1])
                             with c_b1:
-                                n_del = st.selectbox("Dar de baja a:", data_full['codnadador'].unique(), format_func=lambda x: data_full[data_full['codnadador']==x]['Nadador'].values[0], key=f"d_{comp_id}")
+                                nadadores_disponibles = data_full['codnadador'].unique()
+                                if len(nadadores_disponibles) > 0:
+                                    n_del = st.selectbox("Dar de baja a:", nadadores_disponibles, format_func=lambda x: data_full[data_full['codnadador']==x]['Nadador'].values[0], key=f"d_{comp_id}")
+                                else:
+                                    n_del = None
                             with c_b2:
-                                if st.button("Baja", key=f"btn_d_{comp_id}"):
+                                if n_del and st.button("Baja", key=f"btn_d_{comp_id}"):
                                     eliminar_inscripcion(comp_id, n_del); st.rerun()
 
                     with t2:
+                        # Recuperar pruebas habilitadas actuales para pre-llenar el editor
+                        pruebas_actuales_db = row.get('pruebas_habilitadas', "")
+                        lista_pre = [p.strip() for p in str(pruebas_actuales_db).split(",")] if pd.notna(pruebas_actuales_db) and str(pruebas_actuales_db).strip() != "" else LISTA_PRUEBAS
+
                         with st.form(f"edit_{comp_id}"):
-                            new_n = st.text_input("Nombre", value=row['nombre_evento'])
-                            # --- FIX FECHA DD/MM/YYYY ---
-                            new_f = st.date_input("Fecha Evento", value=pd.to_datetime(row['fecha_dt']), format="DD/MM/YYYY")
-                            new_l = st.date_input("Cierre Inscripción", value=pd.to_datetime(f_limite), format="DD/MM/YYYY")
+                            col_e1, col_e2 = st.columns(2)
+                            new_n = col_e1.text_input("Nombre", value=row['nombre_evento'])
+                            new_c = col_e2.number_input("Costo", value=int(row['costo']) if pd.notna(row['costo']) else 0)
+                            
+                            col_e3, col_e4 = st.columns(2)
+                            new_f = col_e3.date_input("Fecha Evento", value=pd.to_datetime(row['fecha_dt']), format="DD/MM/YYYY")
+                            new_l = col_e4.date_input("Cierre Inscripción", value=pd.to_datetime(f_limite), format="DD/MM/YYYY")
+                            
+                            new_pruebas = st.multiselect("Pruebas Habilitadas", LISTA_PRUEBAS, default=[p for p in lista_pre if p in LISTA_PRUEBAS])
+                            
                             new_desc = st.text_area("Descripción", value=row['descripcion'])
                             
                             if st.form_submit_button("Actualizar Datos"):
-                                guardar_competencia(comp_id, new_n, new_f, row['hora_inicio'], row['cod_pileta'], new_l, row['costo'], new_desc)
+                                guardar_competencia(comp_id, new_n, new_f, row['hora_inicio'], row['cod_pileta'], new_l, new_c, new_desc, new_pruebas)
                                 st.rerun()
                             
-                            if st.form_submit_button("⚠️ ELIMINAR EVENTO"):
+                            st.markdown("---")
+                            if st.form_submit_button("⚠️ ELIMINAR EVENTO COMPLETO", type="primary"):
                                 eliminar_competencia(comp_id); st.rerun()
             
-            st.divider() # Separador visual entre eventos
+            st.divider()
