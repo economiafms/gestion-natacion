@@ -28,9 +28,8 @@ def obtener_nombre_mes(n):
     except:
         return "Desconocido"
 
-# --- GLOSARIO DE REFERENCIAS (MOBILE FRIENDLY) ---
+# --- GLOSARIO DE REFERENCIAS ---
 def mostrar_referencias():
-    """Muestra el glosario UNA SOLA VEZ. Diseño adaptado."""
     with st.expander("📖 Glosario de Referencias (Ayuda)"):
         st.markdown("""
         **INTENSIDADES**
@@ -92,7 +91,6 @@ def cargar_datos_rutinas_view():
         except:
             df_nad = pd.DataFrame(columns=["codnadador", "nombre", "apellido"])
             
-        # Normalización
         if not df_rut.empty:
             df_rut['anio_rutina'] = pd.to_numeric(df_rut['anio_rutina'], errors='coerce').fillna(0).astype(int)
             df_rut['mes_rutina'] = pd.to_numeric(df_rut['mes_rutina'], errors='coerce').fillna(0).astype(int)
@@ -199,7 +197,6 @@ def render_tarjeta_individual(row, df_seg, key_suffix):
         fecha_obj = pd.to_datetime(check.iloc[0]['fecha_realizada'])
         fecha_str = fecha_obj.strftime("%d/%m")
 
-    # Diseño condicional
     if esta_realizada:
         borde = "#2E7D32"
         bg = "#1B2E1B"
@@ -266,10 +263,8 @@ def render_feed_activo(df_rut, df_seg, anio_ver, mes_ver, key_suffix=""):
     else:
         if l_completadas: st.success("¡Excelente! Has completado todo el mes. 🏆")
 
-# === NUEVO DISEÑO UX/UI PARA HISTORIAL ===
+# --- HISTORIAL UX/UI MEJORADO (SIN HTML ROTO) ---
 def render_historial_compacto(df_rut, df_seg, anio, mes, id_usuario_objetivo):
-    """Muestra el historial con diseño moderno (Cards compactas + Scorecard)."""
-    
     rutinas_mes = df_rut[
         (df_rut['anio_rutina'] == anio) & 
         (df_rut['mes_rutina'] == mes)
@@ -279,7 +274,6 @@ def render_historial_compacto(df_rut, df_seg, anio, mes, id_usuario_objetivo):
         st.info("No hay planificación cargada para este mes.")
         return
 
-    # 1. Cálculos de KPIs
     total_rutinas = len(rutinas_mes)
     completadas = 0
     detalle_sesiones = []
@@ -287,9 +281,8 @@ def render_historial_compacto(df_rut, df_seg, anio, mes, id_usuario_objetivo):
     for _, r in rutinas_mes.iterrows():
         r_id = r['id_rutina']
         check = df_seg[(df_seg['id_rutina'] == r_id) & (df_seg['codnadador'] == id_usuario_objetivo)]
-        
         hecho = not check.empty
-        fecha_txt = ""
+        fecha_txt = "-"
         if hecho:
             completadas += 1
             fecha_obj = pd.to_datetime(check.iloc[0]['fecha_realizada'])
@@ -303,7 +296,7 @@ def render_historial_compacto(df_rut, df_seg, anio, mes, id_usuario_objetivo):
 
     porcentaje = int((completadas / total_rutinas) * 100) if total_rutinas > 0 else 0
     
-    # 2. SCORECARD SUPERIOR (Visual Impact)
+    # 1. SCORECARD SUPERIOR
     st.markdown(f"""
     <div style="background-color: #262730; border-radius: 12px; padding: 20px; margin-bottom: 25px; border: 1px solid #444; text-align: center;">
         <h3 style="margin:0; font-size: 16px; color: #aaa;">ASISTENCIA {obtener_nombre_mes(mes).upper()}</h3>
@@ -313,55 +306,38 @@ def render_historial_compacto(df_rut, df_seg, anio, mes, id_usuario_objetivo):
     """, unsafe_allow_html=True)
     
     st.progress(porcentaje / 100)
-    st.write("") # Espaciador
+    st.write("") 
 
-    # 3. LISTA DE SESIONES (Estilo lista limpia)
+    # 2. LISTA DE SESIONES (HTML SIMPLIFICADO)
     st.caption("DETALLE DE ACTIVIDAD")
     
     for item in detalle_sesiones:
-        # Definir estilos según estado
         if item['hecho']:
             icono = "✅"
-            color_texto = "white"
-            bg_badge = "rgba(46, 125, 50, 0.3)" # Verde transparente
-            border_badge = "#2E7D32"
-            texto_badge = "COMPLETADO"
+            color_txt = "white"
+            badge_bg = "rgba(46, 125, 50, 0.3)"
+            badge_border = "#2E7D32"
+            badge_txt = "COMPLETADO"
             opacity = "1.0"
             fecha_display = item['fecha']
         else:
             icono = "⭕"
-            color_texto = "#888" # Grisáceo
-            bg_badge = "rgba(255, 255, 255, 0.05)"
-            border_badge = "#444"
-            texto_badge = "PENDIENTE"
-            opacity = "0.6" # Más transparente
+            color_txt = "#888"
+            badge_bg = "rgba(255, 255, 255, 0.05)"
+            badge_border = "#444"
+            badge_txt = "PENDIENTE"
+            opacity = "0.6"
             fecha_display = "--/--"
 
-        # Layout de fila custom con HTML para mayor control visual
+        # Estructura simple sin divs anidados innecesarios
         st.markdown(f"""
-        <div style="
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center; 
-            padding: 12px 0; 
-            border-bottom: 1px solid #333; 
-            opacity: {opacity};">
-            
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <span style="font-size: 18px;">{icono}</span>
-                <span style="font-weight: 500; font-size: 16px; color: {color_texto};">Sesión {item['nro']}</span>
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #333; opacity: {opacity};">
+            <div style="font-size: 16px; color: {color_txt};">
+                <span style="font-size: 18px; margin-right: 8px;">{icono}</span> Sesión {item['nro']}
             </div>
-            
             <div style="text-align: right;">
-                <span style="
-                    font-size: 10px; 
-                    font-weight: bold; 
-                    background-color: {bg_badge}; 
-                    border: 1px solid {border_badge}; 
-                    color: {color_texto}; 
-                    padding: 4px 8px; 
-                    border-radius: 12px;">
-                    {texto_badge}
+                <span style="font-size: 10px; font-weight: bold; background-color: {badge_bg}; border: 1px solid {badge_border}; color: {color_txt}; padding: 4px 8px; border-radius: 12px;">
+                    {badge_txt}
                 </span>
                 <div style="font-size: 12px; color: #666; margin-top: 4px;">{fecha_display}</div>
             </div>
@@ -386,7 +362,7 @@ if rol in ["M", "P"]:
 
 # --- UI PRINCIPAL ---
 st.title("📝 Sesiones de Entrenamiento")
-st.subheader(f"{mi_nombre}") # Solo nombre, discreto
+st.subheader(f"{mi_nombre}") 
 
 if df_rutinas is None:
     st.error("No se pudieron cargar los datos. Verifica tu conexión.")
