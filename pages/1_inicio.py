@@ -75,47 +75,78 @@ def intentar_desbloqueo():
 
 # --- VISUALIZACIÓN ---
 
-# // NUEVO: 1️⃣ Guía rápida (Perfil N y M)
+# // NUEVO: 1️⃣ Guía rápida (con texto original y emojis para M)
 if st.session_state.role == "N":
     with st.expander("📖 Guía rápida de uso – Perfil Nadador", expanded=False):
         st.markdown("""
         Este sistema está diseñado para que cada nadador gestione y registre su propia información deportiva.
+
         Cuantos más datos cargues, mejor vas a poder analizar tu rendimiento y evolución en el tiempo.
         
         **Ficha**
         Encontrás todo lo relacionado a tu perfil deportivo: competencias, mejores tiempos, historial y relevos.
+
+        También podés consultar la ficha de un compañero si conocés su DNI.
         
         **Rutinas**
-        Accedés a las rutinas mensuales del entrenador con seguimiento de progreso.
+        Accedés a las rutinas mensuales del entrenador, con una barra de progreso para saber en qué sesión estás y llevar un registro ordenado de tus entrenamientos.
         
         **Entrenamientos**
-        Módulo para cargar los test de rendimiento y parciales.
+        Este módulo se utiliza para cargar los test de rendimiento.
+
+        Los test pueden incluir parciales, divididos en cuatro tramos según la distancia de la prueba.
+
+        Las pruebas de 50 metros no tienen parciales.
+
+        Si no contás con los parciales, podés cargar el test sin ese detalle.
         
         **Mi categoría**
-        Comparativa de tiempos y rendimiento con otros nadadores de tu categoría.
+        Visualizás los valores promedio de tu categoría y los nadadores que la integran, para comparar tus tiempos y rendimiento en competencias.
         
         **Agenda**
-        Próximas competencias y registro dinámico de inscripciones.
+        Encontrás las próximas competencias del equipo y podés registrarte de forma simple, reemplazando el registro en Excel por un sistema más dinámico.
+        
+        **Aclaraciones importantes**
+        * La información es autogestionada por el nadador
+        * El entrenador no carga ni corrige datos
+        * Cada registro suma para tu mejora futura
+        * Uso personal, voluntario y a libre demanda
         """)
 elif st.session_state.role == "M":
     with st.expander("📖 Guía rápida de uso – Perfil Manager", expanded=False):
         st.markdown("""
-        Este sistema está diseñado para gestionar la información deportiva del equipo.
+        Este sistema está diseñado para que cada nadador gestione y registre su propia información deportiva.
+
+        Cuantos más datos cargues, mejor vas a poder analizar tu rendimiento y evolución en el tiempo.
         
         **🧾 Ficha**
-        Consulta el perfil deportivo: competencias, mejores tiempos e historial.
+        Encontrás todo lo relacionado a tu perfil deportivo: competencias, mejores tiempos, historial y relevos.
+
+        También podés consultar la ficha de un compañero si conocés su DNI.
         
         **🏋️ Rutinas**
-        Acceso a las rutinas mensuales con barra de progreso.
+        Accedés a las rutinas mensuales del entrenador, con una barra de progreso para saber en qué sesión estás y llevar un registro ordenado de tus entrenamientos.
         
         **⏱️ Entrenamientos**
-        Módulo para carga y consulta de tests de rendimiento.
+        Este módulo se utiliza para cargar los test de rendimiento.
+
+        Los test pueden incluir parciales, divididos en cuatro tramos según la distancia de la prueba.
+
+        Las pruebas de 50 metros no tienen parciales.
+
+        Si no contás con los parciales, podés cargar el test sin ese detalle.
         
         **🧩 Mi categoría**
-        Visualización de valores promedio y comparativas por categoría.
+        Visualizás los valores promedio de tu categoría y los nadadores que la integran, para comparar tus tiempos y rendimiento en competencias.
         
         **📅 Agenda**
-        Gestión de próximas competencias y registros del equipo.
+        Encontrás las próximas competencias del equipo y podés registrarte de forma simple, reemplazando el registro en Excel por un sistema más dinámico.
+        
+        **Aclaraciones importantes**
+        * La información es autogestionada por el nadador
+        * El entrenador no carga ni corrige datos
+        * Cada registro suma para tu mejora futura
+        * Uso personal, voluntario y a libre demanda
         """)
 
 # // EXISTENTE (sin modificar)
@@ -275,7 +306,7 @@ if db and st.session_state.user_id:
 
     st.write("")
 
-    # // NUEVO: 2️⃣ Estadísticas del club recalculadas y visuales
+    # // NUEVO: 2️⃣ Estadísticas del club (Visual Mejorado)
     st.markdown("<h5 style='text-align: center; color: #888; margin-top: 20px;'>ESTADÍSTICAS DEL CLUB</h5>", unsafe_allow_html=True)
     
     total_nadadores = len(db['nadadores'])
@@ -288,7 +319,7 @@ if db and st.session_state.user_id:
             <div style="font-size: 28px; font-weight: 800; color: white;">{total_nadadores}</div>
         </div>
         <div style="flex: 1; background-color: #262730; border-top: 3px solid #E30613; padding: 15px; border-radius: 8px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
-            <div style="font-size: 11px; color: #aaa; text-transform: uppercase;">Pruebas</div>
+            <div style="font-size: 11px; color: #aaa; text-transform: uppercase;">Pruebas Registradas</div>
             <div style="font-size: 28px; font-weight: 800; color: white;">{total_pruebas_reg}</div>
         </div>
     </div>
@@ -325,8 +356,8 @@ if db and st.session_state.user_id:
         base = alt.Chart(df_n).encode(theta=alt.Theta("count()", stack=True))
         st.altair_chart((base.mark_arc(outerRadius=80, innerRadius=50).encode(color=alt.Color("codgenero", scale=colors, legend=None)) + base.mark_text(radius=100).encode(text="count()", order=alt.Order("codgenero"), color=alt.value("white"))), use_container_width=True)
 
-    # --- 6. CANDADO / GESTIÓN ---
-    # // NUEVO: 3️⃣ Botón a ancho completo para Perfil M
+    # --- 6. GESTIÓN (Perfil M) ---
+    # // NUEVO: 3️⃣ Botón a ancho completo
     if st.session_state.role == "M":
         st.write(""); st.write("")
         label_btn = "⚙️ CARGAR COMPETENCIAS" if not st.session_state.admin_unlocked else "🔒 BLOQUEAR GESTIÓN"
