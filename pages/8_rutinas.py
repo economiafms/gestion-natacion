@@ -149,28 +149,37 @@ def render_tarjeta_individual(row, df_seg, key_suffix):
     
     with st.container():
         st.markdown(f"""<div style="border: 2px solid {borde}; border-radius: 10px; background-color: {bg}; padding: 15px; margin-bottom: 15px;">""", unsafe_allow_html=True)
-        c_head, c_act = st.columns([5, 2]) # Ajustamos ancho de columnas para que entren los textos
-        with c_head:
-            if esta_realizada:
+        
+        # --- CAMBIO: COLUMNAS DINÁMICAS PARA FIJAR EL BOTÓN X AL FINAL ---
+        if esta_realizada:
+            # Si está completada, damos mucho espacio al texto (8) y poco al botón (1) para pegarlo a la derecha
+            c_head, c_act = st.columns([8, 1])
+            
+            with c_head:
                 st.markdown(f"#### ✅ Sesión {r_sesion} <span style='font-size:14px; color:#888'>({fecha_str})</span>", unsafe_allow_html=True)
                 st.markdown(f"<div style='text-decoration: line-through; color: #aaa;'>", unsafe_allow_html=True)
                 st.markdown(r_texto)
                 st.markdown("</div>", unsafe_allow_html=True)
-            else:
-                st.markdown(f"#### ⭕ Sesión {r_sesion}")
-                st.markdown(r_texto)
-        with c_act:
-            st.write("")
-            if esta_realizada:
-                # CAMBIO: Solo Emoji Cruz
+            
+            with c_act:
+                st.write("") # Alineación vertical
                 if st.button("❌", key=f"un_{r_id}_{key_suffix}", help="Desmarcar (No realizada)"):
                     borrar_seguimiento(r_id, mi_id)
                     st.rerun()
-            else:
-                # CAMBIO: Botón "DÍA GANADO"
+        else:
+            # Si está pendiente, mantenemos espacio para el botón grande "DÍA GANADO"
+            c_head, c_act = st.columns([5, 2])
+            
+            with c_head:
+                st.markdown(f"#### ⭕ Sesión {r_sesion}")
+                st.markdown(r_texto)
+            
+            with c_act:
+                st.write("") # Alineación vertical
                 if st.button("🏊 DÍA GANADO", key=f"do_{r_id}_{key_suffix}", type="primary", help="Marcar como Completada"):
                     guardar_seguimiento(r_id, mi_id)
                     st.rerun()
+
         st.markdown("</div>", unsafe_allow_html=True)
 
 def render_feed_activo(df_rut, df_seg, anio_ver, mes_ver, key_suffix=""):
