@@ -57,18 +57,19 @@ def calcular_categoria_master(anio_nac):
     try:
         edad = datetime.now().year - int(anio_nac)
         if edad < 20: return "Juvenil"
-        elif 20 <= edad <= 24: return "PRE"
-        elif 25 <= edad <= 29: return "A"
-        elif 30 <= edad <= 34: return "B"
-        elif 35 <= edad <= 39: return "C"
-        elif 40 <= edad <= 44: return "D"
-        elif 45 <= edad <= 49: return "E"
-        elif 50 <= edad <= 54: return "F"
-        elif 55 <= edad <= 59: return "G"
-        elif 60 <= edad <= 64: return "H"
-        elif 65 <= edad <= 69: return "I"
-        elif 70 <= edad <= 74: return "J"
-        else: return "K+"
+        elif 20 <= edad <= 24: return "Pre-Master"
+        elif 25 <= edad <= 29: return "Master A"
+        elif 30 <= edad <= 34: return "Master B"
+        elif 35 <= edad <= 39: return "Master C"
+        elif 40 <= edad <= 44: return "Master D"
+        elif 45 <= edad <= 49: return "Master E"
+        elif 50 <= edad <= 54: return "Master F"
+        elif 55 <= edad <= 59: return "Master G"
+        elif 60 <= edad <= 64: return "Master H"
+        elif 65 <= edad <= 69: return "Master I"
+        elif 70 <= edad <= 74: return "Master J"
+        elif 75 <= edad <= 79: return "Master K"
+        else: return "Master K+"
     except: return "-"
 
 @st.cache_data(ttl="5s")
@@ -269,7 +270,7 @@ else:
                 <div style="font-size:13px; color:#ccc;">{row['descripcion'] or ''}</div>
             </div>""", unsafe_allow_html=True)
 
-            # LISTA PÚBLICA DETALLADA
+            # LISTA PÚBLICA
             with st.expander("📋 Ver Lista de Inscriptos"):
                 f_ins = df_inscripciones[df_inscripciones['id_competencia'] == comp_id]
                 if f_ins.empty: st.caption("Sin inscriptos.")
@@ -278,12 +279,7 @@ else:
                     d_full['Anio'] = d_full['fechanac'].dt.year
                     d_full['Cat'] = d_full['Anio'].apply(calcular_categoria_master)
                     d_full['Nadador'] = d_full['apellido'] + ", " + d_full['nombre']
-                    # Mostrar tabla pública limpia
-                    st.dataframe(
-                        d_full[['Nadador', 'codgenero', 'Cat', 'pruebas']].rename(columns={'codgenero':'Gen', 'pruebas':'Pruebas'}), 
-                        hide_index=True, 
-                        use_container_width=True
-                    )
+                    st.dataframe(d_full[['Nadador', 'codgenero', 'Cat', 'pruebas']].rename(columns={'codgenero':'Gen', 'pruebas':'Pruebas'}), hide_index=True, use_container_width=True)
 
             # INSCRIPCIÓN USUARIO
             ins_user = df_inscripciones[(df_inscripciones['id_competencia'] == comp_id) & (df_inscripciones['codnadador'] == mi_id)]
@@ -315,7 +311,7 @@ else:
             elif esta:
                 st.success(f"✅ Inscripto: {ins_user.iloc[0]['pruebas']}")
 
-            # ADMIN PANEL - INTERMEDIO (Filas compactas pero directas)
+            # ADMIN PANEL
             if rol in ["M", "P"]:
                 with st.expander(f"🛡️ Administrar ({row['nombre_evento']})"):
                     t1, t2 = st.tabs(["❌ Gestión Bajas", "⚙️ Editar Evento"])
@@ -324,30 +320,31 @@ else:
                         if f_ins.empty:
                             st.caption("Nada para gestionar.")
                         else:
-                            # Volvemos a generar data si hace falta, pero ya la tenemos arriba en 'd_full'
-                            # Usamos d_full filtrada para este bloque
                             d_adm = f_ins.merge(df_nadadores, on="codnadador", how="left")
                             d_adm['Nombre'] = d_adm['apellido'] + " " + d_adm['nombre']
                             d_adm['Anio'] = d_adm['fechanac'].dt.year
                             d_adm['Cat'] = d_adm['Anio'].apply(calcular_categoria_master)
 
-                            # CABECERA COMPACTA
-                            c1, c2, c3, c4 = st.columns([3, 1.5, 3, 1])
+                            # --- CABECERA SEPARADA ---
+                            c1, c2, c3, c4, c5 = st.columns([3, 1, 2, 3, 1])
                             c1.markdown("**Nadador**")
-                            c2.markdown("**Cat/Gen**")
-                            c3.markdown("**Pruebas**")
-                            c4.markdown("**Acción**")
+                            c2.markdown("**Gen**")
+                            c3.markdown("**Cat**")
+                            c4.markdown("**Pruebas**")
+                            c5.markdown("**X**")
                             st.divider()
 
-                            # FILAS COMPACTAS
+                            # --- FILAS SEPARADAS ---
                             for _, r_adm in d_adm.iterrows():
-                                rc1, rc2, rc3, rc4 = st.columns([3, 1.5, 3, 1])
+                                rc1, rc2, rc3, rc4, rc5 = st.columns([3, 1, 2, 3, 1])
                                 with rc1: st.write(f"**{r_adm['Nombre']}**")
-                                with rc2: st.caption(f"{r_adm['Cat']} ({r_adm['codgenero']})")
-                                with rc3: st.caption(r_adm['pruebas'])
-                                with rc4: 
+                                with rc2: st.write(f"{r_adm['codgenero']}")
+                                with rc3: st.write(f"{r_adm['Cat']}")
+                                with rc4: st.caption(r_adm['pruebas'])
+                                with rc5: 
                                     if st.button("🗑️", key=f"d_{comp_id}_{r_adm['codnadador']}", help="Eliminar"):
                                         eliminar_inscripcion(comp_id, r_adm['codnadador']); st.rerun()
+                                st.markdown("<hr style='margin: 3px 0; border-color: #333;'>", unsafe_allow_html=True)
 
                     with t2:
                         l_pre = [x.strip() for x in str(row.get('pruebas_habilitadas', "")).split(",")] if str(row.get('pruebas_habilitadas', "")).strip() else LISTA_PRUEBAS
