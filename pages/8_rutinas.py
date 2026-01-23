@@ -425,7 +425,7 @@ if rol in ["M", "P"]:
     if "g_anio" not in st.session_state: st.session_state.g_anio = datetime.now().year
     if "g_mes" not in st.session_state: st.session_state.g_mes = datetime.now().month
 
-    # Trigger para recalcular el número de sesión
+    # Trigger para recalcular el número de sesión (Carga inicial)
     if st.session_state.get("trigger_calculo", False) or "admin_sesion" not in st.session_state:
         if df_rutinas is not None:
             prox = calcular_proxima_sesion(df_rutinas, st.session_state.g_anio, st.session_state.g_mes)
@@ -451,6 +451,13 @@ if rol in ["M", "P"]:
     
     with st.expander("⚙️ Gestión de Sesiones (Crear/Editar)", expanded=False):
         st.markdown("##### Editor de Sesiones")
+
+        # --- FIX: LOGICA DE AVANCE SEGURO (SE EJECUTA AL RERUN) ---
+        if st.session_state.get("forzar_avance_sesion", False):
+            if "admin_sesion" in st.session_state and st.session_state.admin_sesion < 31:
+                st.session_state.admin_sesion += 1
+            st.session_state.forzar_avance_sesion = False
+        # ----------------------------------------------------------
         
         c1, c2, c3 = st.columns([1, 1, 1])
         
@@ -498,12 +505,8 @@ if rol in ["M", "P"]:
                         st.error(msg)
                     else:
                         st.success(msg)
-                        # --- FIX CRÍTICO: AVANCE MANUAL DE SESIÓN ---
-                        # Incrementamos manualmente el contador para que la UI muestre el siguiente numero
-                        # sin esperar a leer la base de datos (que puede tardar en reflejar el cambio).
-                        if st.session_state.admin_sesion < 31:
-                             st.session_state.admin_sesion += 1
-                        
+                        # Activar flag y recargar para que se ejecute al inicio
+                        st.session_state.forzar_avance_sesion = True
                         time.sleep(0.5)
                         st.rerun()
             
