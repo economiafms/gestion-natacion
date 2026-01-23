@@ -75,6 +75,41 @@ def intentar_desbloqueo():
 
 # --- VISUALIZACIÓN ---
 
+# // NUEVO: 3️⃣ Primera sección colapsada – Guía de uso (INICIO)
+if st.session_state.role == "N":
+    with st.expander("📖 Guía rápida de uso – Perfil Nadador", expanded=False):
+        st.markdown("""
+        Este sistema está diseñado para que cada nadador gestione y registre su propia información deportiva.
+        
+        Cuantos más datos cargues, mejor vas a poder analizar tu rendimiento y evolución en el tiempo.
+        
+        **Ficha**
+        Encontrás todo lo relacionado a tu perfil deportivo: competencias, mejores tiempos, historial y relevos. 
+        También podés consultar la ficha de un compañero si conocés su DNI.
+        
+        **Rutinas**
+        Accedés a las rutinas mensuales del entrenador, con una barra de progreso para saber en qué sesión estás y llevar un registro ordenado de tus entrenamientos.
+        
+        **Entrenamientos**
+        Este módulo se utiliza para cargar los test de rendimiento. 
+        Los test pueden incluir parciales, divididos en cuatro tramos según la distancia de la prueba. 
+        Las pruebas de 50 metros no tienen parciales. 
+        Si no contás con los parciales, podés cargar el test sin ese detalle.
+        
+        **Mi categoría**
+        Visualizás los valores promedio de tu categoría y los nadadores que la integran, para comparar tus tiempos y rendimiento en competencias.
+        
+        **Agenda**
+        Encontrás las próximas competencias del equipo y podés registrarte de forma simple, reemplazando el registro en Excel por un sistema más dinámico.
+        
+        **Aclaraciones importantes**
+        * La información es autogestionada por el nadador
+        * El entrenador no carga ni corrige datos
+        * Cada registro suma para tu mejora futura
+        * Uso personal, voluntario y a libre demanda
+        """)
+
+# // EXISTENTE (sin modificar)
 # BANNER TÍTULO
 st.markdown("""
     <style>
@@ -238,8 +273,19 @@ if db and st.session_state.user_id:
     st.write("")
 
     # 4. ESTADÍSTICAS GLOBALES DEL CLUB
+    # // RECALCULO: 1️⃣ Estadísticas del club (recalcular)
     st.markdown("<h5 style='text-align: center; color: #888;'>ESTADÍSTICAS DEL CLUB</h5>", unsafe_allow_html=True)
     
+    total_nadadores = len(db['nadadores'])
+    total_pruebas_reg = len(df_t) + len(df_r)
+
+    st.columns(1) # Espaciador
+    c_n1, c_n2 = st.columns(2)
+    with c_n1:
+        st.metric("Nadadores", total_nadadores)
+    with c_n2:
+        st.metric("Pruebas Registradas", total_pruebas_reg)
+
     t_oro = len(df_t[df_t['posicion']==1]) + len(df_r[df_r['posicion']==1])
     t_plata = len(df_t[df_t['posicion']==2]) + len(df_r[df_r['posicion']==2])
     t_bronce = len(df_t[df_t['posicion']==3]) + len(df_r[df_r['posicion']==3])
@@ -272,25 +318,31 @@ if db and st.session_state.user_id:
         st.altair_chart((base.mark_arc(outerRadius=80, innerRadius=50).encode(color=alt.Color("codgenero", scale=colors, legend=None)) + base.mark_text(radius=100).encode(text="count()", order=alt.Order("codgenero"), color=alt.value("white"))), use_container_width=True)
 
     # --- 6. CANDADO DEL PROFE ---
+    # // MODIFICADO: 2️⃣ Visual del candado según perfil (INICIO)
     st.write(""); st.write("")
-    col_space, col_lock = st.columns([8, 1])
-    with col_lock:
-        if not st.session_state.admin_unlocked:
-            if st.button("🔒", help="Desbloquear Admin", type="tertiary", key="btn_lock_open"):
-                st.session_state.show_login_form = not st.session_state.show_login_form
-        else:
-            if st.button("🔓", help="Bloquear Admin", key="btn_lock_close"):
-                st.session_state.admin_unlocked = False
-                st.rerun()
-
-    if st.session_state.show_login_form and not st.session_state.admin_unlocked:
-        with st.form("admin_login_form"):
-            st.write("**Acceso Profesor**")
-            st.text_input("Usuario", key="u_in")
-            st.text_input("Contraseña", type="password", key="p_in")
-            st.form_submit_button("Desbloquear", on_click=intentar_desbloqueo)
     
-    if st.session_state.admin_unlocked:
-        st.success("🔓 Gestión Habilitada: Ver menú lateral")
-        if st.button("⚙️ IR AL PANEL DE CARGA", type="primary", use_container_width=True):
-            st.switch_page("pages/1_cargar_datos.py")
+    if st.session_state.role == "M":
+        # Estructura visual para Manager: Candado convertido en botón "CARGAR COMPETENCIAS"
+        col_space, col_lock = st.columns([1, 4]) # Ajuste para que el botón sea visible al final
+        with col_lock:
+            label_btn = "⚙️ CARGAR COMPETENCIAS" if not st.session_state.admin_unlocked else "🔒 BLOQUEAR GESTIÓN"
+            if st.button(label_btn, use_container_width=True, key="btn_lock_toggle_m"):
+                if not st.session_state.admin_unlocked:
+                    st.session_state.show_login_form = not st.session_state.show_login_form
+                else:
+                    st.session_state.admin_unlocked = False
+                    st.rerun()
+
+        if st.session_state.show_login_form and not st.session_state.admin_unlocked:
+            with st.form("admin_login_form"):
+                st.write("**Acceso Profesor**")
+                st.text_input("Usuario", key="u_in")
+                st.text_input("Contraseña", type="password", key="p_in")
+                st.form_submit_button("Desbloquear", on_click=intentar_desbloqueo)
+        
+        if st.session_state.admin_unlocked:
+            st.success("🔓 Gestión Habilitada: Ver menú lateral")
+            if st.button("⚙️ IR AL PANEL DE CARGA", type="primary", use_container_width=True):
+                st.switch_page("pages/1_cargar_datos.py")
+    
+    # Si el rol es "N", no se renderiza nada en esta sección (el candado desaparece)
