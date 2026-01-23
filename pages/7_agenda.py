@@ -139,7 +139,6 @@ def guardar_competencia(id_comp, nombre, fecha_ev, hora, cod_pil, fecha_lim, cos
     if df_comp is None:
         df_comp = pd.DataFrame(columns=["id_competencia", "nombre_evento", "fecha_evento", "hora_inicio", "cod_pileta", "fecha_limite", "costo", "descripcion", "pruebas_habilitadas"])
     
-    # Asegurar columna si no existe en el fresco
     if 'pruebas_habilitadas' not in df_comp.columns:
         df_comp['pruebas_habilitadas'] = ""
 
@@ -158,13 +157,11 @@ def guardar_competencia(id_comp, nombre, fecha_ev, hora, cod_pil, fecha_lim, cos
     }
 
     if id_comp and not df_comp.empty and id_comp in df_comp['id_competencia'].values:
-        # Editar
         idx = df_comp.index[df_comp['id_competencia'] == id_comp].tolist()[0]
         for key, val in nuevo_registro.items():
             df_comp.at[idx, key] = val
         msg = "✅ Evento actualizado correctamente."
     else:
-        # Crear
         df_comp = pd.concat([df_comp, pd.DataFrame([nuevo_registro])], ignore_index=True)
         msg = "✅ Evento creado correctamente."
 
@@ -180,10 +177,8 @@ def eliminar_competencia(id_comp):
     
     if df_comp is None: return False, "Error conexión."
 
-    # Eliminar evento
     df_comp_final = df_comp[df_comp['id_competencia'] != id_comp]
     
-    # Eliminar inscripciones
     if df_ins is not None and not df_ins.empty:
         df_ins_final = df_ins[df_ins['id_competencia'] != id_comp]
         actualizar_con_retry("Inscripciones", df_ins_final)
@@ -360,6 +355,7 @@ else:
             # --- LISTADO PÚBLICO DE INSCRIPTOS ---
             with st.expander("📋 Ver Lista de Inscriptos"):
                 filtro_ins = df_inscripciones[df_inscripciones['id_competencia'] == comp_id]
+                
                 if filtro_ins.empty:
                     st.caption("Aún no hay nadadores inscriptos.")
                 else:
@@ -421,7 +417,7 @@ else:
                 if esta_inscripto:
                     st.success(f"✅ Tu inscripción: {inscripcion_user.iloc[0]['pruebas']}")
 
-            # --- LÓGICA ADMIN (PANEL MEJORADO - INTERMEDIO) ---
+            # --- LÓGICA ADMIN (PANEL REDISEÑADO: TABLA + SELECTOR) ---
             if rol in ["M", "P"]:
                 with st.expander(f"🛡️ Panel Entrenador ({row['nombre_evento']})"):
                     t1, t2 = st.tabs(["❌ Gestión Bajas", "⚙️ Editar Evento"])
@@ -431,7 +427,7 @@ else:
                         if filtro_ins.empty:
                             st.caption("Nada para gestionar.")
                         else:
-                            # Re-crear data completa si hace falta
+                            # Preparar datos completos
                             if 'data_full' not in locals():
                                 data_full = filtro_ins.merge(df_nadadores, on="codnadador", how="left")
                                 data_full['AnioNac'] = data_full['fechanac'].dt.year
@@ -439,16 +435,16 @@ else:
                                 data_full['Nadador'] = data_full['apellido'] + ", " + data_full['nombre']
                                 data_full['Genero'] = data_full['codgenero']
 
-                            # 1. Tabla Limpia para ver todo
+                            # 1. Tabla Limpia (Con Gen y Cat separados)
                             st.dataframe(
-                                data_full[['Nadador', 'Genero', 'Categoria', 'pruebas']],
+                                data_full[['Nadador', 'Genero', 'Categoria', 'pruebas']].rename(columns={'pruebas': 'Pruebas'}),
                                 hide_index=True,
                                 use_container_width=True
                             )
                             
                             st.divider()
                             
-                            # 2. Selector para borrar (Más seguro y ordenado que mil botones)
+                            # 2. Selector para borrar (Diseño Intermedio)
                             c_del1, c_del2 = st.columns([3, 1])
                             with c_del1:
                                 u_del = st.selectbox(
@@ -458,7 +454,7 @@ else:
                                     key=f"s_del_{comp_id}"
                                 )
                             with c_del2:
-                                st.write("") # Espaciador vertical
+                                st.write("") # Espaciador
                                 if st.button("Eliminar", key=f"b_del_{comp_id}", type="primary"):
                                     eliminar_inscripcion(comp_id, u_del)
                                     st.rerun()
