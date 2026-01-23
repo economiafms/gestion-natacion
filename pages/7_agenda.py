@@ -40,7 +40,6 @@ LISTA_PRUEBAS = [
 # ==========================================
 
 def actualizar_con_retry(worksheet, data, max_retries=5):
-    """Manejo robusto de la API con reintentos."""
     for i in range(max_retries):
         try:
             conn.update(worksheet=worksheet, data=data)
@@ -54,7 +53,6 @@ def actualizar_con_retry(worksheet, data, max_retries=5):
     return False, "Tiempo de espera agotado."
 
 def calcular_categoria_master(anio_nac):
-    """Calcula la categoría Master completa."""
     if pd.isna(anio_nac) or anio_nac == "": return "-"
     try:
         edad = datetime.now().year - int(anio_nac)
@@ -76,7 +74,6 @@ def calcular_categoria_master(anio_nac):
 
 @st.cache_data(ttl="5s")
 def cargar_datos_agenda():
-    """Carga todas las tablas necesarias."""
     try:
         try:
             df_comp = conn.read(worksheet="Competencias").copy()
@@ -113,7 +110,7 @@ def leer_dataset_fresco(worksheet):
     except: return None
 
 # ==========================================
-# 5. FUNCIONES CRUD (LOGICA)
+# 5. FUNCIONES CRUD
 # ==========================================
 
 def guardar_competencia(id_comp, nombre, fecha_ev, hora, cod_pil, fecha_lim, costo, desc, lista_pruebas_hab):
@@ -241,9 +238,7 @@ else:
     for _, row in df_view.iterrows():
         comp_id = row['id_competencia']
         
-        # Filtrado de inscriptos (Importante hacerlo aquí para que esté disponible para ambos roles)
         filtro_ins = df_inscripciones[df_inscripciones['id_competencia'] == comp_id]
-        
         if not filtro_ins.empty:
             d_full = filtro_ins.merge(df_nadadores, on="codnadador", how="left")
             d_full['Anio'] = d_full['fechanac'].dt.year
@@ -252,7 +247,7 @@ else:
         else:
             d_full = pd.DataFrame()
 
-        # Datos Visuales Evento
+        # Visual Evento
         d_pil = df_piletas[df_piletas['codpileta'] == row['cod_pileta']]
         nom_pil = f"{d_pil.iloc[0]['club']} ({d_pil.iloc[0]['medida']})" if not d_pil.empty else row['cod_pileta']
         ubic_pil = d_pil.iloc[0]['ubicacion'] if not d_pil.empty else "-"
@@ -265,7 +260,6 @@ else:
         elif dias_cie < 0: badge = "🔒 CERRADA"; bg = "#E30613"; abierta = False
         else: badge = f"🟢 ABIERTA ({dias_cie} días)"; bg = "#2E7D32"
 
-        # Tarjeta Visual (Estilo Original)
         with st.container():
             st.markdown(f"""
             <div style="background-color: #262730; border: 1px solid #555; border-radius: 8px; padding: 15px; margin-bottom: 10px;">
@@ -285,24 +279,32 @@ else:
                 <div style="font-size:13px; color:#ccc;">{row['descripcion'] or ''}</div>
             </div>""", unsafe_allow_html=True)
 
-            # === A. LISTA PÚBLICA (MEJORADA: Cat/Gen Grandes) ===
+            # === A. LISTA PÚBLICA (MEJORADA: Chips + Color Específico) ===
             with st.expander("📋 Ver Lista de Inscriptos"):
                 if d_full.empty:
                     st.caption("Aún no hay nadadores inscriptos.")
                 else:
                     for _, r_pub in d_full.iterrows():
-                        # Tarjeta Nativa (Limpia, sin HTML custom raro)
+                        # Generar Chips para las pruebas
+                        p_list = [p.strip() for p in str(r_pub['pruebas']).split(",")]
+                        chips = ""
+                        for p in p_list:
+                            chips += f"<span style='background-color:#444; color:#eee; padding:2px 8px; border-radius:12px; font-size:11px; margin-right:4px; display:inline-block; margin-top:4px;'>{p}</span>"
+                        
+                        # Determinar color de Categoría (Master C Rojo, resto Azul)
+                        cat_val = r_pub['Cat']
+                        color_cat = "#FF8A80" if cat_val == "Master C" else "#64B5F6"
+
+                        # Tarjeta Nativa
                         with st.container(border=True):
                             c1, c2 = st.columns([3, 1])
                             with c1:
-                                # Nombre
                                 st.write(f"**{r_pub['Nombre']}**")
-                                # Pruebas con formato limpio
-                                st.caption(f"🏊 {str(r_pub['pruebas']).replace(',', ' • ')}")
+                                # Renderizamos los chips
+                                st.markdown(chips, unsafe_allow_html=True)
                             with c2:
-                                # CATEGORÍA Y GÉNERO: Grandes y destacados usando Headers nativos
-                                # El color azul se aplica nativamente con :blue[]
-                                st.markdown(f"#### :blue[{r_pub['Cat']}]") 
+                                # Categoría con color dinámico
+                                st.markdown(f"<h4 style='margin:0; padding:0; color:{color_cat};'>{cat_val}</h4>", unsafe_allow_html=True)
                                 st.markdown(f"##### {r_pub['codgenero']}")
 
             # === B. INSCRIPCIÓN USUARIO ===
@@ -337,44 +339,42 @@ else:
             elif esta:
                 st.success(f"✅ Inscripto en: {ins_user.iloc[0]['pruebas']}")
 
-            # === C. PANEL ENTRENADOR (DINÁMICO + RESPONSIVE) ===
+            # === C. PANEL ENTRENADOR (CONTAINER SCROLL + TACHO) ===
             if rol in ["M", "P"]:
                 with st.expander(f"🛡️ Panel Entrenador ({row['nombre_evento']})"):
                     t1, t2 = st.tabs(["❌ Gestión Bajas", "⚙️ Editar Evento"])
                     
-                    # 1. Gestión Bajas
                     with t1:
                         if d_full.empty:
                             st.caption("Nada para gestionar.")
                         else:
-                            # TABLA VISUALIZACIÓN (Para ver el panorama)
-                            st.dataframe(
-                                d_full[['Nombre', 'codgenero', 'Cat', 'pruebas']].rename(columns={'codgenero':'Gen', 'pruebas':'Pruebas'}),
-                                hide_index=True,
-                                use_container_width=True,
-                                column_config={"Pruebas": st.column_config.TextColumn("Pruebas", width="large")}
-                            )
-                            
-                            st.divider()
-                            
-                            # ZONA DE ACCIÓN (RESPONSIVE)
-                            st.markdown("##### 🗑️ Zona de Eliminación")
-                            # Contenedor con borde para separar la acción
-                            with st.container(border=True):
-                                # Diseño APILADO (Stacked) para móviles:
-                                # 1. Selector ocupa todo el ancho
-                                u_del = st.selectbox(
-                                    "Seleccionar nadador para dar de baja:", 
-                                    d_full['codnadador'].unique(), 
-                                    format_func=lambda x: d_full[d_full['codnadador']==x]['Nombre'].values[0],
-                                    key=f"s_del_{comp_id}"
-                                )
-                                # 2. Botón ocupa todo el ancho (Debajo del selector)
-                                if st.button("Confirmar Baja", key=f"b_del_{comp_id}", type="primary", use_container_width=True):
-                                    eliminar_inscripcion(comp_id, u_del)
-                                    st.rerun()
+                            # MARCO CONTENEDOR CON ALTURA FIJA (SCROLL)
+                            with st.container(height=400, border=True):
+                                # CABECERA
+                                h1, h2 = st.columns([0.85, 0.15])
+                                h1.markdown("**Nadador**")
+                                h2.markdown("🗑️")
+                                st.divider()
 
-                    # 2. Edición
+                                # LISTA ROW-BY-ROW
+                                for _, r_adm in d_full.iterrows():
+                                    c_info, c_act = st.columns([0.85, 0.15])
+                                    with c_info:
+                                        # Info completa
+                                        st.write(f"**{r_adm['Nombre']}**")
+                                        # Chips visuales también para el admin
+                                        p_list_adm = [p.strip() for p in str(r_adm['pruebas']).split(",")]
+                                        chips_adm = ""
+                                        for p in p_list_adm:
+                                            chips_adm += f"<span style='background-color:#333; border:1px solid #555; color:#aaa; padding:1px 6px; border-radius:10px; font-size:10px; margin-right:3px; display:inline-block;'>{p}</span>"
+                                        
+                                        st.markdown(f"{r_adm['Cat']} | {r_adm['codgenero']} <br> {chips_adm}", unsafe_allow_html=True)
+                                    with c_act:
+                                        if st.button("🗑️", key=f"d_{comp_id}_{r_adm['codnadador']}"):
+                                            eliminar_inscripcion(comp_id, r_adm['codnadador'])
+                                            st.rerun()
+                                    st.divider()
+
                     with t2:
                         l_pre = [x.strip() for x in str(row.get('pruebas_habilitadas', "")).split(",")] if str(row.get('pruebas_habilitadas', "")).strip() else LISTA_PRUEBAS
                         with st.form(f"ed_{comp_id}"):
@@ -384,7 +384,6 @@ else:
                             
                             ce3, ce4 = st.columns(2)
                             nf = ce3.date_input("Fecha", value=pd.to_datetime(row['fecha_dt']), format="DD/MM/YYYY")
-                            # Corrección de variable f_lim
                             nl = ce4.date_input("Cierre", value=pd.to_datetime(f_lim), format="DD/MM/YYYY")
                             
                             nh = st.multiselect("Pruebas", LISTA_PRUEBAS, default=[x for x in l_pre if x in LISTA_PRUEBAS])
