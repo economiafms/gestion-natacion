@@ -32,19 +32,20 @@ def cargar_datos_rutinas():
     try:
         # Rutinas
         try:
-            df_rut = conn.read(worksheet="Rutinas")
+            # CORRECCIÓN 1: .copy() al leer para evitar problemas con la caché de conexión
+            df_rut = conn.read(worksheet="Rutinas").copy()
         except:
             df_rut = pd.DataFrame(columns=["id_rutina", "anio_rutina", "mes_rutina", "nro_sesion", "texto_rutina"])
         
         # Seguimiento
         try:
-            df_seg = conn.read(worksheet="Rutinas_Seguimiento")
+            df_seg = conn.read(worksheet="Rutinas_Seguimiento").copy()
         except:
             df_seg = pd.DataFrame(columns=["id_rutina", "codnadador", "fecha_realizada"])
 
-        # Nadadores (Para el filtro del profesor)
+        # Nadadores
         try:
-            df_nad = conn.read(worksheet="Nadadores")
+            df_nad = conn.read(worksheet="Nadadores").copy()
         except:
             df_nad = pd.DataFrame(columns=["codnadador", "nombre", "apellido"])
             
@@ -100,6 +101,10 @@ def borrar_seguimiento(id_rutina, id_nadador):
 
 def guardar_rutina_admin(anio, mes, sesion, texto):
     df_rut, df_seg, df_nad = cargar_datos_rutinas()
+    
+    # CORRECCIÓN 2: Crear copia explícita antes de modificar
+    df_rut = df_rut.copy()
+    
     nuevo_id = f"{anio}-{mes:02d}-S{sesion:02d}"
     mask = df_rut['id_rutina'] == nuevo_id
     
