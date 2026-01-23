@@ -8,25 +8,6 @@ import random
 # --- 1. CONFIGURACIÓN ---
 st.set_page_config(page_title="Sesiones de Entrenamiento", layout="centered")
 
-# --- PLANTILLA TEST ---
-PLANTILLA_TEST = """OBJETIVO: EVALUACIÓN
--
-10’ Ec. Movilidad
--
-10’ Ec. Tensor
--
-Ec. 500 suaves ( 200 crol + 100 CT + 200 estilos a elección)
--
-6 x 15m Pat Ph c/20"p
--
-6 x 15m f1 c/10"p
--
-200 f3 + 2' o 3' p est.
--
-Realizar Test (partida parte profunda)
--
-200 Afloje + Flexibilidad"""
-
 # --- 2. SEGURIDAD ---
 if "role" not in st.session_state or not st.session_state.role:
     st.switch_page("index.py")
@@ -47,35 +28,43 @@ def obtener_nombre_mes(n):
     except:
         return "Desconocido"
 
-# --- GLOSARIO DE REFERENCIAS ---
+# --- GLOSARIO DE REFERENCIAS (DISEÑO MOBILE FRIENDLY) ---
 def mostrar_referencias():
-    """Muestra el glosario en un desplegable consultivo UNA SOLA VEZ."""
-    with st.expander("📖 Glosario de Referencias y Abreviaturas"):
+    """
+    Muestra el glosario UNA SOLA VEZ.
+    Diseño adaptado para móviles (sin tablas anchas).
+    """
+    with st.expander("📖 Glosario de Referencias (Ayuda)"):
         st.markdown("""
-        | Sigla | Significado | Detalle / Intensidad |
-        | :--- | :--- | :--- |
-        | **T** | Tolerancia | Intensidad alta 100 – 110% |
-        | **VC** | Velocidad Corta | Máxima velocidad |
-        | **VS** | Velocidad Sostenida | Mantener velocidad alta |
-        | **Prog.**| Progresivo | De menor a mayor |
-        | **Reg** | Regresivo | De mayor a menor |
-        | **F1** | Vo2 | Intensidad 100% |
-        | **F2** | Super Aeróbico | Intensidad 80-90% |
-        | **F3** | Sub Aeróbico | Intensidad 70% |
-        | **Ec** | Entrada en Calor | Nado suave inicial |
-        | **EcT** | Ec Tensor | Bíceps/Tríceps/Dorsales/Hombros/Pecho |
-        | **EcM** | Ec Movilidad | Fuera del agua (Brazos/Cintura/Piernas) |
-        | **Act** | Activación | Fuera del agua (Piernas/Brazos/Core) |
-        | **m** | Metros | Distancia |
-        | **p** | Pausa estática | Descanso quieto |
-        | **p act**| Pausa Activa | Descanso en movimiento suave |
-        | **D/** | Dentro del tiempo | Intervalo fijo |
-        | **C/** | Con tiempo | Pausa fija entre repeticiones |
-        | **Pat Ph**| Patada Pos. Hidro.| Cuerpo alineado |
-        | **B** | Brazada | C: Crol / E: Espalda / P: Pecho / M: Mariposa |
-        | **Pat Tabla**| Patada c/ tabla | |
-        | **PB** | Pull Brazada | Uso de pullboy (c/e/p/m) |
-        | **CT** | Corrección Técnica| Foco en el estilo |
+        **INTENSIDADES**
+        * **T (Tolerancia):** Intensidad alta 100 – 110%
+        * **VC (Velocidad Corta):** Máxima velocidad
+        * **VS (Velocidad Sostenida):** Mantener velocidad alta
+        * **F1 (Vo2):** Intensidad 100%
+        * **F2 (Super Aeróbico):** Intensidad 80-90%
+        * **F3 (Sub Aeróbico):** Intensidad 70%
+        * **Prog. (Progresivo):** De menor a mayor
+        * **Reg (Regresivo):** De mayor a menor
+
+        **ACTIVACIÓN Y ENTRADA EN CALOR**
+        * **Ec (Entrada en Calor):** Nado suave inicial
+        * **EcT (Ec Tensor):** Bíceps, Tríceps, Dorsales, Hombros, Pecho, Antebrazos
+        * **EcM (Ec Movilidad):** Fuera del agua (Brazos, Cintura, Piernas, Tobillos, Cuello)
+        * **Act (Activación):** Fuera del agua (Piernas, Brazos, Core)
+
+        **TÉCNICA Y ESTILOS**
+        * **B (Brazada):** C (Crol), E (Espalda), P (Pecho), M (Mariposa)
+        * **Pat Ph:** Patada en Posición Hidrodinámica
+        * **Pat Tabla:** Patada con tabla
+        * **PB (Pull Brazada):** Uso de pullboy
+        * **CT:** Corrección Técnica
+        
+        **OTROS**
+        * **m:** Metros
+        * **p:** Pausa estática
+        * **p act:** Pausa Activa
+        * **D/:** Dentro del tiempo
+        * **C/:** Con tiempo de pausa
         """)
 
 # --- FUNCIÓN DE RETRY ---
@@ -192,7 +181,6 @@ def borrar_seguimiento(id_rutina, id_nadador):
         st.error(f"Error al borrar: {error}")
         return False
 
-# --- ELIMINAR SESIÓN (CON VALIDACIÓN DE SECUENCIA) ---
 def eliminar_sesion_admin(id_rutina):
     df_rut = leer_dataset_fresco("Rutinas")
     if df_rut is None: return "❌ Error de conexión."
@@ -200,7 +188,7 @@ def eliminar_sesion_admin(id_rutina):
     rutina_a_borrar = df_rut[df_rut['id_rutina'] == id_rutina]
     
     if rutina_a_borrar.empty:
-        return "⚠️ La sesión no existe, no se puede eliminar."
+        return "⚠️ La sesión no existe."
     
     r_anio = rutina_a_borrar.iloc[0]['anio_rutina']
     r_mes = rutina_a_borrar.iloc[0]['mes_rutina']
@@ -210,7 +198,7 @@ def eliminar_sesion_admin(id_rutina):
     max_sesion = rutinas_mes['nro_sesion'].max()
     
     if r_sesion < max_sesion:
-        return f"🚫 No se puede eliminar la Sesión {r_sesion} porque existe la Sesión {max_sesion}. Solo se permite eliminar la última sesión del mes."
+        return f"🚫 Solo se permite eliminar la última sesión del mes (Sesión {max_sesion})."
 
     df_rut_final = df_rut[df_rut['id_rutina'] != id_rutina]
     
@@ -218,13 +206,13 @@ def eliminar_sesion_admin(id_rutina):
     
     if exito:
         st.cache_data.clear()
-        return "🗑️ Sesión eliminada correctamente."
+        return "🗑️ Sesión eliminada."
     else:
-        return f"❌ Error al eliminar: {error}"
+        return f"❌ Error: {error}"
 
 def guardar_sesion_admin(anio, mes, sesion, texto):
     df_rut = leer_dataset_fresco("Rutinas")
-    if df_rut is None: return "❌ Error CRÍTICO de conexión."
+    if df_rut is None: return "❌ Error conexión."
 
     if not df_rut.empty:
         df_rut['anio_rutina'] = pd.to_numeric(df_rut['anio_rutina'], errors='coerce').fillna(0).astype(int)
@@ -244,21 +232,13 @@ def guardar_sesion_admin(anio, mes, sesion, texto):
     
     if df_rut[mask].empty:
         df_rut = pd.concat([df_rut, pd.DataFrame([nueva_fila])], ignore_index=True)
-        msg = "✅ Sesión creada correctamente."
+        msg = "✅ Sesión creada."
     else:
         df_rut.loc[mask, "texto_rutina"] = texto
-        df_rut.loc[mask, "anio_rutina"] = int(anio)
-        df_rut.loc[mask, "mes_rutina"] = int(mes)
-        df_rut.loc[mask, "nro_sesion"] = int(sesion)
-        msg = "✅ Sesión actualizada correctamente."
+        msg = "✅ Sesión actualizada."
         
     exito, error = actualizar_con_retry("Rutinas", df_rut)
-    
-    if exito:
-        st.cache_data.clear()
-        return msg
-    else:
-        return f"❌ Error al escribir: {error}"
+    return msg if exito else f"❌ Error: {error}"
 
 def activar_calculo_auto():
     st.session_state.trigger_calculo = True
@@ -270,9 +250,6 @@ def render_tarjeta_individual(row, df_seg, key_suffix):
     r_sesion = row['nro_sesion']
     r_texto = row['texto_rutina']
     
-    # Check si es test (para estilo visual)
-    es_test = "TEST" in r_texto.upper()
-
     check = df_seg[(df_seg['id_rutina'] == r_id) & (df_seg['codnadador'] == mi_id)]
     esta_realizada = not check.empty
     fecha_str = ""
@@ -280,18 +257,15 @@ def render_tarjeta_individual(row, df_seg, key_suffix):
         fecha_obj = pd.to_datetime(check.iloc[0]['fecha_realizada'])
         fecha_str = fecha_obj.strftime("%d/%m")
 
-    # Colores: Verde si está hecha, Rojo si es Test, Gris default
+    # Colores: Verde si está hecha, Gris default (SIN LOGICA DE TEST)
     if esta_realizada:
         borde = "#2E7D32"
         bg = "#1B2E1B"
-    elif es_test:
-        borde = "#E30613" # Rojo Newells
-        bg = "#262730"
     else:
         borde = "#444"
         bg = "#262730"
     
-    titulo_display = f"EVALUACIÓN / TEST" if es_test else f"Sesión {r_sesion}"
+    titulo_display = f"Sesión {r_sesion}"
 
     with st.container():
         st.markdown(f"""<div style="border: 2px solid {borde}; border-radius: 10px; background-color: {bg}; padding: 15px; margin-bottom: 15px;">""", unsafe_allow_html=True)
@@ -333,14 +307,13 @@ def render_feed_activo(df_rut, df_seg, anio_ver, mes_ver, key_suffix=""):
         st.info(f"No hay sesiones cargadas para {obtener_nombre_mes(mes_ver)} {anio_ver}.")
         return
 
-    # --- ORDENAMIENTO: TEST AL FINAL ---
-    rutinas_filtradas['es_test'] = rutinas_filtradas['texto_rutina'].str.upper().str.contains("TEST")
-    rutinas_filtradas.sort_values(by=['es_test', 'nro_sesion'], ascending=[True, True], inplace=True)
+    # ORDENAMIENTO NORMAL (Solo por nro_sesion)
+    rutinas_filtradas.sort_values(by='nro_sesion', ascending=True, inplace=True)
 
     # --- GLOSARIO DE REFERENCIAS (UNICA VEZ, ARRIBA DE LA LISTA) ---
     mostrar_referencias()
 
-    # --- SEPARAR PENDIENTES Y COMPLETADAS (Scroll vertical) ---
+    # --- LISTADO VERTICAL (Scroll) ---
     l_pendientes = []
     l_completadas = []
 
@@ -353,7 +326,7 @@ def render_feed_activo(df_rut, df_seg, anio_ver, mes_ver, key_suffix=""):
 
     if l_completadas:
         with st.expander(f"✅ Historial: {len(l_completadas)} Sesiones Completadas", expanded=False):
-            # Mostramos las completadas en orden inverso (la última hecha arriba)
+            # Mostramos las completadas en orden inverso
             for row in reversed(l_completadas):
                 render_tarjeta_individual(row, df_seg, key_suffix)
         st.write("---")
@@ -367,8 +340,7 @@ def render_feed_activo(df_rut, df_seg, anio_ver, mes_ver, key_suffix=""):
             st.success("¡Excelente! Has completado todas las sesiones del mes. 🏆")
 
 def render_historial_compacto(df_rut, df_seg, anio, mes, id_usuario_objetivo):
-    """Muestra tabla de cumplimiento SIN TEXTO."""
-    
+    """Muestra tabla de cumplimiento."""
     rutinas_mes = df_rut[
         (df_rut['anio_rutina'] == anio) & 
         (df_rut['mes_rutina'] == mes)
@@ -440,6 +412,7 @@ if rol in ["M", "P"]:
 
 # --- 7. INTERFAZ ---
 st.title("📝 Sesiones de Entrenamiento")
+st.subheader(f"{mi_nombre}") # Solo nombre, más chico
 
 if df_rutinas is None:
     st.error("No se pudieron cargar los datos. Verifica tu conexión.")
@@ -455,12 +428,6 @@ if rol in ["M", "P"]:
     with st.expander("⚙️ Gestión de Sesiones (Crear/Editar)", expanded=False):
         st.markdown("##### Editor de Sesiones")
         
-        # --- BOTÓN CARGA RÁPIDA TEST ---
-        if st.button("➕ Cargar Plantilla TEST"):
-            st.session_state.temp_texto = PLANTILLA_TEST
-            st.session_state.trigger_calculo = True
-            st.rerun()
-
         c1, c2, c3 = st.columns([1, 1, 1])
         
         anio_actual = datetime.now().year
@@ -478,23 +445,15 @@ if rol in ["M", "P"]:
         id_busqueda = f"{st.session_state.g_anio}-{st.session_state.g_mes:02d}-S{st.session_state.admin_sesion:02d}"
         row_existente = df_rutinas[df_rutinas['id_rutina'] == id_busqueda]
         
-        # --- LÓGICA DE BOTONES CONDICIONALES ---
         es_edicion = not row_existente.empty
-        
-        # Si apretamos el botón de TEST, usamos esa plantilla
-        if 'temp_texto' in st.session_state:
-            texto_previo = st.session_state.temp_texto
-            del st.session_state.temp_texto
-        else:
-            texto_previo = row_existente.iloc[0]['texto_rutina'] if es_edicion else ""
+        texto_previo = row_existente.iloc[0]['texto_rutina'] if es_edicion else ""
         
         estado_txt = "✏️ Editando Existente" if es_edicion else "✨ Nueva Sesión"
         st.caption(f"ID: {id_busqueda} | {estado_txt}")
         
         with st.form("form_rutina"):
-            f_texto = st.text_area("Contenido", value=texto_previo, height=200, key=f"txt_{id_busqueda}")
+            f_texto = st.text_area("Contenido", value=texto_previo, height=200)
             
-            # Layout condicional de botones
             if es_edicion:
                 c_del, c_save = st.columns([1, 2])
                 with c_del:
@@ -530,7 +489,7 @@ if rol in ["M", "P"]:
 
     st.divider()
 
-    tab_explorar, tab_seguimiento = st.tabs(["📖 Explorar Sesiones (Textos)", "📊 Seguimiento Alumnos"])
+    tab_explorar, tab_seguimiento = st.tabs(["📖 Explorar Sesiones", "📊 Seguimiento Alumnos"])
     
     with tab_explorar:
         col_v1, col_v2 = st.columns(2)
@@ -557,7 +516,7 @@ if rol in ["M", "P"]:
         df_nad_activos = df_nadadores[df_nadadores['codnadador'].isin(ids_activos)].copy()
         
         if df_nad_activos.empty:
-            st.warning("⚠️ Aún no hay alumnos con sesiones completadas.")
+            st.warning("⚠️ Aún no hay alumnos con registros.")
         else:
             df_nad_activos['NombreCompleto'] = df_nad_activos['apellido'] + ", " + df_nad_activos['nombre']
             lista_nads = df_nad_activos[['codnadador', 'NombreCompleto']].sort_values('NombreCompleto')
@@ -565,7 +524,7 @@ if rol in ["M", "P"]:
             col_s1, col_s2, col_s3 = st.columns([2, 1, 1])
             with col_s1:
                 sel_nad_id = st.selectbox(
-                    "Alumno (Con registros)", 
+                    "Alumno", 
                     lista_nads['codnadador'], 
                     format_func=lambda x: lista_nads[lista_nads['codnadador'] == x]['NombreCompleto'].values[0]
                 )
@@ -589,7 +548,7 @@ if rol in ["M", "P"]:
 # ROL: NADADOR (N)
 # ==========================
 else:
-    tab_curso, tab_hist = st.tabs(["📅 Mes en Curso", "📜 Historial / Registro"])
+    tab_curso, tab_hist = st.tabs(["📅 Mes en Curso", "📜 Historial"])
     
     with tab_curso:
         hoy = datetime.now()
@@ -598,7 +557,6 @@ else:
         
     with tab_hist:
         st.markdown("#### Registro de Cumplimiento")
-        st.caption("Aquí puedes verificar tu asistencia a las sesiones pasadas.")
         
         c_h1, c_h2 = st.columns(2)
         anios_disp = sorted(list(set(df_rutinas['anio_rutina'].unique())), reverse=True)
