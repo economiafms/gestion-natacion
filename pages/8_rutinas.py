@@ -309,7 +309,7 @@ def render_historial_compacto(df_rut, df_seg, anio, mes, id_usuario_objetivo):
 
     porcentaje = int((completadas / total_rutinas) * 100) if total_rutinas > 0 else 0
     
-    # --- VOLVEMOS AL DISEÑO NATIVO DE STREAMLIT ---
+    # --- VOLVEMOS AL FORMATO NATIVO (ST.METRIC + ST.COLUMNS) ---
     c1, c2, c3 = st.columns(3)
     c1.metric("Total Sesiones", total_rutinas)
     c2.metric("Completadas", completadas)
