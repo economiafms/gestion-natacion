@@ -200,32 +200,32 @@ if st.session_state.role == "M":
 elif st.session_state.role == "N":
     with st.expander("📖 Guía rápida de uso – Perfil Nadador", expanded=False):
         st.markdown("""
-        Este sistema está diseñado para que gestione y registre mi propia información deportiva.
-        Cuantos más datos cargue, mejor voy a poder analizar mi rendimiento y evolución en el tiempo.
+        Este sistema está diseñado para que cada nadador gestione y registre su propia información deportiva.
+        Cuantos más datos cargues, mejor vas a poder analizar tu rendimiento y evolución en el tiempo.
         
         **👤 Ficha**
-        Encuentro todo lo relacionado a mi perfil deportivo: competencias, mejores tiempos, historial y relevos.
-        También puedo consultar la ficha de un compañero si conozco su DNI.
+        Encontrás todo lo relacionado a tu perfil deportivo: competencias, mejores tiempos, historial y relevos.
+        También podés consultar la ficha de un compañero si conocés su DNI.
         
         **📝 Rutinas**
-        Accedo a las rutinas mensuales del entrenador, con una barra de progreso para saber en qué sesión estoy y llevar un registro ordenado de mis entrenamientos.
+        Accedés a las rutinas mensuales del entrenador, con una barra de progreso para saber en qué sesión estás y llevar un registro ordenado de tus entrenamientos.
         
         **🏋️ Entrenamientos**
-        Este módulo se utiliza para cargar mis test de rendimiento.
+        Este módulo se utiliza para cargar los test de rendimiento.
         Los test pueden incluir parciales, divididos en cuatro tramos según la distancia de la prueba.
         
         **🏅 Mi categoría**
-        Visualizo los valores promedio de mi categoría y los nadadores que la integran, para comparar mis tiempos y rendimiento en competencias.
+        Visualizás los valores promedio de tu categoría y los nadadores que la integran, para comparar tus tiempos y rendimiento en competencias.
         
         **📅 Agenda**
-        Encuentro las próximas competencias del equipo y puedo registrarme de forma simple, reemplazando el registro en Excel por un sistema más dinámico.
+        Encontrás las próximas competencias del equipo y podés registrarte de forma simple, reemplazando el registro en Excel por un sistema más dinámico.
         
         ---
         **Aclaraciones importantes**
-        * La información es autogestionada por mí.
-        * El entrenador no carga ni corrige datos.
-        * Cada registro suma para mi mejora futura.
-        * Uso personal, voluntario y a libre demanda.
+        * La información es autogestionada por el nadador
+        * El entrenador no carga ni corrige datos
+        * Cada registro suma para tu mejora futura
+        * Uso personal, voluntario y a libre demanda
         """)
 
 st.divider()
