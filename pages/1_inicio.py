@@ -130,7 +130,7 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# 1. GUÍA RÁPIDA (Debajo del banner)
+# 1. GUÍA RÁPIDA
 if st.session_state.role == "M":
     with st.expander("📖 Guía rápida de uso – Perfil Manager", expanded=False):
         st.markdown("""
@@ -246,47 +246,75 @@ if db and st.session_state.user_id:
     
     st.write("") 
 
-    # // NUEVO: ATAJO RUTINA DIARIA (Diseño LIBRE y sesión como ENTERO)
+    # // ATAJO RUTINA DIARIA (Logica Completa de Gamificación)
     if st.session_state.role == "N":
-        with st.expander("🏊‍♂️ ¿Hice mi rutina de hoy?", expanded=False):
-            
-            # OBTENER HORA ARGENTINA (UTC-3)
-            hoy_arg = datetime.now(timezone.utc) - timedelta(hours=3)
-            
-            df_rut = db.get('rutinas')
-            df_seg = db.get('seguimiento')
-            
-            if df_rut is not None and df_seg is not None:
-                rutinas_mes = df_rut[
-                    (df_rut['anio_rutina'] == hoy_arg.year) & 
-                    (df_rut['mes_rutina'] == hoy_arg.month)
-                ].copy()
+        # HORA ARGENTINA (UTC-3)
+        hoy_arg = datetime.now(timezone.utc) - timedelta(hours=3)
+        
+        df_rut = db.get('rutinas')
+        df_seg = db.get('seguimiento')
+        
+        if df_rut is not None and df_seg is not None:
+            rutinas_mes = df_rut[
+                (df_rut['anio_rutina'] == hoy_arg.year) & 
+                (df_rut['mes_rutina'] == hoy_arg.month)
+            ].copy()
 
-                hoy_str_corto = hoy_arg.strftime("%Y-%m-%d")
-                rutina_hoy_completada = None
+            # REGLA 1: Si no hay rutinas en el mes, NO mostrar el expander
+            if not rutinas_mes.empty:
                 
-                if not df_seg.empty:
-                    mis_seg = df_seg[df_seg['codnadador'] == user_id].copy()
-                    mis_seg['fecha_dt'] = pd.to_datetime(mis_seg['fecha_realizada']).dt.strftime("%Y-%m-%d")
+                with st.expander("🏊‍♂️ ¿Hice mi rutina de hoy?", expanded=False):
                     
-                    hecho_hoy = mis_seg[mis_seg['fecha_dt'] == hoy_str_corto]
+                    hoy_str_corto = hoy_arg.strftime("%Y-%m-%d")
+                    rutina_hoy_completada = None
                     
-                    if not hecho_hoy.empty:
-                        ultimo_id_hoy = hecho_hoy.iloc[-1]['id_rutina']
-                        rutina_hoy_completada = rutinas_mes[rutinas_mes['id_rutina'] == ultimo_id_hoy]
-                    realizadas_historicas = mis_seg['id_rutina'].unique()
-                else:
-                    realizadas_historicas = []
+                    if not df_seg.empty:
+                        mis_seg = df_seg[df_seg['codnadador'] == user_id].copy()
+                        mis_seg['fecha_dt'] = pd.to_datetime(mis_seg['fecha_realizada']).dt.strftime("%Y-%m-%d")
+                        
+                        hecho_hoy = mis_seg[mis_seg['fecha_dt'] == hoy_str_corto]
+                        
+                        if not hecho_hoy.empty:
+                            ultimo_id_hoy = hecho_hoy.iloc[-1]['id_rutina']
+                            rutina_hoy_completada = rutinas_mes[rutinas_mes['id_rutina'] == ultimo_id_hoy]
+                        realizadas_historicas = mis_seg['id_rutina'].unique()
+                    else:
+                        realizadas_historicas = []
 
-                # --- DISEÑO LIBRE SIN TARJETAS ---
-                if rutina_hoy_completada is not None and not rutina_hoy_completada.empty:
-                    # ESTADO: COMPLETADO HOY
-                    r_row = rutina_hoy_completada.iloc[0]
-                    st.success(f"🏆 **¡Misión Cumplida!** Completé la **Sesión {int(r_row['nro_sesion'])}** hoy.")
-                    
-                else:
-                    # ESTADO: PENDIENTE
-                    if not rutinas_mes.empty:
+                    # --- LÓGICA DE ESTADOS ---
+                    if rutina_hoy_completada is not None and not rutina_hoy_completada.empty:
+                        # HOY GANÓ. Verificamos si era la ÚLTIMA rutina disponible del mes.
+                        r_row = rutina_hoy_completada.iloc[0]
+                        
+                        # Calculamos si quedan pendientes (excluyendo la que ya se sabe realizada)
+                        pendientes_check = rutinas_mes[~rutinas_mes['id_rutina'].isin(realizadas_historicas)]
+                        
+                        if pendientes_check.empty:
+                            # REGLA 2: ULTIMA RUTINA -> PLACA DORADA + BALLOONS
+                            st.balloons()
+                            st.markdown(f"""
+                            <div style="
+                                border: 2px solid #FFD700; 
+                                border-radius: 12px; 
+                                background-color: #1a1a1a; 
+                                padding: 20px; 
+                                text-align: center;
+                                box-shadow: 0 4px 15px rgba(255, 215, 0, 0.2);
+                                margin-bottom: 20px;">
+                                <div style="font-size: 40px; margin-bottom: 10px;">🏆</div>
+                                <h3 style="margin: 0; color: #FFD700; font-weight: 800; letter-spacing: 1px;">¡MES COMPLETADO!</h3>
+                                <p style="color: #ccc; margin-top: 5px; font-size: 14px;">Sesión {int(r_row['nro_sesion'])} finalizada. ¡Completé todas las rutinas!</p>
+                                <div style="margin-top: 15px; padding: 8px; background-color: rgba(255, 215, 0, 0.1); border-radius: 8px; color: #FFD700; font-size: 12px; font-weight: bold;">
+                                    ¡Impresionante constancia! A descansar. 🔋
+                                </div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        else:
+                            # REGLA 3: DÍA NORMAL -> MENSAJE SIMPLE
+                            st.success(f"🏆 **¡Misión Cumplida!** Completé la **Sesión {int(r_row['nro_sesion'])}** hoy.")
+                        
+                    else:
+                        # PENDIENTE
                         rutinas_pendientes = rutinas_mes[~rutinas_mes['id_rutina'].isin(realizadas_historicas)].sort_values('nro_sesion')
                         
                         if not rutinas_pendientes.empty:
@@ -299,7 +327,6 @@ if db and st.session_state.user_id:
                             st.markdown(r_texto)
                             st.write("") 
                             
-                            # Botón con Animación
                             if st.button("✅ DÍA GANADO", key=f"btn_ganado_inicio_{r_id}", type="primary", use_container_width=True):
                                 my_bar = st.progress(0, text="Registrando entrenamiento...")
                                 for percent_complete in range(100):
@@ -313,11 +340,8 @@ if db and st.session_state.user_id:
                                 if guardar_seguimiento_inicio(r_id, user_id):
                                     time.sleep(1) 
                                     st.rerun()
-
                         else:
-                            st.info("🏅 No tengo rutinas pendientes. ¡Mes completo!")
-                    else:
-                        st.caption("No tengo rutinas asignadas para este mes.")
+                            st.info("🏅 ¡Mes completo! No tengo más rutinas pendientes.")
         
         st.write("") 
 
@@ -397,7 +421,7 @@ if db and st.session_state.user_id:
 
     st.write("")
 
-    # // 2️⃣ Estadísticas del club (Visual Mejorado)
+    # // 2️⃣ Estadísticas del club
     st.markdown("<h5 style='text-align: center; color: #888; margin-top: 20px;'>ESTADÍSTICAS DEL CLUB</h5>", unsafe_allow_html=True)
     
     total_nadadores = len(db['nadadores'])
