@@ -158,6 +158,7 @@ with tab_cargar:
         c1, c2 = st.columns([1, 2])
         f_val = c1.date_input("Fecha", date.today(), format="DD/MM/YYYY")
         
+        # En la carga usamos lista_noms completa (todos los nadadores)
         n_in = c2.selectbox("Nadador", [mi_nom_comp] if rol=="N" else lista_noms, index=0 if rol=="N" else None)
         id_nad_target = mi_id if rol=="N" else (df_nad[(df_nad['apellido'].str.upper() + ", " + df_nad['nombre']) == n_in].iloc[0]['codnadador'] if n_in else None)
         
@@ -232,36 +233,30 @@ with tab_cargar:
                     if s_final == 0:
                         st.error("⚠️ El tiempo final es obligatorio.")
                     else:
-                        # --- NUEVA LOGICA: Detección y Normalización ---
-                        lp_final = [] # Listado final normalizado (strings)
+                        lp_final = [] 
                         s_parciales_norm = 0
                         tipo_detectado = "INDIVIDUALES"
                         
                         raw_secs = []
-                        # 1. Parsear Inputs a Segundos
                         for p_str in lp:
                             sec = a_segundos(p_str)
                             if sec is not None and sec > 0:
                                 raw_secs.append(sec)
                         
                         if raw_secs:
-                            # 2. Algoritmo de Detección
                             sum_raw = sum(raw_secs)
                             last_raw = raw_secs[-1]
                             is_increasing = all(x < y for x, y in zip(raw_secs, raw_secs[1:]))
-                            tolerance = 2.0 # Margen de error en segundos
+                            tolerance = 2.0 
                             
                             es_acumulado = False
                             
-                            # Criterio A: Suma coincide con Total -> Individuales (Prioridad)
                             if abs(sum_raw - s_final) <= tolerance:
                                 es_acumulado = False
                                 tipo_detectado = "INDIVIDUALES"
-                            # Criterio B: Estrictamente creciente Y Último parcial coincide con Total -> Acumulados
                             elif is_increasing and abs(last_raw - s_final) <= tolerance:
                                 es_acumulado = True
                                 tipo_detectado = "CRONOMETRADOS (Acumulados)"
-                            # Criterio C: Estrictamente creciente Y Suma excesiva -> Asumimos Acumulado
                             elif is_increasing and sum_raw > (s_final * 1.5):
                                 es_acumulado = True
                                 tipo_detectado = "CRONOMETRADOS (Acumulados)"
@@ -269,36 +264,29 @@ with tab_cargar:
                                 es_acumulado = False
                                 tipo_detectado = "INDIVIDUALES"
 
-                            # 3. Normalización
                             norm_secs = []
                             if es_acumulado:
                                 prev = 0
                                 for curr in raw_secs:
                                     diff = curr - prev
-                                    if diff <= 0: diff = 0.01 # Evitar 0 o negativos
+                                    if diff <= 0: diff = 0.01 
                                     norm_secs.append(diff)
                                     prev = curr
                             else:
                                 norm_secs = raw_secs
                             
-                            # 4. Preparar datos para DB
                             lp_final = [fmt_mm_ss(s) for s in norm_secs]
                             s_parciales_norm = sum(norm_secs)
                             
-                            # Feedback al usuario
                             st.info(f"ℹ️ Detección automática: **{tipo_detectado}**. Se guardaron como tramos individuales.")
 
-                            # 5. Validaciones Suaves (Warning en vez de Error)
                             if abs(s_parciales_norm - s_final) > 1.0:
                                 st.warning(f"⚠️ Atención: La suma de los parciales ({fmt_mm_ss(s_parciales_norm)}) difiere del Tiempo Final ({fmt_mm_ss(s_final)}).")
                         else:
-                            # Si no cargó parciales
                             lp_final = []
 
-                        # Rellenar lista hasta 4 para indexar sin error
                         while len(lp_final) < 4: lp_final.append("")
                         
-                        # --- GUARDADO ---
                         with st.spinner("Guardando..."):
                             try:
                                 max_id = pd.to_numeric(db['entrenamientos']['id_entrenamiento'], errors='coerce').max() if not db['entrenamientos'].empty else 0
@@ -323,9 +311,21 @@ with tab_cargar:
 # ==============================================================================
 with tab_ver:
     target_id = mi_id if rol == "N" else None
+    
+    # 1. Selector de Nadador (Solo para M o P)
     if rol in ["M", "P"]:
-        sel_n = st.selectbox("Consultar Historial de:", lista_noms, index=None, key="h_nad")
-        if sel_n: target_id = df_nad[(df_nad['apellido'].str.upper() + ", " + df_nad['nombre']) == sel_n].iloc[0]['codnadador']
+        # FILTRO INTELIGENTE:
+        # Solo mostramos nadadores que tengan registros en 'entrenamientos'
+        if not df_ent.empty:
+            ids_con_historia = df_ent['codnadador'].unique().astype(str)
+            df_nad_con_historia = df_nad[df_nad['codnadador'].astype(str).isin(ids_con_historia)]
+            lista_noms_filtrada = sorted((df_nad_con_historia['apellido'].astype(str).str.upper() + ", " + df_nad_con_historia['nombre'].astype(str)).unique().tolist())
+        else:
+            lista_noms_filtrada = []
+
+        sel_n = st.selectbox("Consultar Historial de:", lista_noms_filtrada, index=None, key="h_nad")
+        if sel_n: 
+            target_id = df_nad[(df_nad['apellido'].str.upper() + ", " + df_nad['nombre']) == sel_n].iloc[0]['codnadador']
     
     if target_id:
         df_h = df_ent[df_ent['codnadador'].astype(str) == str(target_id)].copy()
@@ -336,12 +336,12 @@ with tab_ver:
             # --- FILTROS DINÁMICOS ---
             st.markdown("<div class='section-title'>🔍 Filtros</div>", unsafe_allow_html=True)
             
-            # 1. Filtro Estilo
+            # 2. Filtro Estilo
             est_opts = ["Todos"] + sorted(df_h['descripcion_x'].unique().tolist())
             c_f1, c_f2 = st.columns(2)
             f_est = c_f1.selectbox("Estilo", est_opts)
             
-            # 2. Filtro Distancia
+            # 3. Filtro Distancia
             if f_est == "Todos":
                 valid_dists = sorted(df_h['descripcion_y'].unique().tolist())
             else:
