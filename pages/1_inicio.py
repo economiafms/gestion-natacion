@@ -95,7 +95,7 @@ def guardar_seguimiento_inicio(id_rutina, id_nadador):
 
 # --- VISUALIZACIÓN ---
 
-# BANNER TÍTULO (RESTAURADO A SU POSICIÓN ORIGINAL)
+# BANNER TÍTULO
 st.markdown("""
     <style>
         .banner-box {
@@ -126,7 +126,7 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# // CORREGIDO: Guía rápida ubicada DEBAJO del banner (como se solicitó originalmente)
+# 1. GUÍA RÁPIDA (Debajo del banner)
 if st.session_state.role == "M":
     with st.expander("📖 Guía rápida de uso – Perfil Manager", expanded=False):
         st.markdown("""
@@ -242,10 +242,12 @@ if db and st.session_state.user_id:
     
     st.write("") 
 
-    # // NUEVO: ATAJO RUTINA DIARIA (GAMIFICADO)
+    # // NUEVO: ATAJO RUTINA DIARIA (Diseño Compacto y Gamificado)
     if st.session_state.role == "N":
-        with st.expander("🏊‍♂️ ¿Hiciste tu rutina de hoy?", expanded=False):
-            
+        # Contenedor principal centrado para evitar el ancho total
+        c_spacer_L, c_rutina, c_spacer_R = st.columns([0.2, 4, 0.2])
+        
+        with c_rutina:
             hoy = datetime.now()
             df_rut = db.get('rutinas')
             df_seg = db.get('seguimiento')
@@ -257,22 +259,19 @@ if db and st.session_state.user_id:
                     (df_rut['mes_rutina'] == hoy.month)
                 ].copy()
 
-                # --- LÓGICA DE GAMIFICACIÓN ---
-                # Verificar si HOY ya completó alguna rutina
+                # --- LÓGICA DE ESTADO (Día Ganado vs Pendiente) ---
                 hoy_str_corto = hoy.strftime("%Y-%m-%d")
-                
                 rutina_hoy_completada = None
+                
                 if not df_seg.empty:
                     mis_seg = df_seg[df_seg['codnadador'] == user_id].copy()
                     mis_seg['fecha_dt'] = pd.to_datetime(mis_seg['fecha_realizada']).dt.strftime("%Y-%m-%d")
-                    # Buscamos si hay un registro con fecha de HOY
                     hecho_hoy = mis_seg[mis_seg['fecha_dt'] == hoy_str_corto]
                     
                     if not hecho_hoy.empty:
-                        # Si hizo más de una (raro), tomamos la última
                         ultimo_id_hoy = hecho_hoy.iloc[-1]['id_rutina']
                         rutina_hoy_completada = rutinas_mes[rutinas_mes['id_rutina'] == ultimo_id_hoy]
-
+                    
                     realizadas_historicas = mis_seg['id_rutina'].unique()
                 else:
                     realizadas_historicas = []
@@ -280,22 +279,29 @@ if db and st.session_state.user_id:
                 # --- RENDERIZADO ---
                 if rutina_hoy_completada is not None and not rutina_hoy_completada.empty:
                     # ESTADO: DÍA GANADO 🏆
-                    st.balloons() # Dopamina si acaba de recargar
+                    st.balloons() # ¡Dopamina!
                     r_row = rutina_hoy_completada.iloc[0]
                     
                     st.markdown(f"""
-                    <div style="border: 2px solid #2E7D32; border-radius: 10px; background-color: #1B2E1B; padding: 15px; margin-bottom: 10px; position: relative;">
-                        <div style="position: absolute; top: 10px; right: 10px; font-size: 24px;">🏆</div>
-                        <h4 style="margin-top:0; color:#4CAF50;">✅ ¡DÍA GANADO!</h4>
-                        <p style="color: #aaa; margin-bottom: 5px; font-weight: bold;">Sesión {r_row['nro_sesion']} Completada</p>
-                        <div style="font-size: 13px; color: #888; text-decoration: line-through; white-space: pre-wrap;">{r_row['texto_rutina']}</div>
-                        <br>
-                        <div style="text-align: center; color: #4CAF50; font-weight: bold; font-size: 14px;">¡Excelente trabajo! A descansar. 🌙</div>
+                    <div style="
+                        border: 2px solid #FFD700; 
+                        border-radius: 12px; 
+                        background-color: #1a1a1a; 
+                        padding: 20px; 
+                        text-align: center;
+                        box-shadow: 0 4px 15px rgba(255, 215, 0, 0.2);
+                        margin-bottom: 20px;">
+                        <div style="font-size: 40px; margin-bottom: 10px;">🏆</div>
+                        <h3 style="margin: 0; color: #FFD700; font-weight: 800; letter-spacing: 1px;">¡DÍA GANADO!</h3>
+                        <p style="color: #ccc; margin-top: 5px; font-size: 14px;">Sesión {r_row['nro_sesion']} completada con éxito.</p>
+                        <div style="margin-top: 15px; padding: 8px; background-color: rgba(255, 215, 0, 0.1); border-radius: 8px; color: #FFD700; font-size: 12px; font-weight: bold;">
+                            ¡Gran trabajo hoy! A recuperar energías. 🔋
+                        </div>
                     </div>
                     """, unsafe_allow_html=True)
 
                 else:
-                    # ESTADO: PENDIENTE
+                    # ESTADO: PENDIENTE (Diseño estilo 'Rutinas' pero compacto)
                     if not rutinas_mes.empty:
                         rutinas_pendientes = rutinas_mes[~rutinas_mes['id_rutina'].isin(realizadas_historicas)].sort_values('nro_sesion')
                         
@@ -305,29 +311,49 @@ if db and st.session_state.user_id:
                             r_nro = prox_sesion['nro_sesion']
                             r_texto = prox_sesion['texto_rutina']
                             
-                            # Tarjeta estilo RUTINAS (borde gris, fondo oscuro, limpio)
+                            # Encabezado "Tu Misión de Hoy"
                             st.markdown(f"""
-                            <div style="border: 1px solid #444; border-radius: 10px; background-color: #262730; padding: 15px; margin-bottom: 10px; border-left: 5px solid #E30613;">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                                    <h4 style="margin:0; color:white;">Sesión {r_nro}</h4>
-                                    <span style="background-color: #E30613; color: white; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: bold;">PENDIENTE</span>
-                                </div>
-                                <div style="font-size: 14px; color: #ddd; white-space: pre-wrap; line-height: 1.5;">{r_texto}</div>
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                                <span style="color: #aaa; font-size: 12px; font-weight: bold; text-transform: uppercase;">⚡ Tu entrenamiento de hoy</span>
+                                <span style="background-color: #E30613; color: white; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: bold;">PENDIENTE</span>
+                            </div>
+                            """, unsafe_allow_html=True)
+
+                            # Tarjeta compacta estilo Rutinas
+                            st.markdown(f"""
+                            <div style="
+                                border-left: 4px solid #E30613;
+                                background-color: #262730;
+                                border-radius: 0 8px 8px 0;
+                                padding: 15px;
+                                margin-bottom: 15px;
+                                box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+                                <h4 style="margin: 0 0 10px 0; color: white; font-weight: 700;">Sesión {r_nro}</h4>
+                                <div style="
+                                    font-size: 13px; 
+                                    color: #ddd; 
+                                    white-space: pre-wrap; 
+                                    line-height: 1.5; 
+                                    max-height: 200px; 
+                                    overflow-y: auto;
+                                    padding-right: 5px;">{r_texto}</div>
                             </div>
                             """, unsafe_allow_html=True)
                             
-                            col_space, col_btn = st.columns([1, 2])
-                            with col_btn:
-                                if st.button("🏊 DÍA GANADO", key=f"btn_ganado_inicio_{r_id}", type="primary", use_container_width=True):
-                                    with st.spinner("Guardando..."):
-                                        if guardar_seguimiento_inicio(r_id, user_id):
-                                            st.rerun()
+                            # Botón de acción destacado
+                            if st.button("✅ MARCAR DÍA GANADO", key=f"btn_ganado_inicio_{r_id}", type="primary", use_container_width=True):
+                                with st.spinner("Guardando victoria..."):
+                                    if guardar_seguimiento_inicio(r_id, user_id):
+                                        time.sleep(0.5)
+                                        st.rerun()
                         else:
-                            st.success("No tenés rutinas pendientes para este mes. ¡Todo al día! 🏆")
+                            st.info("🏅 No tenés rutinas pendientes para este mes. ¡Todo al día!")
                     else:
-                        st.info("Aún no se han cargado rutinas para este mes.")
-            else:
-                st.warning("No se pudieron cargar las rutinas.")
+                        st.markdown("""
+                        <div style="border: 1px dashed #666; border-radius: 8px; padding: 20px; text-align: center; color: #888;">
+                            <i>No se han cargado rutinas para este mes aún.</i>
+                        </div>
+                        """, unsafe_allow_html=True)
         
         st.write("") 
 
@@ -458,7 +484,6 @@ if db and st.session_state.user_id:
         st.altair_chart((base.mark_arc(outerRadius=80, innerRadius=50).encode(color=alt.Color("codgenero", scale=colors, legend=None)) + base.mark_text(radius=100).encode(text="count()", order=alt.Order("codgenero"), color=alt.value("white"))), use_container_width=True)
 
     # --- 6. GESTIÓN (Perfil M) ---
-    # // 3️⃣ Botón a ancho completo
     if st.session_state.role == "M":
         st.write(""); st.write("")
         label_btn = "⚙️ CARGAR COMPETENCIAS" if not st.session_state.admin_unlocked else "🔒 BLOQUEAR GESTIÓN"
