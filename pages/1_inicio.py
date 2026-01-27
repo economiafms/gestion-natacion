@@ -21,21 +21,46 @@ if "admin_unlocked" not in st.session_state:
 # --- CONEXIÓN ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 
+# --- OPTIMIZACIÓN DE CARGA DE DATOS (FIX ERROR 429) ---
+# Separamos los datos estáticos de los dinámicos para no saturar la API
+
 @st.cache_data(ttl="1h")
-def cargar_data():
+def cargar_datos_generales():
+    """Carga datos pesados que no cambian frecuentemente."""
     try:
         return {
             "nadadores": conn.read(worksheet="Nadadores"),
             "tiempos": conn.read(worksheet="Tiempos"),
             "relevos": conn.read(worksheet="Relevos"),
             "categorias": conn.read(worksheet="Categorias"),
-            "estilos": conn.read(worksheet="Estilos"),
+            "estilos": conn.read(worksheet="Estilos")
+        }
+    except: return None
+
+@st.cache_data(ttl="10m")
+def cargar_datos_rutinas():
+    """Carga solo las rutinas y el seguimiento, que cambian seguido."""
+    try:
+        return {
             "rutinas": conn.read(worksheet="Rutinas"),
             "seguimiento": conn.read(worksheet="Rutinas_Seguimiento")
         }
     except: return None
 
-db = cargar_data()
+# Función unificadora para mantener compatibilidad con el código existente
+def get_db():
+    general = cargar_datos_generales()
+    rutinas = cargar_datos_rutinas()
+    
+    if general and rutinas:
+        return {**general, **rutinas}
+    elif general:
+        return general
+    elif rutinas:
+        return rutinas
+    return None
+
+db = get_db()
 
 # --- FUNCIONES AUXILIARES ---
 def calcular_cat_exacta(edad, df_cat):
@@ -78,6 +103,7 @@ def intentar_desbloqueo():
 
 def guardar_seguimiento_inicio(id_rutina, id_nadador):
     try:
+        # Leemos solo la hoja necesaria sin caché para tener el último estado
         df_seg = conn.read(worksheet="Rutinas_Seguimiento", ttl=0)
         
         # OBTENER HORA ARGENTINA (UTC-3)
@@ -91,7 +117,12 @@ def guardar_seguimiento_inicio(id_rutina, id_nadador):
         }])
         df_final = pd.concat([df_seg, nuevo_registro], ignore_index=True)
         conn.update(worksheet="Rutinas_Seguimiento", data=df_final)
-        st.cache_data.clear()
+        
+        # --- FIX IMPORTANTE ---
+        # Solo limpiamos el caché de RUTINAS, no el general.
+        # Esto evita recargar las 7 hojas y previene el error 429.
+        cargar_datos_rutinas.clear()
+        
         return True
     except Exception as e:
         st.error(f"Error al guardar: {e}")
