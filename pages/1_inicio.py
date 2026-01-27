@@ -80,8 +80,7 @@ def guardar_seguimiento_inicio(id_rutina, id_nadador):
     try:
         df_seg = conn.read(worksheet="Rutinas_Seguimiento", ttl=0)
         
-        # // FIX: OBTENER HORA ARGENTINA (UTC-3)
-        # Obtenemos UTC y restamos 3 horas manualmente para asegurar coincidencia
+        # OBTENER HORA ARGENTINA (UTC-3)
         ahora_arg = datetime.now(timezone.utc) - timedelta(hours=3)
         hora_str = ahora_arg.strftime("%Y-%m-%d %H:%M:%S")
         
@@ -135,13 +134,13 @@ st.markdown("""
 if st.session_state.role == "M":
     with st.expander("📖 Guía rápida de uso – Perfil Manager", expanded=False):
         st.markdown("""
-        Esta guía detalla las herramientas disponibles para el profesor, facilitando el análisis y la toma de decisiones.
+        Esta guía detalla las herramientas disponibles para mi gestión, facilitando el análisis y la toma de decisiones.
         
         **📂 Fichero**
-        El profesor puede consultar la ficha técnica completa de todos sus nadadores, incluyendo historial de competencias, mejores tiempos y relevos, con filtros para facilitar el análisis.
+        Puedo consultar la ficha técnica completa de todos mis nadadores, incluyendo historial de competencias, mejores tiempos y relevos, con filtros para facilitar mi análisis.
         
         **📝 Rutinas**
-        Permite crear, editar y asignar rutinas a los nadadores, y verificar quiénes cumplen con los entrenamientos planificados.
+        Permite crear, editar y asignar rutinas a mis nadadores, y verificar quiénes cumplen con los entrenamientos planificados.
         
         **🏋️ Entrenamientos**
         Visualización de los tiempos de test de todos los nadadores para evaluar evolución y rendimiento.
@@ -159,43 +158,43 @@ if st.session_state.role == "M":
         Simulación de escenarios manuales y automáticos de relevos para estimar tiempos basados en datos reales.
 
         **➕ Cargar competencias (Inicio)**
-        Desde el botón CARGAR COMPETENCIAS se pueden cargar nuevos nadadores, asignar permisos de Manager o Nadador y cargar tiempos de competencias y relevos.
+        Desde el botón CARGAR COMPETENCIAS puedo cargar nuevos nadadores, asignar permisos de Manager o Nadador y cargar tiempos de competencias y relevos.
         
         ---
         **Aclaración final:**
         * La carga diaria de datos deportivos es responsabilidad del nadador.
-        * El rol del profesor es analizar y tomar decisiones a partir de esa información.
+        * Mi rol es analizar y tomar decisiones a partir de esa información.
         """)
 
 elif st.session_state.role == "N":
     with st.expander("📖 Guía rápida de uso – Perfil Nadador", expanded=False):
         st.markdown("""
-        Este sistema está diseñado para que cada nadador gestione y registre su propia información deportiva.
-        Cuantos más datos cargues, mejor vas a poder analizar tu rendimiento y evolución en el tiempo.
+        Este sistema está diseñado para que gestione y registre mi propia información deportiva.
+        Cuantos más datos cargue, mejor voy a poder analizar mi rendimiento y evolución en el tiempo.
         
         **👤 Ficha**
-        Encontrás todo lo relacionado a tu perfil deportivo: competencias, mejores tiempos, historial y relevos.
-        También podés consultar la ficha de un compañero si conocés su DNI.
+        Encuentro todo lo relacionado a mi perfil deportivo: competencias, mejores tiempos, historial y relevos.
+        También puedo consultar la ficha de un compañero si conozco su DNI.
         
         **📝 Rutinas**
-        Accedés a las rutinas mensuales del entrenador, con una barra de progreso para saber en qué sesión estás y llevar un registro ordenado de tus entrenamientos.
+        Accedo a las rutinas mensuales del entrenador, con una barra de progreso para saber en qué sesión estoy y llevar un registro ordenado de mis entrenamientos.
         
         **🏋️ Entrenamientos**
-        Este módulo se utiliza para cargar los test de rendimiento.
+        Este módulo se utiliza para cargar mis test de rendimiento.
         Los test pueden incluir parciales, divididos en cuatro tramos según la distancia de la prueba.
         
         **🏅 Mi categoría**
-        Visualizás los valores promedio de tu categoría y los nadadores que la integran, para comparar tus tiempos y rendimiento en competencias.
+        Visualizo los valores promedio de mi categoría y los nadadores que la integran, para comparar mis tiempos y rendimiento en competencias.
         
         **📅 Agenda**
-        Encontrás las próximas competencias del equipo y podés registrarte de forma simple, reemplazando el registro en Excel por un sistema más dinámico.
+        Encuentro las próximas competencias del equipo y puedo registrarme de forma simple, reemplazando el registro en Excel por un sistema más dinámico.
         
         ---
         **Aclaraciones importantes**
-        * La información es autogestionada por el nadador
-        * El entrenador no carga ni corrige datos
-        * Cada registro suma para tu mejora futura
-        * Uso personal, voluntario y a libre demanda
+        * La información es autogestionada por mí.
+        * El entrenador no carga ni corrige datos.
+        * Cada registro suma para mi mejora futura.
+        * Uso personal, voluntario y a libre demanda.
         """)
 
 st.divider()
@@ -218,7 +217,7 @@ if db and st.session_state.user_id:
     mi_total = mis_oros + mis_platas + mis_bronces
 
     # 1. TARJETA PERFIL
-    st.write("### 👤 Tu Perfil")
+    st.write("### 👤 Mi Perfil")
     st.markdown(f"""
     <style>
         .padron-card {{ background-color: #262730; border: 1px solid #444; border-radius: 12px; padding: 15px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 6px rgba(0,0,0,0.3); margin-bottom: 20px; }}
@@ -249,17 +248,15 @@ if db and st.session_state.user_id:
 
     # // NUEVO: ATAJO RUTINA DIARIA (Diseño LIBRE y sesión como ENTERO)
     if st.session_state.role == "N":
-        with st.expander("🏊‍♂️ ¿Hiciste tu rutina de hoy?", expanded=False):
+        with st.expander("🏊‍♂️ ¿Hice mi rutina de hoy?", expanded=False):
             
-            # // FIX: OBTENER HORA ARGENTINA (UTC-3)
-            # Todo el cálculo de "Hoy" se basa en la hora Argentina, no en la del servidor.
+            # OBTENER HORA ARGENTINA (UTC-3)
             hoy_arg = datetime.now(timezone.utc) - timedelta(hours=3)
             
             df_rut = db.get('rutinas')
             df_seg = db.get('seguimiento')
             
             if df_rut is not None and df_seg is not None:
-                # Filtrar rutinas del mes y año actual (ARGENTINA)
                 rutinas_mes = df_rut[
                     (df_rut['anio_rutina'] == hoy_arg.year) & 
                     (df_rut['mes_rutina'] == hoy_arg.month)
@@ -270,10 +267,8 @@ if db and st.session_state.user_id:
                 
                 if not df_seg.empty:
                     mis_seg = df_seg[df_seg['codnadador'] == user_id].copy()
-                    # Convertimos fecha guardada a string corto para comparar "Día"
                     mis_seg['fecha_dt'] = pd.to_datetime(mis_seg['fecha_realizada']).dt.strftime("%Y-%m-%d")
                     
-                    # Buscamos si hay algo completado con la fecha de HOY (ARGENTINA)
                     hecho_hoy = mis_seg[mis_seg['fecha_dt'] == hoy_str_corto]
                     
                     if not hecho_hoy.empty:
@@ -287,8 +282,7 @@ if db and st.session_state.user_id:
                 if rutina_hoy_completada is not None and not rutina_hoy_completada.empty:
                     # ESTADO: COMPLETADO HOY
                     r_row = rutina_hoy_completada.iloc[0]
-                    # Visualización limpia sin bordes
-                    st.success(f"🏆 **¡Misión Cumplida!** Completaste la **Sesión {int(r_row['nro_sesion'])}** hoy.")
+                    st.success(f"🏆 **¡Misión Cumplida!** Completé la **Sesión {int(r_row['nro_sesion'])}** hoy.")
                     
                 else:
                     # ESTADO: PENDIENTE
@@ -298,17 +292,15 @@ if db and st.session_state.user_id:
                         if not rutinas_pendientes.empty:
                             prox_sesion = rutinas_pendientes.iloc[0]
                             r_id = prox_sesion['id_rutina']
-                            r_nro = int(prox_sesion['nro_sesion']) # // FIX: Entero
+                            r_nro = int(prox_sesion['nro_sesion']) 
                             r_texto = prox_sesion['texto_rutina']
                             
-                            # // DISEÑO LIBRE: Sin cards
-                            st.markdown(f"#### ⚡ Próximo Entrenamiento: Sesión {r_nro}")
+                            st.markdown(f"#### ⚡ Mi entrenamiento de hoy: Sesión {r_nro}")
                             st.markdown(r_texto)
-                            st.write("") # Espaciador
+                            st.write("") 
                             
-                            # Botón con Animación Toast + Progress
+                            # Botón con Animación
                             if st.button("✅ DÍA GANADO", key=f"btn_ganado_inicio_{r_id}", type="primary", use_container_width=True):
-                                # 1. Barra de progreso 
                                 my_bar = st.progress(0, text="Registrando entrenamiento...")
                                 for percent_complete in range(100):
                                     time.sleep(0.01) 
@@ -316,18 +308,16 @@ if db and st.session_state.user_id:
                                 time.sleep(0.2)
                                 my_bar.empty()
                                 
-                                # 2. Toast
                                 st.toast(f"¡Excelente! Sesión {r_nro} registrada con éxito.", icon='🏆')
                                 
-                                # 3. Guardar y Recargar
                                 if guardar_seguimiento_inicio(r_id, user_id):
                                     time.sleep(1) 
                                     st.rerun()
 
                         else:
-                            st.info("🏅 No tenés rutinas pendientes. ¡Mes completo!")
+                            st.info("🏅 No tengo rutinas pendientes. ¡Mes completo!")
                     else:
-                        st.caption("No hay rutinas asignadas para este mes.")
+                        st.caption("No tengo rutinas asignadas para este mes.")
         
         st.write("") 
 
