@@ -373,6 +373,36 @@ def render_historial_compacto(df_rut, df_seg, anio, mes, id_usuario_objetivo):
     porcentaje = int((completadas / total_rutinas) * 100) if total_rutinas > 0 else 0
     nombre_mes = obtener_nombre_mes(mes).upper()
     
+    # -------------------------------------------------------------
+    # EFECTO DOPAMINA: Tarjeta de Logro al 100% (Solo Nadador)
+    # -------------------------------------------------------------
+    if st.session_state.role == "N" and porcentaje == 100:
+        # Control para no saturar con globos cada vez que se toca algo
+        celeb_key = f"celeb_{anio}_{mes}"
+        if celeb_key not in st.session_state:
+            st.balloons()
+            st.session_state[celeb_key] = True
+            
+        st.markdown(f"""
+        <div style="
+            background: linear-gradient(135deg, #E30613 0%, #000000 100%);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 25px;
+            text-align: center;
+            border: 2px solid #fff;
+            box-shadow: 0 4px 15px rgba(227, 6, 19, 0.4);
+        ">
+            <div style="font-size: 40px; margin-bottom: 10px;">🏆</div>
+            <h2 style="color: white; margin: 0; font-weight: 800; text-transform: uppercase; font-style: italic;">¡RUTINA COMPLETADA!</h2>
+            <p style="color: #f0f0f0; font-size: 16px; margin-top: 5px; font-weight: 500;">
+                Lograste el 100% de asistencia en {nombre_mes}.<br>
+                <span style="font-size: 14px; opacity: 0.9; font-style: italic;">"Sumás constancia, sumás mejora"</span>
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+    # -------------------------------------------------------------
+
     # 1. SCORECARD DIVIDIDO (DISEÑO SOLICITADO)
     st.markdown(f"""
     <div style="background-color: #262730; border-radius: 8px; padding: 20px; border: 1px solid #444; margin-bottom: 20px;">
