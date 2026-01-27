@@ -120,9 +120,10 @@ def fmt_mm_ss(seconds):
 df_nad = db['nadadores'].copy()
 df_cat = db['categorias'].copy()
 
-# // FIX: EXCLUSIÓN HARDCODED DE NADADOR 66
-# Se elimina de la base local para que no impacte en gráficos ni listados
-df_nad = df_nad[df_nad['codnadador'].astype(str) != '66']
+# // FIX ROBUSTO: EXCLUSIÓN DE NADADOR 66
+# Normalizamos a string, quitamos espacios y removemos decimales (.0) por si viene como float
+# Esto elimina '66', 66, '66.0', 66.0 de forma segura.
+df_nad = df_nad[~df_nad['codnadador'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True).eq('66')]
 
 # Normalizar columnas para evitar errores de espacios/mayúsculas
 df_nad.columns = df_nad.columns.str.strip().str.lower()
@@ -147,7 +148,7 @@ target_genero = None
 
 if rol == "N":
     # MODO NADADOR
-    me = df_nad[df_nad['codnadador'].astype(str) == str(mi_id)]
+    me = df_nad[df_nad['codnadador'].astype(str).str.replace(r'\.0$', '', regex=True) == str(mi_id)]
     if not me.empty:
         my_data = me.iloc[0]
         target_categoria = my_data['categoria_actual']
@@ -157,7 +158,7 @@ if rol == "N":
         st.info(f"👋 Hola **{mi_nombre}**. Edad: {edad_str} años.")
         st.markdown(f"### 🏷️ Categoría: <span style='color:#E30613'>{target_categoria}</span> ({target_genero})", unsafe_allow_html=True)
     else:
-        # Si el usuario logueado es el 66 (o no existe), caerá aquí
+        # Si el usuario actual fuese el 66, también vería este error (correcto, está excluido)
         st.error("Perfil no encontrado o acceso restringido.")
         st.stop()
 
@@ -189,7 +190,7 @@ if target_categoria and target_genero:
     if not rivales.empty:
         cols = st.columns(2)
         for i, (idx, row) in enumerate(rivales.iterrows()):
-            es_yo = (str(row['codnadador']) == str(mi_id)) if rol == "N" else False
+            es_yo = (str(row['codnadador']).replace('.0','') == str(mi_id)) if rol == "N" else False
             clase = "swimmer-card is-me" if es_yo else "swimmer-card"
             yo_lbl = " (TÚ)" if es_yo else ""
             edad_txt = int(row['edad_calculada']) if pd.notna(row['edad_calculada']) else "-"
@@ -256,7 +257,8 @@ if target_categoria and target_genero:
                     
                     # Colores
                     def get_color(cod):
-                        if rol == "N" and str(cod) == str(mi_id): return "#E30613" # Rojo Usuario
+                        # Fix comparación robusta ID usuario
+                        if rol == "N" and str(cod).replace('.0','') == str(mi_id): return "#E30613" # Rojo Usuario
                         return "#666666" # Gris Rival
                     
                     avg_times['Color'] = avg_times['codnadador'].apply(get_color)
@@ -296,7 +298,8 @@ if target_categoria and target_genero:
                     
                     # Mensaje de posición
                     if rol == "N":
-                        mi_dato = avg_times[avg_times['codnadador'].astype(str) == str(mi_id)]
+                        # Comparación robusta para encontrar mi dato
+                        mi_dato = avg_times[avg_times['codnadador'].astype(str).str.replace(r'\.0$', '', regex=True) == str(mi_id)]
                         if not mi_dato.empty:
                             rank = avg_times.index.get_loc(mi_dato.index[0]) + 1
                             st.success(f"🏅 Tu promedio te ubica **#{rank}** de {len(avg_times)} en {sel_dist} {sel_est}.")
