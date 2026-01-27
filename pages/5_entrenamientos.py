@@ -196,6 +196,8 @@ with tab_cargar:
                 quiere_p = False
                 if m_par > 0:
                     quiere_p = st.toggle("¿Cargar tiempos parciales?", value=True)
+                    if quiere_p:
+                        st.caption("ℹ️ Podés cargar parciales cronometrados o individuales. El sistema los detecta automáticamente.")
 
         # --- PASO 2 ---
         if mostrar_paso_2:
@@ -230,36 +232,91 @@ with tab_cargar:
                     if s_final == 0:
                         st.error("⚠️ El tiempo final es obligatorio.")
                     else:
-                        es_valido = True
-                        if quiere_p:
-                            s_parciales = 0
-                            for p_str in lp:
-                                sec = a_segundos(p_str)
-                                if sec: s_parciales += sec
-                            
-                            if s_parciales > 0 and abs(s_parciales - s_final) > 0.5:
-                                st.error(f"❌ Error Matemático: Suma parciales ({s_parciales:.2f}s) != Final ({s_final:.2f}s).")
-                                es_valido = False
+                        # --- NUEVA LOGICA: Detección y Normalización ---
+                        lp_final = [] # Listado final normalizado (strings)
+                        s_parciales_norm = 0
+                        tipo_detectado = "INDIVIDUALES"
                         
-                        if es_valido:
-                            with st.spinner("Guardando..."):
-                                try:
-                                    max_id = pd.to_numeric(db['entrenamientos']['id_entrenamiento'], errors='coerce').max() if not db['entrenamientos'].empty else 0
-                                    new_id = int(0 if pd.isna(max_id) else max_id) + 1
-                                    id_dp = df_dist[df_dist['descripcion'].str.startswith(str(m_par))].iloc[0]['coddistancia'] if quiere_p else ""
+                        raw_secs = []
+                        # 1. Parsear Inputs a Segundos
+                        for p_str in lp:
+                            sec = a_segundos(p_str)
+                            if sec is not None and sec > 0:
+                                raw_secs.append(sec)
+                        
+                        if raw_secs:
+                            # 2. Algoritmo de Detección
+                            sum_raw = sum(raw_secs)
+                            last_raw = raw_secs[-1]
+                            is_increasing = all(x < y for x, y in zip(raw_secs, raw_secs[1:]))
+                            tolerance = 2.0 # Margen de error en segundos
+                            
+                            es_acumulado = False
+                            
+                            # Criterio A: Suma coincide con Total -> Individuales (Prioridad)
+                            if abs(sum_raw - s_final) <= tolerance:
+                                es_acumulado = False
+                                tipo_detectado = "INDIVIDUALES"
+                            # Criterio B: Estrictamente creciente Y Último parcial coincide con Total -> Acumulados
+                            elif is_increasing and abs(last_raw - s_final) <= tolerance:
+                                es_acumulado = True
+                                tipo_detectado = "CRONOMETRADOS (Acumulados)"
+                            # Criterio C: Estrictamente creciente Y Suma excesiva -> Asumimos Acumulado
+                            elif is_increasing and sum_raw > (s_final * 1.5):
+                                es_acumulado = True
+                                tipo_detectado = "CRONOMETRADOS (Acumulados)"
+                            else:
+                                es_acumulado = False
+                                tipo_detectado = "INDIVIDUALES"
 
-                                    row = pd.DataFrame([{
-                                        "id_entrenamiento": new_id, "fecha": fecha_str, 
-                                        "codnadador": int(id_nad_target), "codestilo": id_est,
-                                        "coddistancia": id_dt, "coddistancia_parcial": id_dp,
-                                        "tiempo_final": f"{mf:02d}:{sf:02d}.{cf:02d}",
-                                        "parcial_1": lp[0] if len(lp)>0 else "", "parcial_2": lp[1] if len(lp)>1 else "",
-                                        "parcial_3": lp[2] if len(lp)>2 else "", "parcial_4": lp[3] if len(lp)>3 else "",
-                                        "observaciones": ""
-                                    }])
-                                    conn.update(worksheet="Entrenamientos", data=pd.concat([db['entrenamientos'], row], ignore_index=True))
-                                    st.success("✅ Guardado."); time.sleep(1); reset_carga(); st.cache_data.clear(); st.rerun()
-                                except Exception as e: st.error(f"Error: {e}")
+                            # 3. Normalización
+                            norm_secs = []
+                            if es_acumulado:
+                                prev = 0
+                                for curr in raw_secs:
+                                    diff = curr - prev
+                                    if diff <= 0: diff = 0.01 # Evitar 0 o negativos
+                                    norm_secs.append(diff)
+                                    prev = curr
+                            else:
+                                norm_secs = raw_secs
+                            
+                            # 4. Preparar datos para DB
+                            lp_final = [fmt_mm_ss(s) for s in norm_secs]
+                            s_parciales_norm = sum(norm_secs)
+                            
+                            # Feedback al usuario
+                            st.info(f"ℹ️ Detección automática: **{tipo_detectado}**. Se guardaron como tramos individuales.")
+
+                            # 5. Validaciones Suaves (Warning en vez de Error)
+                            if abs(s_parciales_norm - s_final) > 1.0:
+                                st.warning(f"⚠️ Atención: La suma de los parciales ({fmt_mm_ss(s_parciales_norm)}) difiere del Tiempo Final ({fmt_mm_ss(s_final)}).")
+                        else:
+                            # Si no cargó parciales
+                            lp_final = []
+
+                        # Rellenar lista hasta 4 para indexar sin error
+                        while len(lp_final) < 4: lp_final.append("")
+                        
+                        # --- GUARDADO ---
+                        with st.spinner("Guardando..."):
+                            try:
+                                max_id = pd.to_numeric(db['entrenamientos']['id_entrenamiento'], errors='coerce').max() if not db['entrenamientos'].empty else 0
+                                new_id = int(0 if pd.isna(max_id) else max_id) + 1
+                                id_dp = df_dist[df_dist['descripcion'].str.startswith(str(m_par))].iloc[0]['coddistancia'] if quiere_p else ""
+
+                                row = pd.DataFrame([{
+                                    "id_entrenamiento": new_id, "fecha": fecha_str, 
+                                    "codnadador": int(id_nad_target), "codestilo": id_est,
+                                    "coddistancia": id_dt, "coddistancia_parcial": id_dp,
+                                    "tiempo_final": f"{mf:02d}:{sf:02d}.{cf:02d}",
+                                    "parcial_1": lp_final[0], "parcial_2": lp_final[1],
+                                    "parcial_3": lp_final[2], "parcial_4": lp_final[3],
+                                    "observaciones": ""
+                                }])
+                                conn.update(worksheet="Entrenamientos", data=pd.concat([db['entrenamientos'], row], ignore_index=True))
+                                st.success("✅ Guardado."); time.sleep(1); reset_carga(); st.cache_data.clear(); st.rerun()
+                            except Exception as e: st.error(f"Error: {e}")
 
 # ==============================================================================
 #  HISTORIAL
