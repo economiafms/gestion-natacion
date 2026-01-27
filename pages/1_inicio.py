@@ -213,7 +213,7 @@ elif st.session_state.role == "N":
         **🏋️ Entrenamientos**
         Este módulo se utiliza para cargar los test de rendimiento.
         Los test pueden incluir parciales, divididos en cuatro tramos según la distancia de la prueba. Recorda anotar los parciales según esta tabla.
-        50mts = 1x50  /  100mts = 4x25   /    200mts = 4x50 /     400mts = 4x100
+        **50mts = 1x50  /  100mts = 4x25   /    200mts = 4x50 /     400mts = 4x100
         
         **🏅 Mi categoría**
         Visualizás los valores promedio de tu categoría y los nadadores que la integran, para comparar tus tiempos y rendimiento en competencias.
