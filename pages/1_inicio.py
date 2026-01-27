@@ -2,7 +2,7 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 import altair as alt
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 import time
 
 # --- CONFIGURACIÓN ---
@@ -79,11 +79,16 @@ def intentar_desbloqueo():
 def guardar_seguimiento_inicio(id_rutina, id_nadador):
     try:
         df_seg = conn.read(worksheet="Rutinas_Seguimiento", ttl=0)
-        hora_arg = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        # // FIX: OBTENER HORA ARGENTINA (UTC-3)
+        # Obtenemos UTC y restamos 3 horas manualmente para asegurar coincidencia
+        ahora_arg = datetime.now(timezone.utc) - timedelta(hours=3)
+        hora_str = ahora_arg.strftime("%Y-%m-%d %H:%M:%S")
+        
         nuevo_registro = pd.DataFrame([{
             "id_rutina": id_rutina,
             "codnadador": int(id_nadador),
-            "fecha_realizada": hora_arg
+            "fecha_realizada": hora_str
         }])
         df_final = pd.concat([df_seg, nuevo_registro], ignore_index=True)
         conn.update(worksheet="Rutinas_Seguimiento", data=df_final)
@@ -246,22 +251,29 @@ if db and st.session_state.user_id:
     if st.session_state.role == "N":
         with st.expander("🏊‍♂️ ¿Hiciste tu rutina de hoy?", expanded=False):
             
-            hoy = datetime.now()
+            # // FIX: OBTENER HORA ARGENTINA (UTC-3)
+            # Todo el cálculo de "Hoy" se basa en la hora Argentina, no en la del servidor.
+            hoy_arg = datetime.now(timezone.utc) - timedelta(hours=3)
+            
             df_rut = db.get('rutinas')
             df_seg = db.get('seguimiento')
             
             if df_rut is not None and df_seg is not None:
+                # Filtrar rutinas del mes y año actual (ARGENTINA)
                 rutinas_mes = df_rut[
-                    (df_rut['anio_rutina'] == hoy.year) & 
-                    (df_rut['mes_rutina'] == hoy.month)
+                    (df_rut['anio_rutina'] == hoy_arg.year) & 
+                    (df_rut['mes_rutina'] == hoy_arg.month)
                 ].copy()
 
-                hoy_str_corto = hoy.strftime("%Y-%m-%d")
+                hoy_str_corto = hoy_arg.strftime("%Y-%m-%d")
                 rutina_hoy_completada = None
                 
                 if not df_seg.empty:
                     mis_seg = df_seg[df_seg['codnadador'] == user_id].copy()
+                    # Convertimos fecha guardada a string corto para comparar "Día"
                     mis_seg['fecha_dt'] = pd.to_datetime(mis_seg['fecha_realizada']).dt.strftime("%Y-%m-%d")
+                    
+                    # Buscamos si hay algo completado con la fecha de HOY (ARGENTINA)
                     hecho_hoy = mis_seg[mis_seg['fecha_dt'] == hoy_str_corto]
                     
                     if not hecho_hoy.empty:
@@ -286,10 +298,10 @@ if db and st.session_state.user_id:
                         if not rutinas_pendientes.empty:
                             prox_sesion = rutinas_pendientes.iloc[0]
                             r_id = prox_sesion['id_rutina']
-                            r_nro = int(prox_sesion['nro_sesion']) # // FIX: Convertir a entero
+                            r_nro = int(prox_sesion['nro_sesion']) # // FIX: Entero
                             r_texto = prox_sesion['texto_rutina']
                             
-                            # // DISEÑO LIBRE: Sin cards ni HTML complejo, solo texto y markdown
+                            # // DISEÑO LIBRE: Sin cards
                             st.markdown(f"#### ⚡ Próximo Entrenamiento: Sesión {r_nro}")
                             st.markdown(r_texto)
                             st.write("") # Espaciador
