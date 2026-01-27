@@ -3,6 +3,7 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 import altair as alt
 from datetime import datetime
+import time
 
 # --- CONFIGURACIÓN ---
 st.set_page_config(page_title="Inicio", layout="centered")
@@ -28,7 +29,10 @@ def cargar_data():
             "tiempos": conn.read(worksheet="Tiempos"),
             "relevos": conn.read(worksheet="Relevos"),
             "categorias": conn.read(worksheet="Categorias"),
-            "estilos": conn.read(worksheet="Estilos")
+            "estilos": conn.read(worksheet="Estilos"),
+            # // NUEVO: Traemos Rutinas para el atajo de Inicio
+            "rutinas": conn.read(worksheet="Rutinas"),
+            "seguimiento": conn.read(worksheet="Rutinas_Seguimiento")
         }
     except: return None
 
@@ -73,40 +77,27 @@ def intentar_desbloqueo():
     else: 
         st.error("Credenciales incorrectas")
 
+# // NUEVO: Función para marcar día ganado desde Inicio
+def guardar_seguimiento_inicio(id_rutina, id_nadador):
+    try:
+        df_seg = conn.read(worksheet="Rutinas_Seguimiento", ttl=0)
+        hora_arg = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        nuevo_registro = pd.DataFrame([{
+            "id_rutina": id_rutina,
+            "codnadador": int(id_nadador),
+            "fecha_realizada": hora_arg
+        }])
+        df_final = pd.concat([df_seg, nuevo_registro], ignore_index=True)
+        conn.update(worksheet="Rutinas_Seguimiento", data=df_final)
+        st.cache_data.clear()
+        return True
+    except Exception as e:
+        st.error(f"Error al guardar: {e}")
+        return False
+
 # --- VISUALIZACIÓN ---
 
-# BANNER TÍTULO (EXISTENTE)
-st.markdown("""
-    <style>
-        .banner-box {
-            background-color: #262730;
-            padding: 20px;
-            border-radius: 12px;
-            border: 1px solid #444;
-            text-align: center;
-            margin-bottom: 25px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-        }
-        .banner-sub {
-            color: white !important;
-            font-size: 20px;
-            margin: 0;
-            font-weight: normal;
-        }
-        .banner-main {
-            color: #E30613 !important;
-            font-size: 32px;
-            margin: 0;
-            font-weight: 800;
-        }
-    </style>
-    <div class='banner-box'>
-        <h3 class='banner-sub'>BIENVENIDOS AL COMPLEJO ACUÁTICO</h3>
-        <h1 class='banner-main'>NEWELL'S OLD BOYS</h1>
-    </div>
-""", unsafe_allow_html=True)
-
-# // MODIFICADO: Guía rápida ubicada DEBAJO del banner
+# // EXISTENTE: Guía rápida (con texto original y emojis para M)
 if st.session_state.role == "M":
     with st.expander("📖 Guía rápida de uso – Perfil Manager", expanded=False):
         st.markdown("""
@@ -175,6 +166,37 @@ elif st.session_state.role == "N":
 
 st.divider()
 
+# BANNER TÍTULO (EXISTENTE)
+st.markdown("""
+    <style>
+        .banner-box {
+            background-color: #262730;
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid #444;
+            text-align: center;
+            margin-bottom: 25px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        .banner-sub {
+            color: white !important;
+            font-size: 20px;
+            margin: 0;
+            font-weight: normal;
+        }
+        .banner-main {
+            color: #E30613 !important;
+            font-size: 32px;
+            margin: 0;
+            font-weight: 800;
+        }
+    </style>
+    <div class='banner-box'>
+        <h3 class='banner-sub'>BIENVENIDOS AL COMPLEJO ACUÁTICO</h3>
+        <h1 class='banner-main'>NEWELL'S OLD BOYS</h1>
+    </div>
+""", unsafe_allow_html=True)
+
 if db and st.session_state.user_id:
     user_id = st.session_state.user_id
     me = db['nadadores'][db['nadadores']['codnadador'] == user_id].iloc[0]
@@ -221,6 +243,63 @@ if db and st.session_state.user_id:
         st.switch_page("pages/2_visualizar_datos.py")
     
     st.write("") 
+
+    # // NUEVO: BLOQUE COLAPSABLE DE RUTINA DIARIA (Solo Perfil N)
+    if st.session_state.role == "N":
+        with st.expander("🏊‍♂️ ¿Hiciste tu rutina de hoy?", expanded=False):
+            # Lógica para encontrar la próxima rutina pendiente
+            hoy = datetime.now()
+            df_rut = db.get('rutinas')
+            df_seg = db.get('seguimiento')
+            
+            if df_rut is not None and df_seg is not None:
+                # 1. Filtrar rutinas del mes y año actual
+                rutinas_mes = df_rut[
+                    (df_rut['anio_rutina'] == hoy.year) & 
+                    (df_rut['mes_rutina'] == hoy.month)
+                ].copy()
+                
+                # 2. Filtrar las que ya hizo el usuario
+                if not rutinas_mes.empty:
+                    if not df_seg.empty:
+                        realizadas = df_seg[df_seg['codnadador'] == user_id]['id_rutina'].unique()
+                    else:
+                        realizadas = []
+                    
+                    rutinas_pendientes = rutinas_mes[~rutinas_mes['id_rutina'].isin(realizadas)].sort_values('nro_sesion')
+                    
+                    if not rutinas_pendientes.empty:
+                        # Tomamos la PRIMERA pendiente (la más próxima)
+                        prox_sesion = rutinas_pendientes.iloc[0]
+                        r_id = prox_sesion['id_rutina']
+                        r_nro = prox_sesion['nro_sesion']
+                        r_texto = prox_sesion['texto_rutina']
+                        
+                        st.markdown(f"""
+                        <div style="background-color: #1e1e1e; border: 1px solid #444; border-radius: 8px; padding: 15px; margin-bottom: 10px; border-left: 5px solid #E30613;">
+                            <h4 style="margin-top:0; color:white;">Sesión {r_nro}</h4>
+                            <div style="font-size: 14px; color: #ddd; white-space: pre-wrap;">{r_texto}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        
+                        col_info, col_btn = st.columns([2, 1])
+                        with col_info:
+                             st.caption("Al finalizar, confirmá tu entrenamiento.")
+                        with col_btn:
+                            if st.button("🏊 DÍA GANADO", key=f"btn_ganado_inicio_{r_id}", type="primary", use_container_width=True):
+                                with st.spinner("Guardando..."):
+                                    if guardar_seguimiento_inicio(r_id, user_id):
+                                        st.success("¡Bien hecho! 🏆")
+                                        time.sleep(1)
+                                        st.rerun()
+                    else:
+                        st.success("No tenés rutinas pendientes para este mes. ¡Día cumplido! 🏆")
+                else:
+                    st.info("Aún no se han cargado rutinas para este mes.")
+            else:
+                st.warning("No se pudieron cargar las rutinas.")
+        
+        st.write("") # Espaciado inferior
 
     # 2. MIS REGISTROS (FRECUENCIA DE ESTILOS)
     mis_regs = db['tiempos'][db['tiempos']['codnadador'] == user_id].copy()
