@@ -379,7 +379,7 @@ if db and st.session_state.user_id:
     # 2. MIS REGISTROS (FRECUENCIA DE ESTILOS)
     mis_regs = db['tiempos'][db['tiempos']['codnadador'] == user_id].copy()
     if not mis_regs.empty:
-        st.markdown("<h5 style='text-align: center; color: #aaa; margin-bottom: 15px;'>🏊 MIS ESTILOS FRECUENTES</h5>", unsafe_allow_html=True)
+        st.markdown("<h5 style='text-align: center; color: #aaa; margin-bottom: 15px;'>MIS ESTILOS FRECUENTES</h5>", unsafe_allow_html=True)
         mis_regs = mis_regs.merge(db['estilos'], on='codestilo', how='left')
         col_desc = 'descripcion' if 'descripcion' in mis_regs.columns and 'descripcion_x' in mis_regs.columns else 'descripcion_x'
         if col_desc not in mis_regs.columns: col_desc = 'descripcion' 
