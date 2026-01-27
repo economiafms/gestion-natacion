@@ -242,7 +242,7 @@ if db and st.session_state.user_id:
     
     st.write("") 
 
-    # // NUEVO: ATAJO RUTINA DIARIA (Diseño Profesional con Animaciones)
+    # // NUEVO: ATAJO RUTINA DIARIA (Diseño LIBRE y sesión como ENTERO)
     if st.session_state.role == "N":
         with st.expander("🏊‍♂️ ¿Hiciste tu rutina de hoy?", expanded=False):
             
@@ -271,11 +271,12 @@ if db and st.session_state.user_id:
                 else:
                     realizadas_historicas = []
 
-                # --- DISEÑO LIMPIO Y PROFESIONAL ---
+                # --- DISEÑO LIBRE SIN TARJETAS ---
                 if rutina_hoy_completada is not None and not rutina_hoy_completada.empty:
                     # ESTADO: COMPLETADO HOY
                     r_row = rutina_hoy_completada.iloc[0]
-                    st.success(f"🏆 **¡Misión Cumplida!** Completaste la **Sesión {r_row['nro_sesion']}** hoy.")
+                    # Visualización limpia sin bordes
+                    st.success(f"🏆 **¡Misión Cumplida!** Completaste la **Sesión {int(r_row['nro_sesion'])}** hoy.")
                     
                 else:
                     # ESTADO: PENDIENTE
@@ -285,42 +286,30 @@ if db and st.session_state.user_id:
                         if not rutinas_pendientes.empty:
                             prox_sesion = rutinas_pendientes.iloc[0]
                             r_id = prox_sesion['id_rutina']
-                            r_nro = prox_sesion['nro_sesion']
+                            r_nro = int(prox_sesion['nro_sesion']) # // FIX: Convertir a entero
                             r_texto = prox_sesion['texto_rutina']
                             
-                            # Card Estilizada
-                            st.markdown(f"""
-                            <div style="
-                                border: 1px solid #333; 
-                                border-left: 5px solid #E30613; 
-                                background-color: #262730; 
-                                border-radius: 8px; 
-                                padding: 15px; 
-                                margin-bottom: 15px;
-                                box-shadow: 0 2px 5px rgba(0,0,0,0.2);">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                                    <h4 style="margin:0; font-size: 16px; color: white;">⚡ Próximo Entrenamiento: Sesión {r_nro}</h4>
-                                </div>
-                                <div style="font-size: 13px; color: #ccc; white-space: pre-wrap; line-height: 1.5;">{r_texto}</div>
-                            </div>
-                            """, unsafe_allow_html=True)
+                            # // DISEÑO LIBRE: Sin cards ni HTML complejo, solo texto y markdown
+                            st.markdown(f"#### ⚡ Próximo Entrenamiento: Sesión {r_nro}")
+                            st.markdown(r_texto)
+                            st.write("") # Espaciador
                             
                             # Botón con Animación Toast + Progress
                             if st.button("✅ DÍA GANADO", key=f"btn_ganado_inicio_{r_id}", type="primary", use_container_width=True):
-                                # 1. Barra de progreso "simulada" de carga
+                                # 1. Barra de progreso 
                                 my_bar = st.progress(0, text="Registrando entrenamiento...")
                                 for percent_complete in range(100):
-                                    time.sleep(0.01) # Simulación rápida
+                                    time.sleep(0.01) 
                                     my_bar.progress(percent_complete + 1, text="Registrando entrenamiento...")
                                 time.sleep(0.2)
                                 my_bar.empty()
                                 
-                                # 2. Toast Profesional
+                                # 2. Toast
                                 st.toast(f"¡Excelente! Sesión {r_nro} registrada con éxito.", icon='🏆')
                                 
                                 # 3. Guardar y Recargar
                                 if guardar_seguimiento_inicio(r_id, user_id):
-                                    time.sleep(1) # Dar tiempo a leer el toast
+                                    time.sleep(1) 
                                     st.rerun()
 
                         else:
