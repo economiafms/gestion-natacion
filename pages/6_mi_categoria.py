@@ -120,6 +120,9 @@ def fmt_mm_ss(seconds):
 df_nad = db['nadadores'].copy()
 df_cat = db['categorias'].copy()
 
+# 1. EXCLUSIÓN DE NADADOR 66
+df_nad = df_nad[df_nad['codnadador'].astype(str) != '66']
+
 # Normalizar columnas para evitar errores de espacios/mayúsculas
 df_nad.columns = df_nad.columns.str.strip().str.lower()
 df_cat.columns = df_cat.columns.str.strip().str.lower()
@@ -143,9 +146,7 @@ target_genero = None
 
 if rol == "N":
     # MODO NADADOR
-    # Buscamos al usuario NORMALIZANDO el ID para evitar errores de formato (66 vs 66.0)
-    me = df_nad[df_nad['codnadador'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True) == str(mi_id)]
-    
+    me = df_nad[df_nad['codnadador'].astype(str) == str(mi_id)]
     if not me.empty:
         my_data = me.iloc[0]
         target_categoria = my_data['categoria_actual']
@@ -172,31 +173,11 @@ elif rol in ["M", "P"]:
 
 if target_categoria and target_genero:
     
-    # 1. FILTRAR RIVALES (Base preliminar)
+    # 1. FILTRAR RIVALES
     rivales = df_nad[
         (df_nad['categoria_actual'] == target_categoria) & 
         (df_nad['codgenero'] == target_genero)
     ].copy()
-    
-    # ==============================================================================
-    # FIX: EXCLUSIÓN DE NADADOR 66 (FRANCO MINACORI) EN LISTADOS
-    # Aplicamos el filtro AQUÍ, sobre la lista de visualización, no sobre la base global.
-    # ==============================================================================
-    
-    # Normalización temporal para filtrado seguro
-    rivales['temp_id_str'] = rivales['codnadador'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
-    
-    # Filtro por ID (66)
-    cond_id = rivales['temp_id_str'] == '66'
-    
-    # Filtro por Nombre (Doble seguridad)
-    cond_nom = (rivales['nombre'].astype(str).str.upper().str.strip() == 'FRANCO') & \
-               (rivales['apellido'].astype(str).str.upper().str.strip() == 'MINACORI')
-    
-    # Aplicar exclusión
-    rivales = rivales[~(cond_id | cond_nom)].drop(columns=['temp_id_str'])
-    
-    # ==============================================================================
     
     ids_rivales = rivales['codnadador'].tolist()
     
@@ -206,11 +187,7 @@ if target_categoria and target_genero:
     if not rivales.empty:
         cols = st.columns(2)
         for i, (idx, row) in enumerate(rivales.iterrows()):
-            # Comparación robusta para resaltar al usuario
-            row_id_str = str(row['codnadador']).strip().replace('.0', '')
-            user_id_str = str(mi_id).strip().replace('.0', '')
-            es_yo = (row_id_str == user_id_str) if rol == "N" else False
-            
+            es_yo = (str(row['codnadador']) == str(mi_id)) if rol == "N" else False
             clase = "swimmer-card is-me" if es_yo else "swimmer-card"
             yo_lbl = " (TÚ)" if es_yo else ""
             edad_txt = int(row['edad_calculada']) if pd.notna(row['edad_calculada']) else "-"
@@ -233,7 +210,6 @@ if target_categoria and target_genero:
         
         # 1. Cargar Tiempos y filtrar
         df_tiempos = db['tiempos'].copy()
-        # Filtramos tiempos usando los IDs de rivales (que YA excluyen al 66)
         df_tiempos = df_tiempos[df_tiempos['codnadador'].isin(ids_rivales)]
         
         if not df_tiempos.empty:
@@ -277,9 +253,7 @@ if target_categoria and target_genero:
                     
                     # Colores
                     def get_color(cod):
-                        c_str = str(cod).strip().replace('.0', '')
-                        u_str = str(mi_id).strip().replace('.0', '')
-                        if rol == "N" and c_str == u_str: return "#E30613" # Rojo Usuario
+                        if rol == "N" and str(cod) == str(mi_id): return "#E30613" # Rojo Usuario
                         return "#666666" # Gris Rival
                     
                     avg_times['Color'] = avg_times['codnadador'].apply(get_color)
@@ -319,10 +293,7 @@ if target_categoria and target_genero:
                     
                     # Mensaje de posición
                     if rol == "N":
-                        user_id_norm = str(mi_id).strip().replace('.0', '')
-                        # Búsqueda robusta en el dataframe de promedios
-                        mi_dato = avg_times[avg_times['codnadador'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True) == user_id_norm]
-                        
+                        mi_dato = avg_times[avg_times['codnadador'].astype(str) == str(mi_id)]
                         if not mi_dato.empty:
                             rank = avg_times.index.get_loc(mi_dato.index[0]) + 1
                             st.success(f"🏅 Tu promedio te ubica **#{rank}** de {len(avg_times)} en {sel_dist} {sel_est}.")
