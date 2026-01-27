@@ -120,7 +120,8 @@ def fmt_mm_ss(seconds):
 df_nad = db['nadadores'].copy()
 df_cat = db['categorias'].copy()
 
-# 1. EXCLUSIÓN DE NADADOR 66
+# // FIX: EXCLUSIÓN HARDCODED DE NADADOR 66
+# Se elimina de la base local para que no impacte en gráficos ni listados
 df_nad = df_nad[df_nad['codnadador'].astype(str) != '66']
 
 # Normalizar columnas para evitar errores de espacios/mayúsculas
@@ -156,6 +157,7 @@ if rol == "N":
         st.info(f"👋 Hola **{mi_nombre}**. Edad: {edad_str} años.")
         st.markdown(f"### 🏷️ Categoría: <span style='color:#E30613'>{target_categoria}</span> ({target_genero})", unsafe_allow_html=True)
     else:
+        # Si el usuario logueado es el 66 (o no existe), caerá aquí
         st.error("Perfil no encontrado o acceso restringido.")
         st.stop()
 
@@ -210,6 +212,7 @@ if target_categoria and target_genero:
         
         # 1. Cargar Tiempos y filtrar
         df_tiempos = db['tiempos'].copy()
+        # Filtramos tiempos usando los IDs de rivales (que YA excluyen al 66)
         df_tiempos = df_tiempos[df_tiempos['codnadador'].isin(ids_rivales)]
         
         if not df_tiempos.empty:
