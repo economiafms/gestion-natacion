@@ -120,30 +120,12 @@ def fmt_mm_ss(seconds):
 df_nad = db['nadadores'].copy()
 df_cat = db['categorias'].copy()
 
+# 1. EXCLUSIÓN DE NADADOR 66
+df_nad = df_nad[df_nad['codnadador'].astype(str) != '66']
+
 # Normalizar columnas para evitar errores de espacios/mayúsculas
 df_nad.columns = df_nad.columns.str.strip().str.lower()
 df_cat.columns = df_cat.columns.str.strip().str.lower()
-
-# ==============================================================================
-# FIX DEFINITIVO: EXCLUSIÓN DE NADADOR 66 (FRANCO MINACORI)
-# ==============================================================================
-# Creamos una columna temporal normalizada para el ID (sin decimales ni espacios)
-df_nad['temp_id_str'] = df_nad['codnadador'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
-
-# 1. Filtro por ID
-condicion_id = df_nad['temp_id_str'] == '66'
-
-# 2. Filtro por Nombre y Apellido (Doble seguridad)
-# Asumimos que las columnas se llaman 'nombre' y 'apellido' tras la normalización
-condicion_nombre = (df_nad['nombre'].astype(str).str.upper().str.strip() == 'FRANCO') & \
-                   (df_nad['apellido'].astype(str).str.upper().str.strip() == 'MINACORI')
-
-# Aplicamos la exclusión: Nos quedamos con los que NO cumplan ninguna de las dos condiciones
-df_nad = df_nad[~(condicion_id | condicion_nombre)]
-
-# Limpiamos la columna temporal
-df_nad = df_nad.drop(columns=['temp_id_str'])
-# ==============================================================================
 
 # 2. Calcular Edad y Categoría para todos
 if 'fechanac' in df_nad.columns:
@@ -164,9 +146,7 @@ target_genero = None
 
 if rol == "N":
     # MODO NADADOR
-    # Usamos normalización robusta también para encontrar al usuario actual
-    me = df_nad[df_nad['codnadador'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True) == str(mi_id)]
-    
+    me = df_nad[df_nad['codnadador'].astype(str) == str(mi_id)]
     if not me.empty:
         my_data = me.iloc[0]
         target_categoria = my_data['categoria_actual']
@@ -176,8 +156,7 @@ if rol == "N":
         st.info(f"👋 Hola **{mi_nombre}**. Edad: {edad_str} años.")
         st.markdown(f"### 🏷️ Categoría: <span style='color:#E30613'>{target_categoria}</span> ({target_genero})", unsafe_allow_html=True)
     else:
-        # Si el usuario logueado es el excluido (66), caerá aquí
-        st.error("Perfil no encontrado o acceso restringido para esta sección.")
+        st.error("Perfil no encontrado o acceso restringido.")
         st.stop()
 
 elif rol in ["M", "P"]:
@@ -208,11 +187,7 @@ if target_categoria and target_genero:
     if not rivales.empty:
         cols = st.columns(2)
         for i, (idx, row) in enumerate(rivales.iterrows()):
-            # Comparación robusta para resaltar al usuario
-            row_id_str = str(row['codnadador']).strip().replace('.0', '')
-            user_id_str = str(mi_id).strip().replace('.0', '')
-            es_yo = (row_id_str == user_id_str) if rol == "N" else False
-            
+            es_yo = (str(row['codnadador']) == str(mi_id)) if rol == "N" else False
             clase = "swimmer-card is-me" if es_yo else "swimmer-card"
             yo_lbl = " (TÚ)" if es_yo else ""
             edad_txt = int(row['edad_calculada']) if pd.notna(row['edad_calculada']) else "-"
@@ -235,7 +210,6 @@ if target_categoria and target_genero:
         
         # 1. Cargar Tiempos y filtrar
         df_tiempos = db['tiempos'].copy()
-        # Filtramos tiempos usando los IDs de rivales (que YA excluyen al 66)
         df_tiempos = df_tiempos[df_tiempos['codnadador'].isin(ids_rivales)]
         
         if not df_tiempos.empty:
@@ -279,9 +253,7 @@ if target_categoria and target_genero:
                     
                     # Colores
                     def get_color(cod):
-                        c_str = str(cod).strip().replace('.0', '')
-                        u_str = str(mi_id).strip().replace('.0', '')
-                        if rol == "N" and c_str == u_str: return "#E30613" # Rojo Usuario
+                        if rol == "N" and str(cod) == str(mi_id): return "#E30613" # Rojo Usuario
                         return "#666666" # Gris Rival
                     
                     avg_times['Color'] = avg_times['codnadador'].apply(get_color)
@@ -321,10 +293,7 @@ if target_categoria and target_genero:
                     
                     # Mensaje de posición
                     if rol == "N":
-                        user_id_norm = str(mi_id).strip().replace('.0', '')
-                        # Búsqueda robusta en el dataframe de promedios
-                        mi_dato = avg_times[avg_times['codnadador'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True) == user_id_norm]
-                        
+                        mi_dato = avg_times[avg_times['codnadador'].astype(str) == str(mi_id)]
                         if not mi_dato.empty:
                             rank = avg_times.index.get_loc(mi_dato.index[0]) + 1
                             st.success(f"🏅 Tu promedio te ubica **#{rank}** de {len(avg_times)} en {sel_dist} {sel_est}.")
