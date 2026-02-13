@@ -273,9 +273,10 @@ if db and st.session_state.user_id:
     </div>
     """, unsafe_allow_html=True)
     
-    if st.button("Ver Mi Ficha Completa ➝", type="primary", use_container_width=True, key="btn_ficha_inicio"):
-        st.session_state.ver_nadador_especifico = st.session_state.user_name
-        st.switch_page("pages/2_visualizar_datos.py")
+    if st.session_state.role == "N":
+        if st.button("Ver Mi Ficha Completa ➝", type="primary", use_container_width=True, key="btn_ficha_inicio"):
+            st.session_state.ver_nadador_especifico = st.session_state.user_name
+            st.switch_page("pages/2_visualizar_datos.py")
     
     st.write("") 
 
