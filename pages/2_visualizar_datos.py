@@ -419,9 +419,10 @@ def render_tab_padron():
         </div>
         """, unsafe_allow_html=True)
         
-        if st.button(f"Ver Ficha {row['nombre']} ➝", key=f"btn_p_{row['codnadador']}", use_container_width=True):
+if st.button(f"Ver Ficha {row['nombre']} ➝", key=f"btn_p_{row['codnadador']}", use_container_width=True):
             st.session_state.nadador_seleccionado = row['Nombre Completo']
             st.toast("Para visualizar los datos, presioná FICHA TÉCNICA", icon="ℹ️")
+            import time; time.sleep(0.8) 
             st.rerun()
 
 def render_tab_relevos_general():
@@ -522,6 +523,7 @@ else:
             render_tab_ficha(id_actual, unique_key_suffix="_master")
             
     with tab3: render_tab_relevos_general()
+
 
 
 
