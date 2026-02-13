@@ -37,6 +37,47 @@ def obtener_nombre_mes(n):
     except:
         return "Desconocido"
 
+def get_periodo_mas_cercano(fecha_actual, registros_disponibles):
+    """
+    Calcula el período (año, mes) más cercano a la fecha actual basándose en los registros disponibles.
+    Prioridad: 1. Actual, 2. Más cercano pasado, 3. Más cercano futuro.
+    registros_disponibles: lista de tuplas [(anio, mes), ...]
+    """
+    if not registros_disponibles:
+        return fecha_actual.year, fecha_actual.month
+
+    # Convertir a objetos datetime para comparación (día 1)
+    target = datetime(fecha_actual.year, fecha_actual.month, 1)
+    fechas_disp = []
+    
+    # Filtrar y validar fechas
+    for y, m in registros_disponibles:
+        try:
+            fechas_disp.append(datetime(int(y), int(m), 1))
+        except:
+            continue
+            
+    if not fechas_disp:
+        return fecha_actual.year, fecha_actual.month
+
+    # 1. Coincidencia exacta
+    if target in fechas_disp:
+        return target.year, target.month
+
+    # 2. Buscar hacia atrás (Max del pasado)
+    pasado = [d for d in fechas_disp if d < target]
+    if pasado:
+        mejor_pasado = max(pasado)
+        return mejor_pasado.year, mejor_pasado.month
+
+    # 3. Buscar hacia adelante (Min del futuro)
+    futuro = [d for d in fechas_disp if d > target]
+    if futuro:
+        mejor_futuro = min(futuro)
+        return mejor_futuro.year, mejor_futuro.month
+
+    return fecha_actual.year, fecha_actual.month
+
 def mostrar_referencias():
     with st.expander("📖 Glosario de Referencias (Clic para ver)"):
         st.markdown("""
@@ -377,7 +418,6 @@ def render_historial_compacto(df_rut, df_seg, anio, mes, id_usuario_objetivo):
     # EFECTO DOPAMINA: Tarjeta de Logro al 100% (Solo Nadador)
     # -------------------------------------------------------------
     if st.session_state.role == "N" and porcentaje == 100:
-        # Control para no saturar con globos cada vez que se toca algo
         celeb_key = f"celeb_{anio}_{mes}"
         if celeb_key not in st.session_state:
             st.balloons()
@@ -403,7 +443,7 @@ def render_historial_compacto(df_rut, df_seg, anio, mes, id_usuario_objetivo):
         """, unsafe_allow_html=True)
     # -------------------------------------------------------------
 
-    # 1. SCORECARD DIVIDIDO (DISEÑO SOLICITADO)
+    # SCORECARD DIVIDIDO
     st.markdown(f"""
     <div style="background-color: #262730; border-radius: 8px; padding: 20px; border: 1px solid #444; margin-bottom: 20px;">
         <div style="color: #aaa; font-size: 13px; font-weight: bold; margin-bottom: 12px; letter-spacing: 1px;">
@@ -426,14 +466,14 @@ def render_historial_compacto(df_rut, df_seg, anio, mes, id_usuario_objetivo):
     st.progress(porcentaje / 100)
     st.write("") 
 
-    # 2. LISTADO DE SESIONES
+    # LISTADO DE SESIONES
     st.caption(f"DETALLE DE ACTIVIDAD")
 
     for item in lista_render:
         if item['hecho']:
             color = "#2E7D32" # Verde
             icono = "✅"
-            texto_estado = "NADADO" # <--- CAMBIO SOLICITADO
+            texto_estado = "NADADO"
             bg_badge = "#1B5E20"
         else:
             color = "#555" # Gris
@@ -537,7 +577,6 @@ if rol in ["M", "P"]:
         st.caption(f"ID: {id_busqueda} | {estado_txt}")
         
         with st.form("form_rutina"):
-            # KEY DINÁMICO para limpiar el input
             f_texto = st.text_area("Contenido", value=texto_previo, height=200, key=f"editor_texto_{id_busqueda}")
             
             if es_edicion:
@@ -577,11 +616,16 @@ if rol in ["M", "P"]:
 
     tab_explorar, tab_seguimiento = st.tabs(["📖 Explorar Sesiones", "📊 Seguimiento Alumnos"])
     
+    # --- LOGICA DE DEFAULT (PERFIL M - EXPLORAR) ---
+    unique_periods_global = df_rutinas[['anio_rutina', 'mes_rutina']].drop_duplicates().values.tolist()
+    def_y_ex, def_m_ex = get_periodo_mas_cercano(datetime.now(), unique_periods_global)
+
     with tab_explorar:
         col_v1, col_v2 = st.columns(2)
         v_anios = sorted(list(set(df_rutinas['anio_rutina'].unique().tolist() + [datetime.now().year])), reverse=True)
         
-        with col_v1: sel_a = st.selectbox("Año", v_anios, key="adm_v_a")
+        idx_y_ex = v_anios.index(def_y_ex) if def_y_ex in v_anios else 0
+        with col_v1: sel_a = st.selectbox("Año", v_anios, index=idx_y_ex, key="adm_v_a")
         
         meses_disp_explorar = sorted(df_rutinas[df_rutinas['anio_rutina'] == sel_a]['mes_rutina'].unique().tolist())
         
@@ -590,11 +634,26 @@ if rol in ["M", "P"]:
              sel_m = None
         else:
              mapa_meses_ex = {i: obtener_nombre_mes(i) for i in meses_disp_explorar}
-             with col_v2: sel_m = st.selectbox("Mes", meses_disp_explorar, format_func=lambda x: mapa_meses_ex[x], key="adm_v_m")
+             
+             # Intentar mantener el mes por defecto si existe en la lista filtrada
+             idx_m_ex = 0
+             if def_m_ex in meses_disp_explorar:
+                 idx_m_ex = meses_disp_explorar.index(def_m_ex)
+             elif meses_disp_explorar:
+                 # Si el mes por defecto no está (ej: cambiamos de año), buscamos el más cercano en la lista
+                 target_dt = datetime(sel_a, def_m_ex, 1)
+                 avail_dt = [datetime(sel_a, m, 1) for m in meses_disp_explorar]
+                 # Reutilizamos logica simple: mas cercano
+                 closest = min(avail_dt, key=lambda x: abs(x - target_dt))
+                 idx_m_ex = meses_disp_explorar.index(closest.month)
+
+             with col_v2: sel_m = st.selectbox("Mes", meses_disp_explorar, format_func=lambda x: mapa_meses_ex[x], index=idx_m_ex, key="adm_v_m")
         
         if sel_m:
             render_feed_activo(df_rutinas, df_seguimiento, sel_a, sel_m, key_suffix="admin_view")
 
+    # --- LOGICA DE DEFAULT (PERFIL M - SEGUIMIENTO) ---
+    # Usamos la misma logica global para los defaults de tiempo
     with tab_seguimiento:
         st.info("Seleccione un alumno para ver su cumplimiento histórico.")
         
@@ -614,8 +673,12 @@ if rol in ["M", "P"]:
                     lista_nads['codnadador'], 
                     format_func=lambda x: lista_nads[lista_nads['codnadador'] == x]['NombreCompleto'].values[0]
                 )
+            
+            # Aplicamos defaults calculados previamente (Global Best Period)
+            # Para Año
+            idx_y_seg = v_anios.index(def_y_ex) if def_y_ex in v_anios else 0
             with col_s2:
-                sel_a_seg = st.selectbox("Año", v_anios, key="seg_a")
+                sel_a_seg = st.selectbox("Año", v_anios, index=idx_y_seg, key="seg_a")
             
             meses_disp_seg = sorted(df_rutinas[df_rutinas['anio_rutina'] == sel_a_seg]['mes_rutina'].unique().tolist())
             
@@ -624,7 +687,19 @@ if rol in ["M", "P"]:
                  sel_m_seg = None
             else:
                  mapa_meses_seg = {i: obtener_nombre_mes(i) for i in meses_disp_seg}
-                 with col_s3: sel_m_seg = st.selectbox("Mes", meses_disp_seg, format_func=lambda x: mapa_meses_seg[x], key="seg_m")
+                 
+                 # Lógica de índice para mes
+                 idx_m_seg = 0
+                 if def_m_ex in meses_disp_seg:
+                     idx_m_seg = meses_disp_seg.index(def_m_ex)
+                 elif meses_disp_seg:
+                     # Fallback al más cercano
+                     target_dt = datetime(sel_a_seg, def_m_ex, 1)
+                     avail_dt = [datetime(sel_a_seg, m, 1) for m in meses_disp_seg]
+                     closest = min(avail_dt, key=lambda x: abs(x - target_dt))
+                     idx_m_seg = meses_disp_seg.index(closest.month)
+
+                 with col_s3: sel_m_seg = st.selectbox("Mes", meses_disp_seg, format_func=lambda x: mapa_meses_seg[x], index=idx_m_seg, key="seg_m")
                 
             st.markdown(f"**Reporte para:** {lista_nads[lista_nads['codnadador']==sel_nad_id]['NombreCompleto'].values[0]}")
             if sel_m_seg:
@@ -638,17 +713,37 @@ else:
     
     with tab_curso:
         hoy = datetime.now()
+        # Aquí también podríamos aplicar la lógica de "Más cercano" si no hay del mes actual, 
+        # pero "Mes en Curso" implica explícitamente "HOY".
+        # Sin embargo, si queremos consistencia absoluta:
+        # unique_periods_n = df_rutinas[['anio_rutina', 'mes_rutina']].drop_duplicates().values.tolist()
+        # best_y, best_m = get_periodo_mas_cercano(hoy, unique_periods_n)
+        # st.markdown(f"### Sesiones de {obtener_nombre_mes(best_m)} {best_y}")
+        # render_feed_activo(df_rutinas, df_seguimiento, best_y, best_m, key_suffix="nad_curso")
+        # Mantenemos el comportamiento original para "Mes en Curso" (mostrar HOY)
+        
         st.markdown(f"### Sesiones de {obtener_nombre_mes(hoy.month)} {hoy.year}")
         render_feed_activo(df_rutinas, df_seguimiento, hoy.year, hoy.month, key_suffix="nad_curso")
         
     with tab_hist:
         st.markdown("#### Registro de Cumplimiento")
         
+        # --- LOGICA DE DEFAULT (PERFIL N - HISTORIAL) ---
+        # 1. Obtener períodos disponibles GLOBALMENTE en rutinas
+        # (El usuario ve rutinas asignadas al grupo, no solo las que completó)
+        unique_periods_n = df_rutinas[['anio_rutina', 'mes_rutina']].drop_duplicates().values.tolist()
+        
+        # 2. Calcular mejor fecha
+        def_y_n, def_m_n = get_periodo_mas_cercano(datetime.now(), unique_periods_n)
+
         c_h1, c_h2 = st.columns(2)
         anios_disp = sorted(list(set(df_rutinas['anio_rutina'].unique())), reverse=True)
         if not anios_disp: anios_disp = [datetime.now().year]
         
-        with c_h1: h_anio = st.selectbox("Año", anios_disp, key="h_a")
+        # Índice año default
+        idx_y_n = anios_disp.index(def_y_n) if def_y_n in anios_disp else 0
+        
+        with c_h1: h_anio = st.selectbox("Año", anios_disp, index=idx_y_n, key="h_a")
         
         meses_en_anio = sorted(df_rutinas[df_rutinas['anio_rutina'] == h_anio]['mes_rutina'].unique().tolist())
         
@@ -658,8 +753,20 @@ else:
                 h_mes = None
         else:
             mapa_meses = {i: obtener_nombre_mes(i) for i in meses_en_anio}
+            
+            # Índice mes default
+            idx_m_n = 0
+            if def_m_n in meses_en_anio:
+                idx_m_n = meses_en_anio.index(def_m_n)
+            elif meses_en_anio:
+                 # Fallback inteligente
+                 target_dt = datetime(h_anio, def_m_n, 1)
+                 avail_dt = [datetime(h_anio, m, 1) for m in meses_en_anio]
+                 closest = min(avail_dt, key=lambda x: abs(x - target_dt))
+                 idx_m_n = meses_en_anio.index(closest.month)
+
             with c_h2: 
-                h_mes = st.selectbox("Mes", meses_en_anio, format_func=lambda x: mapa_meses[x], key="h_m")
+                h_mes = st.selectbox("Mes", meses_en_anio, format_func=lambda x: mapa_meses[x], index=idx_m_n, key="h_m")
             
         if h_mes:
             render_historial_compacto(df_rutinas, df_seguimiento, h_anio, h_mes, mi_id)
