@@ -249,6 +249,17 @@ if db and st.session_state.user_id:
     mis_bronces = len(df_t[(df_t['codnadador']==user_id)&(df_t['posicion']==3)]) + len(df_r[((df_r['nadador_1']==user_id)|(df_r['nadador_2']==user_id)|(df_r['nadador_3']==user_id)|(df_r['nadador_4']==user_id))&(df_r['posicion']==3)])
     mi_total = mis_oros + mis_platas + mis_bronces
 
+    # --- DEFINICIÓN CONTENIDO CENTRAL (Flexible para user 66) ---
+    # Si es el usuario 66, mostramos ENTRENADOR. Si no, las medallas.
+    if str(user_id).strip().replace('.0', '') == '66':
+        bloque_central = '<div style="font-size: 18px; font-weight: bold; color: #FFD700; letter-spacing: 1px;">ENTRENADOR</div>'
+    else:
+        bloque_central = f"""
+            <div style="display: flex; justify-content: center; gap: 8px; font-size: 16px;">
+                <span>🥇{mis_oros}</span> <span>🥈{mis_platas}</span> <span>🥉{mis_bronces}</span>
+            </div>
+        """
+
     # 1. TARJETA PERFIL
     st.write("### 👤 Mi Perfil")
     st.markdown(f"""
@@ -262,9 +273,7 @@ if db and st.session_state.user_id:
             <div style="font-size: 13px; color: #ccc;">{edad} años • {me['codgenero']}</div>
         </div>
         <div style="flex: 2; text-align: center;">
-            <div style="display: flex; justify-content: center; gap: 8px; font-size: 16px;">
-                <span>🥇{mis_oros}</span> <span>🥈{mis_platas}</span> <span>🥉{mis_bronces}</span>
-            </div>
+            {bloque_central}
         </div>
         <div style="flex: 1; text-align: right; border-left: 1px solid #555; padding-left: 10px;">
             <div class="p-total">★ {mi_total}</div>
