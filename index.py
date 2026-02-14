@@ -2,10 +2,11 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 import time
+import json
+import base64
 
 # --- 1. CONFIGURACIÓN DEL ÍCONO (ENLACE GITHUB RAW) ---
-# Usamos el enlace RAW directo de GitHub. Esto es lo más compatible que existe.
-# Asegúrate de que el archivo 'escudo.png' esté en la raíz de tu repo.
+# Enlace directo a tu imagen en GitHub
 ICON_URL = "https://raw.githubusercontent.com/economiafms/gestion-natacion/main/escudo.png"
 
 st.set_page_config(
@@ -14,20 +15,42 @@ st.set_page_config(
     page_icon=ICON_URL
 )
 
-# --- TRUCO PARA FORZAR ÍCONO EN ANDROID/IOS ---
-# Inyectamos código HTML para intentar engañar al navegador del celular
-# y que use nuestro escudo en lugar del logo de Streamlit.
+# --- 💀 MANIFEST HACK (SOLUCIÓN DEFINITIVA PARA ANDROID) ---
+# Esto crea un "manifiesto" virtual que obliga a Android a usar el escudo
+# y los colores de NOB al instalar la App.
+manifest_data = {
+    "name": "Acceso NOB",
+    "short_name": "NOB",
+    "start_url": "./",
+    "display": "standalone",
+    "background_color": "#000000",
+    "theme_color": "#E30613",
+    "icons": [
+        {
+            "src": ICON_URL,
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": ICON_URL,
+            "sizes": "512x512",
+            "type": "image/png"
+        }
+    ]
+}
+
+# Convertimos el JSON a un formato que el navegador entienda como archivo
+manifest_json = json.dumps(manifest_data)
+manifest_b64 = base64.b64encode(manifest_json.encode()).decode()
+
+# Inyectamos el manifiesto y el ícono de Apple forzadamente
 st.markdown(f"""
-    <style>
-        /* Esto oculta el código inyectado para que no se vea en la pantalla */
-        .app-icon-fix {{display: none;}}
-    </style>
-    <div class="app-icon-fix">
-        <link rel="apple-touch-icon" sizes="180x180" href="{ICON_URL}">
-        <link rel="icon" type="image/png" sizes="32x32" href="{ICON_URL}">
-        <link rel="icon" type="image/png" sizes="16x16" href="{ICON_URL}">
-    </div>
+    <link rel="manifest" href="data:application/manifest+json;base64,{manifest_b64}">
+    <link rel="apple-touch-icon" sizes="180x180" href="{ICON_URL}">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
 """, unsafe_allow_html=True)
+# -----------------------------------------------------------
 
 # --- 2. GESTIÓN DE ESTADO ---
 if "role" not in st.session_state: st.session_state.role = None
@@ -110,7 +133,7 @@ def pwa_install_button():
         1. Toca el botón **Compartir** (cuadrado con flecha arriba) en la barra inferior.
         2. Desliza hacia abajo y toca en **'Agregar al inicio'**.
         """)
-        st.info("Nota: Si al instalar sigue apareciendo el ícono antiguo, prueba borrar el caché de Chrome en tu celular y vuelve a intentarlo.")
+        st.info("Nota: Si al instalar sigue apareciendo el ícono antiguo, borra la app y el caché de Chrome antes de reinstalar.")
 
 # --- 5. PANTALLA DE LOGIN ---
 def login_screen():
