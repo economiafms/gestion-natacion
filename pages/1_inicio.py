@@ -18,12 +18,21 @@ if "show_login_form" not in st.session_state:
 if "admin_unlocked" not in st.session_state: 
     st.session_state.admin_unlocked = False
 
+# --- GESTIÓN DE PERFIL ACTIVO (M -> N) ---
+# Mantenemos el rol real en session_state, pero usamos active_role para la visualización
+active_role = st.session_state.role
+
+if st.session_state.role == "M":
+    # Opción para cambiar temporalmente la vista
+    if st.toggle("👁️ Ver mi perfil Nadador"):
+        active_role = "N"
+    else:
+        active_role = "M"
+
 # --- CONEXIÓN ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 # --- OPTIMIZACIÓN DE CARGA DE DATOS (FIX ERROR 429) ---
-# Separamos los datos estáticos de los dinámicos para no saturar la API
-
 @st.cache_data(ttl="1h")
 def cargar_datos_generales():
     """Carga datos pesados que no cambian frecuentemente."""
@@ -47,7 +56,6 @@ def cargar_datos_rutinas():
         }
     except: return None
 
-# Función unificadora para mantener compatibilidad con el código existente
 def get_db():
     general = cargar_datos_generales()
     rutinas = cargar_datos_rutinas()
@@ -103,10 +111,8 @@ def intentar_desbloqueo():
 
 def guardar_seguimiento_inicio(id_rutina, id_nadador):
     try:
-        # Leemos solo la hoja necesaria sin caché para tener el último estado
         df_seg = conn.read(worksheet="Rutinas_Seguimiento", ttl=0)
         
-        # OBTENER HORA ARGENTINA (UTC-3)
         ahora_arg = datetime.now(timezone.utc) - timedelta(hours=3)
         hora_str = ahora_arg.strftime("%Y-%m-%d %H:%M:%S")
         
@@ -118,9 +124,6 @@ def guardar_seguimiento_inicio(id_rutina, id_nadador):
         df_final = pd.concat([df_seg, nuevo_registro], ignore_index=True)
         conn.update(worksheet="Rutinas_Seguimiento", data=df_final)
         
-        # --- FIX IMPORTANTE ---
-        # Solo limpiamos el caché de RUTINAS, no el general.
-        # Esto evita recargar las 7 hojas y previene el error 429.
         cargar_datos_rutinas.clear()
         
         return True
@@ -161,8 +164,8 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# 1. GUÍA RÁPIDA
-if st.session_state.role == "M":
+# 1. GUÍA RÁPIDA (Usando active_role)
+if active_role == "M":
     with st.expander("📖 Guía rápida de uso – Perfil Manager", expanded=False):
         st.markdown("""
         Esta guía detalla las herramientas disponibles para mi gestión, facilitando el análisis y la toma de decisiones.
@@ -197,7 +200,7 @@ if st.session_state.role == "M":
         * Mi rol es analizar y tomar decisiones a partir de esa información.
         """)
 
-elif st.session_state.role == "N":
+elif active_role == "N":
     with st.expander("📖 Guía rápida de uso – Perfil Nadador", expanded=False):
         st.markdown("""
         Este sistema está diseñado para que cada nadador gestione y registre su propia información deportiva.
@@ -249,8 +252,24 @@ if db and st.session_state.user_id:
     mis_bronces = len(df_t[(df_t['codnadador']==user_id)&(df_t['posicion']==3)]) + len(df_r[((df_r['nadador_1']==user_id)|(df_r['nadador_2']==user_id)|(df_r['nadador_3']==user_id)|(df_r['nadador_4']==user_id))&(df_r['posicion']==3)])
     mi_total = mis_oros + mis_platas + mis_bronces
 
+    # --- DEFINICIÓN CONTENIDO CENTRAL (Flexible para user 66) ---
+    if str(user_id).strip().replace('.0', '') == '66':
+        bloque_central = """
+        <div style="display: flex; justify-content: center; align-items: center; height: 100%;">
+            <span style="font-size: 18px; font-weight: 800; color: #FFD700; letter-spacing: 1.5px; text-shadow: 0 2px 4px rgba(0,0,0,0.5);">ENTRENADOR</span>
+        </div>
+        """
+    else:
+        bloque_central = f"""
+            <div style="display: flex; justify-content: center; gap: 8px; font-size: 16px;">
+                <span>🥇{mis_oros}</span> <span>🥈{mis_platas}</span> <span>🥉{mis_bronces}</span>
+            </div>
+        """
+
     # 1. TARJETA PERFIL
     st.write("### 👤 Mi Perfil")
+    
+    # Se eliminó visualmente la estrella y la categoría, manteniendo el layout
     st.markdown(f"""
     <style>
         .padron-card {{ background-color: #262730; border: 1px solid #444; border-radius: 12px; padding: 15px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 6px rgba(0,0,0,0.3); margin-bottom: 20px; }}
@@ -262,27 +281,23 @@ if db and st.session_state.user_id:
             <div style="font-size: 13px; color: #ccc;">{edad} años • {me['codgenero']}</div>
         </div>
         <div style="flex: 2; text-align: center;">
-            <div style="display: flex; justify-content: center; gap: 8px; font-size: 16px;">
-                <span>🥇{mis_oros}</span> <span>🥈{mis_platas}</span> <span>🥉{mis_bronces}</span>
-            </div>
+            {bloque_central}
         </div>
         <div style="flex: 1; text-align: right; border-left: 1px solid #555; padding-left: 10px;">
-            <div class="p-total">★ {mi_total}</div>
-            <div style="font-size: 16px; color: #4CAF50; font-weight: bold;">{cat}</div>
-        </div>
+            </div>
     </div>
     """, unsafe_allow_html=True)
     
-    if st.session_state.role == "N":
+    # Solo visible en modo Nadador (ya sea real o simulado)
+    if active_role == "N":
         if st.button("Ver Mi Ficha Completa ➝", type="primary", use_container_width=True, key="btn_ficha_inicio"):
             st.session_state.ver_nadador_especifico = st.session_state.user_name
             st.switch_page("pages/2_visualizar_datos.py")
     
     st.write("") 
 
-    # // ATAJO RUTINA DIARIA (Logica Completa de Gamificación)
-    if st.session_state.role == "N":
-        # HORA ARGENTINA (UTC-3)
+    # // ATAJO RUTINA DIARIA (Logica Completa de Gamificación - Solo en modo Nadador)
+    if active_role == "N":
         hoy_arg = datetime.now(timezone.utc) - timedelta(hours=3)
         
         df_rut = db.get('rutinas')
@@ -294,7 +309,6 @@ if db and st.session_state.user_id:
                 (df_rut['mes_rutina'] == hoy_arg.month)
             ].copy()
 
-            # REGLA 1: Si no hay rutinas en el mes, NO mostrar el expander
             if not rutinas_mes.empty:
                 
                 with st.expander("🏊‍♂️ ¿Hice mi rutina de hoy?", expanded=False):
@@ -315,16 +329,11 @@ if db and st.session_state.user_id:
                     else:
                         realizadas_historicas = []
 
-                    # --- LÓGICA DE ESTADOS ---
                     if rutina_hoy_completada is not None and not rutina_hoy_completada.empty:
-                        # HOY GANÓ. Verificamos si era la ÚLTIMA rutina disponible del mes.
                         r_row = rutina_hoy_completada.iloc[0]
-                        
-                        # Calculamos si quedan pendientes (excluyendo la que ya se sabe realizada)
                         pendientes_check = rutinas_mes[~rutinas_mes['id_rutina'].isin(realizadas_historicas)]
                         
                         if pendientes_check.empty:
-                            # REGLA 2: ULTIMA RUTINA -> PLACA DORADA + BALLOONS
                             st.balloons()
                             st.markdown(f"""
                             <div style="
@@ -344,11 +353,9 @@ if db and st.session_state.user_id:
                             </div>
                             """, unsafe_allow_html=True)
                         else:
-                            # REGLA 3: DÍA NORMAL -> MENSAJE SIMPLE
                             st.success(f"🏆 **¡Misión Cumplida!** Completé la **Sesión {int(r_row['nro_sesion'])}** hoy.")
                         
                     else:
-                        # PENDIENTE
                         rutinas_pendientes = rutinas_mes[~rutinas_mes['id_rutina'].isin(realizadas_historicas)].sort_values('nro_sesion')
                         
                         if not rutinas_pendientes.empty:
@@ -402,11 +409,11 @@ if db and st.session_state.user_id:
     st.divider()
 
     # =================================================================
-    # 3. BOTONERA PRINCIPAL (LÓGICA POR ROL)
+    # 3. BOTONERA PRINCIPAL (LÓGICA POR ROL ACTIVO)
     # =================================================================
     
     # --- ROL NADADOR (N) ---
-    if st.session_state.role == "N":
+    if active_role == "N":
         c1, c2 = st.columns(2)
         with c1:
             if st.button("⏱️ Entrenamientos", type="primary", use_container_width=True, key="btn_train_N"): 
@@ -506,7 +513,7 @@ if db and st.session_state.user_id:
         st.altair_chart((base.mark_arc(outerRadius=80, innerRadius=50).encode(color=alt.Color("codgenero", scale=colors, legend=None)) + base.mark_text(radius=100).encode(text="count()", order=alt.Order("codgenero"), color=alt.value("white"))), use_container_width=True)
 
     # --- 6. GESTIÓN (Perfil M) ---
-    if st.session_state.role == "M":
+    if active_role == "M":
         st.write(""); st.write("")
         label_btn = "⚙️ CARGAR COMPETENCIAS" if not st.session_state.admin_unlocked else "🔒 BLOQUEAR GESTIÓN"
         
