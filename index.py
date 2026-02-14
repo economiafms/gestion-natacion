@@ -110,7 +110,7 @@ def pwa_install_button():
         1. Toca el botón **Compartir** (cuadrado con flecha arriba) en la barra inferior.
         2. Desliza hacia abajo y toca en **'Agregar al inicio'**.
         """)
-        st.info("Nota: Tenerla instalada te permite acceder más rápido a tus tiempos, rutinas, categoría y seguimiento personal. Es una herramienta pensada para acompañar tu evolución deportiva día a día. Tu progreso también se construye con constancia. 🔴⚫🏊.")
+        st.info("Nota: Tenerla instalada te permite acceder más rápido a tus tiempos, rutinas, categoría y seguimiento personal. Es una herramienta pensada para acompañar tu evolución deportiva día a día. Tu progreso también se construye con constancia.")
 
 # --- 5. PANTALLA DE LOGIN ---
 def login_screen():
@@ -196,5 +196,6 @@ else:
             cerrar_sesion()
 
     pg.run()
+
 
 
