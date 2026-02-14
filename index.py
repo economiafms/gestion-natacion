@@ -4,11 +4,11 @@ import pandas as pd
 import time
 
 # --- 1. CONFIGURACIÓN INICIAL ---
-# Enlace directo al escudo en Google Drive
+# CAMBIO: Usamos el enlace directo de Wikimedia que es estable para favicons
 st.set_page_config(
     page_title="Acceso NOB", 
     layout="centered",
-    page_icon="https://drive.google.com/uc?export=view&id=18oVX2gHgJe6X07AXsq3Lddiclzs8WlIS"
+    page_icon="https://upload.wikimedia.org/wikipedia/commons/thumb/4/4c/Escudo_del_Club_Atl%C3%A9tico_Newell%27s_Old_Boys.svg/240px-Escudo_del_Club_Atl%C3%A9tico_Newell%27s_Old_Boys.svg.png"
 )
 
 # --- 2. GESTIÓN DE ESTADO ---
