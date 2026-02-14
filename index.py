@@ -3,13 +3,31 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 import time
 
-# --- 1. CONFIGURACIÓN INICIAL ---
-# CAMBIO: Usamos el enlace de 'thumbnail' de Drive que funciona mejor como imagen directa
+# --- 1. CONFIGURACIÓN DEL ÍCONO (ENLACE GITHUB RAW) ---
+# Usamos el enlace RAW directo de GitHub. Esto es lo más compatible que existe.
+# Asegúrate de que el archivo 'escudo.png' esté en la raíz de tu repo.
+ICON_URL = "https://raw.githubusercontent.com/economiafms/gestion-natacion/main/escudo.png"
+
 st.set_page_config(
     page_title="Acceso NOB", 
     layout="centered",
-    page_icon="https://raw.githubusercontent.com/economiafms/gestion-natacion/main/escudo.png"
+    page_icon=ICON_URL
 )
+
+# --- TRUCO PARA FORZAR ÍCONO EN ANDROID/IOS ---
+# Inyectamos código HTML para intentar engañar al navegador del celular
+# y que use nuestro escudo en lugar del logo de Streamlit.
+st.markdown(f"""
+    <style>
+        /* Esto oculta el código inyectado para que no se vea en la pantalla */
+        .app-icon-fix {{display: none;}}
+    </style>
+    <div class="app-icon-fix">
+        <link rel="apple-touch-icon" sizes="180x180" href="{ICON_URL}">
+        <link rel="icon" type="image/png" sizes="32x32" href="{ICON_URL}">
+        <link rel="icon" type="image/png" sizes="16x16" href="{ICON_URL}">
+    </div>
+""", unsafe_allow_html=True)
 
 # --- 2. GESTIÓN DE ESTADO ---
 if "role" not in st.session_state: st.session_state.role = None
@@ -92,7 +110,7 @@ def pwa_install_button():
         1. Toca el botón **Compartir** (cuadrado con flecha arriba) en la barra inferior.
         2. Desliza hacia abajo y toca en **'Agregar al inicio'**.
         """)
-        st.info("Nota: El acceso directo debería crearse con el escudo de NOB, aunque algunos dispositivos pueden tardar en actualizarlo.")
+        st.info("Nota: Si al instalar sigue apareciendo el ícono antiguo, prueba borrar el caché de Chrome en tu celular y vuelve a intentarlo.")
 
 # --- 5. PANTALLA DE LOGIN ---
 def login_screen():
@@ -178,4 +196,3 @@ else:
             cerrar_sesion()
 
     pg.run()
-
