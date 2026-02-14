@@ -2,76 +2,13 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 import time
-import json
-import base64
 
-# --- 1. CONFIGURACIÓN DEL ÍCONO ---
-ICON_URL = "https://raw.githubusercontent.com/economiafms/gestion-natacion/main/escudo.png"
-
+# --- 1. CONFIGURACIÓN ---
 st.set_page_config(
     page_title="Acceso NOB", 
     layout="centered",
-    page_icon=ICON_URL
+    page_icon="https://upload.wikimedia.org/wikipedia/commons/thumb/4/4c/Escudo_del_Club_Atl%C3%A9tico_Newell%27s_Old_Boys.svg/240px-Escudo_del_Club_Atl%C3%A9tico_Newell%27s_Old_Boys.svg.png"
 )
-
-# --- 💀 MANIFEST HACK V2: JAVASCRIPT ENFORCER ---
-# Este bloque NO SOLO inyecta el manifiesto, sino que usa JavaScript
-# para buscar y ELIMINAR cualquier manifiesto predeterminado de Streamlit
-# que esté bloqueando el nuestro.
-
-manifest_data = {
-    "name": "Acceso NOB",
-    "short_name": "NOB",
-    "start_url": "./",
-    "display": "standalone",
-    "background_color": "#000000",
-    "theme_color": "#E30613",
-    "icons": [
-        {"src": ICON_URL, "sizes": "192x192", "type": "image/png"},
-        {"src": ICON_URL, "sizes": "512x512", "type": "image/png"}
-    ]
-}
-
-manifest_json = json.dumps(manifest_data)
-manifest_b64 = base64.b64encode(manifest_json.encode()).decode()
-
-st.markdown(f"""
-    <script>
-        // Función para forzar el cambio de manifiesto
-        function forceManifest() {{
-            // 1. Buscar y eliminar manifiestos existentes (el de Streamlit)
-            var existingManifests = document.querySelectorAll('link[rel="manifest"]');
-            existingManifests.forEach(function(link) {{
-                link.remove();
-            }});
-
-            // 2. Crear e inyectar nuestro manifiesto
-            var newManifest = document.createElement('link');
-            newManifest.rel = 'manifest';
-            newManifest.href = 'data:application/manifest+json;base64,{manifest_b64}';
-            document.head.appendChild(newManifest);
-
-            // 3. Forzar iconos de Apple y Favicon
-            var appleIcons = document.querySelectorAll('link[rel="apple-touch-icon"]');
-            appleIcons.forEach(l => l.remove());
-            
-            var newApple = document.createElement('link');
-            newApple.rel = 'apple-touch-icon';
-            newApple.href = '{ICON_URL}';
-            document.head.appendChild(newApple);
-            
-            console.log("Escudo NOB inyectado con éxito.");
-        }}
-
-        // Ejecutar inmediatamente y también esperar a que cargue todo
-        forceManifest();
-        window.addEventListener('load', forceManifest);
-        
-        // Ejecutar una vez más a los 2 segundos por si Streamlit lo sobreescribe tarde
-        setTimeout(forceManifest, 2000);
-    </script>
-""", unsafe_allow_html=True)
-# -----------------------------------------------------------
 
 # --- 2. GESTIÓN DE ESTADO ---
 if "role" not in st.session_state: st.session_state.role = None
@@ -94,7 +31,7 @@ def cargar_tablas_login():
         }
     except: return None
 
-# --- 4. FUNCIONES LOGIN / LOGOUT ---
+# --- 4. LÓGICA DE LOGIN ---
 def limpiar_socio(valor):
     if pd.isna(valor): return ""
     return str(valor).split('.')[0].strip()
@@ -139,23 +76,7 @@ def cerrar_sesion():
         del st.session_state[key]
     st.rerun()
 
-# --- NUEVA FUNCIÓN: INSTRUCCIONES DE INSTALACIÓN ---
-def pwa_install_button():
-    st.write("---")
-    with st.expander("📲 INSTALAR APP EN TU CELULAR"):
-        st.markdown("""
-        **Instrucciones para ver el nuevo ícono:**
-        
-        Si ya tenías la app instalada, es muy probable que Android guarde el ícono viejo en caché.
-        
-        1. **Desinstala** la app actual.
-        2. Abre Chrome y borra el caché (Configuración > Privacidad > Borrar datos de navegación > Imágenes y archivos en caché).
-        3. Recarga esta página.
-        4. Vuelve a instalar la aplicación.
-        """)
-        st.info("Nota: Este parche intenta forzar el ícono del club. Si persiste el logo de Streamlit, es una limitación forzosa del servidor gratuito.")
-
-# --- 5. PANTALLA DE LOGIN ---
+# --- 5. PANTALLA DE ACCESO ---
 def login_screen():
     st.markdown("""<style>[data-testid="stSidebar"] {display: none;}</style>""", unsafe_allow_html=True)
     st.markdown("""
@@ -194,13 +115,20 @@ def login_screen():
             <div class="nob-quote">"Del deporte sos la gloria"</div>
         </div>
     """, unsafe_allow_html=True)
+    
     st.markdown("<div style='text-align:center; color:#aaa; font-size:14px; margin-bottom:5px;'>ACCESO SOCIOS</div>", unsafe_allow_html=True)
+    
     st.text_input("Ingrese Nro de Socio", key="input_socio", placeholder="Ej: 123456-01", label_visibility="collapsed")
+    
     if st.button("INGRESAR", type="primary", use_container_width=True):
         validar_socio()
-    
-    # AGREGADO: Llamada a la función de instrucciones
-    pwa_install_button()
+
+    st.write("---")
+    with st.expander("📲 Ayuda para Instalar"):
+        st.markdown("""
+        **Android:** Menú (⋮) > Instalar aplicación.
+        **iPhone:** Compartir > Agregar al inicio.
+        """)
 
 # --- 6. DEFINICIÓN DE PÁGINAS ---
 pg_inicio = st.Page("pages/1_inicio.py", title="Inicio", icon="🏠")
@@ -224,7 +152,7 @@ else:
         "Principal": [pg_inicio, pg_datos, pg_rutinas, pg_entrenamientos, pg_categoria, pg_agenda]
     }
 
-    # --- MENÚ HERRAMIENTAS ---
+    # --- MENÚ HERRAMIENTAS (Solo M y P) ---
     if st.session_state.role in ["M", "P"]:
         menu_pages["Herramientas"] = [pg_ranking, pg_simulador]
 
