@@ -249,26 +249,8 @@ if db and st.session_state.user_id:
     mis_bronces = len(df_t[(df_t['codnadador']==user_id)&(df_t['posicion']==3)]) + len(df_r[((df_r['nadador_1']==user_id)|(df_r['nadador_2']==user_id)|(df_r['nadador_3']==user_id)|(df_r['nadador_4']==user_id))&(df_r['posicion']==3)])
     mi_total = mis_oros + mis_platas + mis_bronces
 
-    # --- DEFINICIÓN CONTENIDO CENTRAL (Flexible para user 66) ---
-    # Si es el usuario 66, mostramos ENTRENADOR. Si no, las medallas.
-    # Usamos un div contenedor con flexbox y alineación centrada para corregir el layout.
-    if str(user_id).strip().replace('.0', '') == '66':
-        bloque_central = """
-        <div style="display: flex; justify-content: center; align-items: center; height: 100%;">
-            <span style="font-size: 18px; font-weight: 800; color: #FFD700; letter-spacing: 1.5px; text-shadow: 0 2px 4px rgba(0,0,0,0.5);">ENTRENADOR</span>
-        </div>
-        """
-    else:
-        bloque_central = f"""
-            <div style="display: flex; justify-content: center; gap: 8px; font-size: 16px;">
-                <span>🥇{mis_oros}</span> <span>🥈{mis_platas}</span> <span>🥉{mis_bronces}</span>
-            </div>
-        """
-
     # 1. TARJETA PERFIL
     st.write("### 👤 Mi Perfil")
-    
-    # Se eliminó visualmente la estrella y la categoría (derecha vacía), manteniendo el layout
     st.markdown(f"""
     <style>
         .padron-card {{ background-color: #262730; border: 1px solid #444; border-radius: 12px; padding: 15px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 6px rgba(0,0,0,0.3); margin-bottom: 20px; }}
@@ -280,14 +262,17 @@ if db and st.session_state.user_id:
             <div style="font-size: 13px; color: #ccc;">{edad} años • {me['codgenero']}</div>
         </div>
         <div style="flex: 2; text-align: center;">
-            {bloque_central}
+            <div style="display: flex; justify-content: center; gap: 8px; font-size: 16px;">
+                <span>🥇{mis_oros}</span> <span>🥈{mis_platas}</span> <span>🥉{mis_bronces}</span>
+            </div>
         </div>
         <div style="flex: 1; text-align: right; border-left: 1px solid #555; padding-left: 10px;">
-            </div>
+            <div class="p-total">★ {mi_total}</div>
+            <div style="font-size: 16px; color: #4CAF50; font-weight: bold;">{cat}</div>
+        </div>
     </div>
     """, unsafe_allow_html=True)
     
-    # Botón 'Ver Mi Ficha' SOLO para Nadadores (N)
     if st.session_state.role == "N":
         if st.button("Ver Mi Ficha Completa ➝", type="primary", use_container_width=True, key="btn_ficha_inicio"):
             st.session_state.ver_nadador_especifico = st.session_state.user_name
