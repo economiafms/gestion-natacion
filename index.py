@@ -4,7 +4,12 @@ import pandas as pd
 import time
 
 # --- 1. CONFIGURACIÓN INICIAL ---
-st.set_page_config(page_title="Acceso NOB", layout="centered")
+# Enlace convertido para acceso directo a la imagen de Drive
+st.set_page_config(
+    page_title="Acceso NOB", 
+    layout="centered",
+    page_icon="https://drive.google.com/uc?export=view&id=18oVX2gHgJe6X07AXsq3Lddiclzs8WlIS"
+)
 
 # --- 2. GESTIÓN DE ESTADO ---
 if "role" not in st.session_state: st.session_state.role = None
@@ -87,7 +92,7 @@ def pwa_install_button():
         1. Toca el botón **Compartir** (cuadrado con flecha arriba) en la barra inferior.
         2. Desliza hacia abajo y toca en **'Agregar al inicio'**.
         """)
-        st.info("Nota: El acceso directo se verá con el ícono de la aplicación web de Streamlit.")
+        [cite_start]st.info("Nota: El acceso directo debería crearse con el escudo de NOB[cite: 1], aunque algunos dispositivos pueden tardar en actualizarlo.")
 
 # --- 5. PANTALLA DE LOGIN ---
 def login_screen():
