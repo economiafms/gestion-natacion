@@ -2,11 +2,9 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 import time
-import json
-import base64
 
-# --- 1. CONFIGURACIÓN DEL ÍCONO ---
-# Usamos el enlace RAW de GitHub. Asegúrate de que la imagen exista en tu repo.
+# --- 1. CONFIGURACIÓN INICIAL ---
+# Usamos TU escudo directamente desde tu repositorio
 ICON_URL = "https://raw.githubusercontent.com/economiafms/gestion-natacion/main/escudo.png"
 
 st.set_page_config(
@@ -14,71 +12,6 @@ st.set_page_config(
     layout="centered",
     page_icon=ICON_URL
 )
-
-# --- 💀 MANIFEST HACK V2: JAVASCRIPT ENFORCER ---
-# Generamos el manifiesto en Python
-manifest_data = {
-    "name": "Acceso NOB",
-    "short_name": "NOB",
-    "start_url": "./",
-    "display": "standalone",
-    "background_color": "#000000",
-    "theme_color": "#E30613",
-    "icons": [
-        {"src": ICON_URL, "sizes": "192x192", "type": "image/png"},
-        {"src": ICON_URL, "sizes": "512x512", "type": "image/png"}
-    ]
-}
-
-# Codificamos a Base64 para inyectarlo directo en el HTML
-manifest_json = json.dumps(manifest_data)
-manifest_b64 = base64.b64encode(manifest_json.encode()).decode()
-
-# Inyección de JavaScript agresivo para reemplazar el manifiesto
-st.markdown(f"""
-    <script>
-        function forceManifest() {{
-            console.log("Intentando forzar manifiesto NOB...");
-            
-            // 1. Eliminar cualquier manifiesto existente (el de Streamlit)
-            var existingManifests = document.querySelectorAll('link[rel="manifest"]');
-            existingManifests.forEach(function(link) {{
-                link.parentNode.removeChild(link);
-            }});
-
-            // 2. Eliminar iconos existentes
-            var existingIcons = document.querySelectorAll('link[rel="icon"], link[rel="apple-touch-icon"], link[rel="shortcut icon"]');
-            existingIcons.forEach(function(link) {{
-                link.parentNode.removeChild(link);
-            }});
-
-            // 3. Crear e inyectar NUESTRO manifiesto
-            var newManifest = document.createElement('link');
-            newManifest.rel = 'manifest';
-            newManifest.href = 'data:application/manifest+json;base64,{manifest_b64}';
-            document.head.appendChild(newManifest);
-
-            // 4. Inyectar NUESTRO ícono (Apple y Favicon)
-            var newApple = document.createElement('link');
-            newApple.rel = 'apple-touch-icon';
-            newApple.href = '{ICON_URL}';
-            document.head.appendChild(newApple);
-
-            var newIcon = document.createElement('link');
-            newIcon.rel = 'icon';
-            newIcon.href = '{ICON_URL}';
-            document.head.appendChild(newIcon);
-            
-            console.log("Manifiesto e íconos NOB inyectados.");
-        }}
-
-        // Ejecutar en varios momentos para asegurar que ganamos la "carrera" de carga
-        forceManifest();
-        window.addEventListener('load', forceManifest);
-        setTimeout(forceManifest, 1000);
-        setTimeout(forceManifest, 3000);
-    </script>
-""", unsafe_allow_html=True)
 
 # --- 2. GESTIÓN DE ESTADO ---
 if "role" not in st.session_state: st.session_state.role = None
@@ -151,16 +84,17 @@ def pwa_install_button():
     st.write("---")
     with st.expander("📲 INSTALAR APP EN TU CELULAR"):
         st.markdown("""
-        **Instrucciones para ver el nuevo ícono:**
+        Puedes agregar esta aplicación a tu pantalla de inicio para un acceso más rápido:
         
-        Si ya tenías la app instalada, es muy probable que Android guarde el ícono viejo en caché.
+        **🤖 Android (Chrome):**
+        1. Toca los tres puntos **(⋮)** arriba a la derecha.
+        2. Selecciona **'Instalar aplicación'** o 'Agregar a la pantalla de inicio'.
         
-        1. **Desinstala** la app actual.
-        2. Abre Chrome y borra el caché (Configuración > Privacidad > Borrar datos de navegación > Imágenes y archivos en caché).
-        3. Recarga esta página.
-        4. Vuelve a instalar la aplicación.
+        **🍎 iPhone (Safari):**
+        1. Toca el botón **Compartir** (cuadrado con flecha arriba) en la barra inferior.
+        2. Desliza hacia abajo y toca en **'Agregar al inicio'**.
         """)
-        st.info("Nota: Este parche intenta forzar el ícono del club mediante JavaScript.")
+        st.info("Nota: Si al instalar sigue apareciendo el ícono antiguo, borra el caché de Chrome y vuelve a intentar.")
 
 # --- 5. PANTALLA DE LOGIN ---
 def login_screen():
