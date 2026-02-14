@@ -5,8 +5,7 @@ import time
 import json
 import base64
 
-# --- 1. CONFIGURACIÓN DEL ÍCONO (ENLACE GITHUB RAW) ---
-# Enlace directo a tu imagen en GitHub
+# --- 1. CONFIGURACIÓN DEL ÍCONO ---
 ICON_URL = "https://raw.githubusercontent.com/economiafms/gestion-natacion/main/escudo.png"
 
 st.set_page_config(
@@ -15,9 +14,11 @@ st.set_page_config(
     page_icon=ICON_URL
 )
 
-# --- 💀 MANIFEST HACK (SOLUCIÓN DEFINITIVA PARA ANDROID) ---
-# Esto crea un "manifiesto" virtual que obliga a Android a usar el escudo
-# y los colores de NOB al instalar la App.
+# --- 💀 MANIFEST HACK V2: JAVASCRIPT ENFORCER ---
+# Este bloque NO SOLO inyecta el manifiesto, sino que usa JavaScript
+# para buscar y ELIMINAR cualquier manifiesto predeterminado de Streamlit
+# que esté bloqueando el nuestro.
+
 manifest_data = {
     "name": "Acceso NOB",
     "short_name": "NOB",
@@ -26,29 +27,49 @@ manifest_data = {
     "background_color": "#000000",
     "theme_color": "#E30613",
     "icons": [
-        {
-            "src": ICON_URL,
-            "sizes": "192x192",
-            "type": "image/png"
-        },
-        {
-            "src": ICON_URL,
-            "sizes": "512x512",
-            "type": "image/png"
-        }
+        {"src": ICON_URL, "sizes": "192x192", "type": "image/png"},
+        {"src": ICON_URL, "sizes": "512x512", "type": "image/png"}
     ]
 }
 
-# Convertimos el JSON a un formato que el navegador entienda como archivo
 manifest_json = json.dumps(manifest_data)
 manifest_b64 = base64.b64encode(manifest_json.encode()).decode()
 
-# Inyectamos el manifiesto y el ícono de Apple forzadamente
 st.markdown(f"""
-    <link rel="manifest" href="data:application/manifest+json;base64,{manifest_b64}">
-    <link rel="apple-touch-icon" sizes="180x180" href="{ICON_URL}">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="mobile-web-app-capable" content="yes">
+    <script>
+        // Función para forzar el cambio de manifiesto
+        function forceManifest() {{
+            // 1. Buscar y eliminar manifiestos existentes (el de Streamlit)
+            var existingManifests = document.querySelectorAll('link[rel="manifest"]');
+            existingManifests.forEach(function(link) {{
+                link.remove();
+            }});
+
+            // 2. Crear e inyectar nuestro manifiesto
+            var newManifest = document.createElement('link');
+            newManifest.rel = 'manifest';
+            newManifest.href = 'data:application/manifest+json;base64,{manifest_b64}';
+            document.head.appendChild(newManifest);
+
+            // 3. Forzar iconos de Apple y Favicon
+            var appleIcons = document.querySelectorAll('link[rel="apple-touch-icon"]');
+            appleIcons.forEach(l => l.remove());
+            
+            var newApple = document.createElement('link');
+            newApple.rel = 'apple-touch-icon';
+            newApple.href = '{ICON_URL}';
+            document.head.appendChild(newApple);
+            
+            console.log("Escudo NOB inyectado con éxito.");
+        }}
+
+        // Ejecutar inmediatamente y también esperar a que cargue todo
+        forceManifest();
+        window.addEventListener('load', forceManifest);
+        
+        // Ejecutar una vez más a los 2 segundos por si Streamlit lo sobreescribe tarde
+        setTimeout(forceManifest, 2000);
+    </script>
 """, unsafe_allow_html=True)
 # -----------------------------------------------------------
 
@@ -123,17 +144,16 @@ def pwa_install_button():
     st.write("---")
     with st.expander("📲 INSTALAR APP EN TU CELULAR"):
         st.markdown("""
-        Puedes agregar esta aplicación a tu pantalla de inicio para un acceso más rápido:
+        **Instrucciones para ver el nuevo ícono:**
         
-        **🤖 Android (Chrome):**
-        1. Toca los tres puntos **(⋮)** arriba a la derecha.
-        2. Selecciona **'Instalar aplicación'** o 'Agregar a la pantalla de inicio'.
+        Si ya tenías la app instalada, es muy probable que Android guarde el ícono viejo en caché.
         
-        **🍎 iPhone (Safari):**
-        1. Toca el botón **Compartir** (cuadrado con flecha arriba) en la barra inferior.
-        2. Desliza hacia abajo y toca en **'Agregar al inicio'**.
+        1. **Desinstala** la app actual.
+        2. Abre Chrome y borra el caché (Configuración > Privacidad > Borrar datos de navegación > Imágenes y archivos en caché).
+        3. Recarga esta página.
+        4. Vuelve a instalar la aplicación.
         """)
-        st.info("Nota: Si al instalar sigue apareciendo el ícono antiguo, borra la app y el caché de Chrome antes de reinstalar.")
+        st.info("Nota: Este parche intenta forzar el ícono del club. Si persiste el logo de Streamlit, es una limitación forzosa del servidor gratuito.")
 
 # --- 5. PANTALLA DE LOGIN ---
 def login_screen():
