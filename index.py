@@ -4,7 +4,6 @@ import pandas as pd
 import time
 
 # --- 1. CONFIGURACIÓN INICIAL ---
-# Usamos TU escudo directamente desde tu repositorio
 ICON_URL = "https://raw.githubusercontent.com/economiafms/gestion-natacion/main/escudo.png"
 
 st.set_page_config(
@@ -84,17 +83,11 @@ def pwa_install_button():
     st.write("---")
     with st.expander("📲 INSTALAR APP EN TU CELULAR"):
         st.markdown("""
-        Puedes agregar esta aplicación a tu pantalla de inicio para un acceso más rápido:
-        
-        **🤖 Android (Chrome):**
-        1. Toca los tres puntos **(⋮)** arriba a la derecha.
-        2. Selecciona **'Instalar aplicación'** o 'Agregar a la pantalla de inicio'.
-        
-        **🍎 iPhone (Safari):**
-        1. Toca el botón **Compartir** (cuadrado con flecha arriba) en la barra inferior.
-        2. Desliza hacia abajo y toca en **'Agregar al inicio'**.
+        **Instrucciones para actualizar:**
+        1. Desinstala la app actual.
+        2. Borra el caché de Chrome.
+        3. Recarga y vuelve a instalar.
         """)
-        st.info("Nota: Si al instalar sigue apareciendo el ícono antiguo, borra el caché de Chrome y vuelve a intentar.")
 
 # --- 5. PANTALLA DE LOGIN ---
 def login_screen():
@@ -140,7 +133,6 @@ def login_screen():
     if st.button("INGRESAR", type="primary", use_container_width=True):
         validar_socio()
     
-    # AGREGADO: Llamada a la función de instrucciones
     pwa_install_button()
 
 # --- 6. DEFINICIÓN DE PÁGINAS ---
@@ -180,3 +172,37 @@ else:
             cerrar_sesion()
 
     pg.run()
+
+# ==========================================
+# ⚡ FORZAR ÍCONO CON JAVASCRIPT (AL FINAL)
+# ==========================================
+# Esto se ejecuta después de que Python ha renderizado todo.
+# Espera 2.5 segundos (tiempo suficiente para que Streamlit termine)
+# y luego reemplaza los iconos del navegador a la fuerza.
+st.markdown(f"""
+    <script>
+        function overrideFavicon() {{
+            var link = document.querySelector("link[rel~='icon']");
+            if (!link) {{
+                link = document.createElement('link');
+                link.rel = 'icon';
+                document.head.appendChild(link);
+            }}
+            link.href = '{ICON_URL}';
+            
+            var appleLink = document.querySelector("link[rel~='apple-touch-icon']");
+            if (!appleLink) {{
+                appleLink = document.createElement('link');
+                appleLink.rel = 'apple-touch-icon';
+                document.head.appendChild(appleLink);
+            }}
+            appleLink.href = '{ICON_URL}';
+        }}
+        
+        // Intentar inmediatamente
+        overrideFavicon();
+        
+        // Intentar de nuevo a los 2.5 segundos
+        setTimeout(overrideFavicon, 2500);
+    </script>
+""", unsafe_allow_html=True)
