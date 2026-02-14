@@ -3,33 +3,31 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 import time
 
-# --- 1. CONFIGURACIÓN DEL ÍCONO (ENLACE GITHUB RAW) ---
-# Usamos el enlace RAW directo de GitHub. Esto es lo más compatible que existe.
-# Asegúrate de que el archivo 'escudo.png' esté en la raíz de tu repo.
-ICON_URL = "https://raw.githubusercontent.com/economiafms/gestion-natacion/main/escudo.png"
+# --- 1. CONFIGURACIÓN DEL ÍCONO (ENLACE ESTABLE) ---
+# Usamos el de Wikimedia que es 100% público y rápido.
+URL_ESCUDO = "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4c/Escudo_del_Club_Atl%C3%A9tico_Newell%27s_Old_Boys.svg/240px-Escudo_del_Club_Atl%C3%A9tico_Newell%27s_Old_Boys.svg.png"
 
 st.set_page_config(
     page_title="Acceso NOB", 
     layout="centered",
-    page_icon=ICON_URL
+    page_icon=URL_ESCUDO
 )
 
-# --- TRUCO PARA FORZAR ÍCONO EN ANDROID/IOS ---
-# Inyectamos código HTML para intentar engañar al navegador del celular
-# y que use nuestro escudo en lugar del logo de Streamlit.
+# --- 2. INTENTO DE FORZAR ÍCONO EN MÓVIL (HTML PURO) ---
+# Esto inyecta las etiquetas estándar para "Agregar a inicio"
 st.markdown(f"""
+    <head>
+        <link rel="apple-touch-icon" sizes="180x180" href="{URL_ESCUDO}">
+        <link rel="icon" type="image/png" sizes="192x192" href="{URL_ESCUDO}">
+        <link rel="shortcut icon" href="{URL_ESCUDO}">
+    </head>
     <style>
-        /* Esto oculta el código inyectado para que no se vea en la pantalla */
-        .app-icon-fix {{display: none;}}
+        /* Ocultar elementos decorativos de Streamlit si es posible */
+        header {{visibility: hidden;}}
     </style>
-    <div class="app-icon-fix">
-        <link rel="apple-touch-icon" sizes="180x180" href="{ICON_URL}">
-        <link rel="icon" type="image/png" sizes="32x32" href="{ICON_URL}">
-        <link rel="icon" type="image/png" sizes="16x16" href="{ICON_URL}">
-    </div>
 """, unsafe_allow_html=True)
 
-# --- 2. GESTIÓN DE ESTADO ---
+# --- 3. GESTIÓN DE ESTADO ---
 if "role" not in st.session_state: st.session_state.role = None
 if "user_name" not in st.session_state: st.session_state.user_name = None
 if "user_id" not in st.session_state: st.session_state.user_id = None
@@ -38,7 +36,7 @@ if "admin_unlocked" not in st.session_state: st.session_state.admin_unlocked = F
 if "ver_nadador_especifico" not in st.session_state: st.session_state.ver_nadador_especifico = None
 if "show_login_form" not in st.session_state: st.session_state.show_login_form = False 
 
-# --- 3. CONEXIÓN ---
+# --- 4. CONEXIÓN ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 @st.cache_data(ttl="1h")
@@ -50,7 +48,7 @@ def cargar_tablas_login():
         }
     except: return None
 
-# --- 4. FUNCIONES LOGIN / LOGOUT ---
+# --- 5. LÓGICA DE LOGIN ---
 def limpiar_socio(valor):
     if pd.isna(valor): return ""
     return str(valor).split('.')[0].strip()
@@ -95,24 +93,7 @@ def cerrar_sesion():
         del st.session_state[key]
     st.rerun()
 
-# --- NUEVA FUNCIÓN: INSTRUCCIONES DE INSTALACIÓN ---
-def pwa_install_button():
-    st.write("---")
-    with st.expander("📲 INSTALAR APP EN TU CELULAR"):
-        st.markdown("""
-        Puedes agregar esta aplicación a tu pantalla de inicio para un acceso más rápido:
-        
-        **🤖 Android (Chrome):**
-        1. Toca los tres puntos **(⋮)** arriba a la derecha.
-        2. Selecciona **'Instalar aplicación'** o 'Agregar a la pantalla de inicio'.
-        
-        **🍎 iPhone (Safari):**
-        1. Toca el botón **Compartir** (cuadrado con flecha arriba) en la barra inferior.
-        2. Desliza hacia abajo y toca en **'Agregar al inicio'**.
-        """)
-        st.info("Nota: Si al instalar sigue apareciendo el ícono antiguo, prueba borrar el caché de Chrome en tu celular y vuelve a intentarlo.")
-
-# --- 5. PANTALLA DE LOGIN ---
+# --- 6. PANTALLA DE ACCESO ---
 def login_screen():
     st.markdown("""<style>[data-testid="stSidebar"] {display: none;}</style>""", unsafe_allow_html=True)
     st.markdown("""
@@ -151,15 +132,13 @@ def login_screen():
             <div class="nob-quote">"Del deporte sos la gloria"</div>
         </div>
     """, unsafe_allow_html=True)
+    
     st.markdown("<div style='text-align:center; color:#aaa; font-size:14px; margin-bottom:5px;'>ACCESO SOCIOS</div>", unsafe_allow_html=True)
     st.text_input("Ingrese Nro de Socio", key="input_socio", placeholder="Ej: 123456-01", label_visibility="collapsed")
     if st.button("INGRESAR", type="primary", use_container_width=True):
         validar_socio()
-    
-    # AGREGADO: Llamada a la función de instrucciones
-    pwa_install_button()
 
-# --- 6. DEFINICIÓN DE PÁGINAS ---
+# --- 7. RUTEO ---
 pg_inicio = st.Page("pages/1_inicio.py", title="Inicio", icon="🏠")
 pg_datos = st.Page("pages/2_visualizar_datos.py", title="Fichero", icon="🗃️")
 pg_ranking = st.Page("pages/4_ranking.py", title="Ranking", icon="🏆")
@@ -171,28 +150,19 @@ pg_rutinas = st.Page("pages/8_rutinas.py", title="Rutinas", icon="📝")
 pg_carga = st.Page("pages/1_cargar_datos.py", title="Carga de Datos", icon="⚙️")
 pg_login_obj = st.Page(login_screen, title="Acceso", icon="🔒")
 
-# --- 7. RUTEO Y MENÚ ---
 if not st.session_state.role:
     pg = st.navigation([pg_login_obj])
     pg.run()
 else:
-    # --- MENÚ PRINCIPAL ---
-    menu_pages = {
-        "Principal": [pg_inicio, pg_datos, pg_rutinas, pg_entrenamientos, pg_categoria, pg_agenda]
-    }
-
-    # --- MENÚ HERRAMIENTAS ---
+    menu_pages = {"Principal": [pg_inicio, pg_datos, pg_rutinas, pg_entrenamientos, pg_categoria, pg_agenda]}
     if st.session_state.role in ["M", "P"]:
         menu_pages["Herramientas"] = [pg_ranking, pg_simulador]
-
         if st.session_state.admin_unlocked:
             menu_pages["Administración"] = [pg_carga]
 
     pg = st.navigation(menu_pages)
-
     with st.sidebar:
         st.write("") 
         if st.button("Cerrar Sesión", type="secondary", use_container_width=True):
             cerrar_sesion()
-
     pg.run()
