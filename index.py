@@ -8,7 +8,7 @@ import time
 st.set_page_config(
     page_title="Acceso NOB", 
     layout="centered",
-    page_icon="https://drive.google.com/thumbnail?id=18oVX2gHgJe6X07AXsq3Lddiclzs8WlIS"
+    page_icon="https://raw.githubusercontent.com/economiafms/gestion-natacion/main/escudo.png"
 )
 
 # --- 2. GESTIÓN DE ESTADO ---
@@ -178,3 +178,4 @@ else:
             cerrar_sesion()
 
     pg.run()
+
