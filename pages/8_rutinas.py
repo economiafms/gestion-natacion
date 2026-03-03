@@ -5,6 +5,12 @@ from datetime import datetime, date, timedelta
 import time
 import random
 
+# --- NUEVAS IMPORTACIONES PARA GENERAR WORD ---
+from docx import Document
+from docx.shared import Inches, Pt
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+import io
+
 # ==========================================
 # 1. CONFIGURACIÓN
 # ==========================================
@@ -28,6 +34,39 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 # ==========================================
 # 4. FUNCIONES AUXILIARES Y GLOSARIO
 # ==========================================
+
+# --- NUEVA FUNCIÓN: GENERAR WORD 1/6 DE HOJA ---
+def generar_word_sexto_hoja(entrenamiento_texto, fecha, titulo):
+    doc = Document()
+    
+    # Configuración de márgenes para 1/6 de hoja (A4 aprox)
+    # 4.5 pulgadas de margen izquierdo desplaza el texto a la derecha
+    # 7.5 pulgadas de margen inferior asegura que no baje de la parte superior
+    section = doc.sections[0]
+    section.top_margin = Inches(0.5)
+    section.bottom_margin = Inches(7.5) 
+    section.left_margin = Inches(4.5)   
+    section.right_margin = Inches(0.5)
+    
+    # Título de la sesión
+    p_titulo = doc.add_paragraph()
+    run_t = p_titulo.add_run(f"{titulo} - {fecha}")
+    run_t.bold = True
+    run_t.font.size = Pt(10)
+    p_titulo.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    # Contenido del entrenamiento
+    p_cont = doc.add_paragraph()
+    # Limpiamos posibles saltos de línea excesivos
+    texto_limpio = str(entrenamiento_texto).replace('\n\n', '\n')
+    run_c = p_cont.add_run(texto_limpio)
+    run_c.font.size = Pt(8.5) # Fuente pequeña para que entre en el recorte
+    p_cont.alignment = WD_ALIGN_PARAGRAPH.LEFT
+
+    buffer = io.BytesIO()
+    doc.save(buffer)
+    buffer.seek(0)
+    return buffer
 
 def obtener_nombre_mes(n):
     meses = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", 
@@ -298,6 +337,8 @@ def render_tarjeta_individual(row, df_seg, key_suffix):
     r_id = row['id_rutina']
     r_sesion = row['nro_sesion']
     r_texto = row['texto_rutina']
+    r_anio = row.get('anio_rutina', '')
+    r_mes = row.get('mes_rutina', '')
     
     check = df_seg[(df_seg['id_rutina'] == r_id) & (df_seg['codnadador'] == mi_id)]
     esta_realizada = not check.empty
@@ -323,6 +364,16 @@ def render_tarjeta_individual(row, df_seg, key_suffix):
                 st.markdown(f"<div style='text-decoration: line-through; color: #aaa;'>", unsafe_allow_html=True)
                 st.markdown(r_texto)
                 st.markdown("</div>", unsafe_allow_html=True)
+                
+                # Botón de descarga para Word 1/6 hoja
+                doc_buffer = generar_word_sexto_hoja(r_texto, f"{r_mes:02d}/{r_anio}", f"SESIÓN {r_sesion}")
+                st.download_button(
+                    label="📄 Descargar para pileta (1/6 hoja)",
+                    data=doc_buffer,
+                    file_name=f"Rutina_S{r_sesion}_{r_mes}_{r_anio}.docx",
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    key=f"dl_{r_id}_{key_suffix}_done"
+                )
             with c_act:
                 if st.button("❌", key=f"un_{r_id}_{key_suffix}", help="Desmarcar"):
                     with st.spinner("Desmarcando..."):
@@ -333,6 +384,16 @@ def render_tarjeta_individual(row, df_seg, key_suffix):
             with c_head:
                 st.markdown(f"#### ⭕ Sesión {r_sesion}")
                 st.markdown(r_texto)
+                
+                # Botón de descarga para Word 1/6 hoja
+                doc_buffer = generar_word_sexto_hoja(r_texto, f"{r_mes:02d}/{r_anio}", f"SESIÓN {r_sesion}")
+                st.download_button(
+                    label="📄 Descargar para pileta (1/6 hoja)",
+                    data=doc_buffer,
+                    file_name=f"Rutina_S{r_sesion}_{r_mes}_{r_anio}.docx",
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    key=f"dl_{r_id}_{key_suffix}_pend"
+                )
             with c_act:
                 st.write("") 
                 if st.button("🏊 DÍA GANADO", key=f"do_{r_id}_{key_suffix}", type="primary"):
@@ -713,14 +774,6 @@ else:
     
     with tab_curso:
         hoy = datetime.now()
-        # Aquí también podríamos aplicar la lógica de "Más cercano" si no hay del mes actual, 
-        # pero "Mes en Curso" implica explícitamente "HOY".
-        # Sin embargo, si queremos consistencia absoluta:
-        # unique_periods_n = df_rutinas[['anio_rutina', 'mes_rutina']].drop_duplicates().values.tolist()
-        # best_y, best_m = get_periodo_mas_cercano(hoy, unique_periods_n)
-        # st.markdown(f"### Sesiones de {obtener_nombre_mes(best_m)} {best_y}")
-        # render_feed_activo(df_rutinas, df_seguimiento, best_y, best_m, key_suffix="nad_curso")
-        # Mantenemos el comportamiento original para "Mes en Curso" (mostrar HOY)
         
         st.markdown(f"### Sesiones de {obtener_nombre_mes(hoy.month)} {hoy.year}")
         render_feed_activo(df_rutinas, df_seguimiento, hoy.year, hoy.month, key_suffix="nad_curso")
@@ -730,7 +783,6 @@ else:
         
         # --- LOGICA DE DEFAULT (PERFIL N - HISTORIAL) ---
         # 1. Obtener períodos disponibles GLOBALMENTE en rutinas
-        # (El usuario ve rutinas asignadas al grupo, no solo las que completó)
         unique_periods_n = df_rutinas[['anio_rutina', 'mes_rutina']].drop_duplicates().values.tolist()
         
         # 2. Calcular mejor fecha
