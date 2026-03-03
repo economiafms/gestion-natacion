@@ -2,3 +2,4 @@ streamlit
 pandas
 st-gsheets-connection
 plotly
+python-docx
