@@ -388,7 +388,7 @@ def render_tarjeta_individual(row, df_seg, key_suffix):
                 # Botón de descarga para Word 1/6 hoja
                 doc_buffer = generar_word_sexto_hoja(r_texto, f"{r_mes:02d}/{r_anio}", f"SESIÓN {r_sesion}")
                 st.download_button(
-                    label="📄 Descargar para pileta (1/6 hoja)",
+                    label="🖨️ Imprimir Sesión)",
                     data=doc_buffer,
                     file_name=f"Rutina_S{r_sesion}_{r_mes}_{r_anio}.docx",
                     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
