@@ -174,7 +174,9 @@ if btn_manual:
 st.divider()
 st.subheader("🎯 Simulador por grupo de nadadores")
 with st.container(border=True):
-    pool = st.multiselect("Seleccionar nadadores:", sorted(df_nad['Nombre Completo'].tolist()), key="pool_opt_g")
+    default_pool = st.session_state.get("simulador_pre_pool", [])
+    valid_default = [x for x in default_pool if x in sorted(df_nad['Nombre Completo'].tolist())]
+    pool = st.multiselect("Seleccionar nadadores:", sorted(df_nad['Nombre Completo'].tolist()), default=valid_default, key="pool_opt_g")
     c1, c2, c3 = st.columns(3)
     o_reg = c1.selectbox("Reglamento", data['cat_relevos']['tipo_reglamento'].unique(), key="o_reg_g")
     o_tipo = c2.radio("Estilo de Prueba", ["Libre (Crol)", "Combinado (Medley)"], horizontal=True)
