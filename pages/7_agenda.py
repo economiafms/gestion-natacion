@@ -481,17 +481,23 @@ else:
                             if st.form_submit_button("⚠️ ELIMINAR EVENTO", type="primary"):
                                 eliminar_competencia(comp_id); st.rerun()
 
-                    # 3. Acceso directo al Simulador (Upgrade)
+            # 3. Acceso directo al Simulador (Upgrade)
                     with t3:
                         st.markdown("##### 🚀 Enviar Inscriptos al Simulador")
                         st.info("Lleva a todos los inscriptos de este evento directamente al Simulador para armar estrategias de postas óptimas y automáticas.")
                         
                         if not d_full.empty:
-                            nombres_inscriptos = d_full['Nombre'].str.upper().tolist()
+                            # FIX 1: Formateamos el nombre EXACTAMENTE como lo lee el simulador (APELLIDO, Nombre)
+                            nombres_inscriptos = (d_full['apellido'].astype(str).str.upper() + ", " + d_full['nombre'].astype(str)).tolist()
                             
                             if st.button("Ir al Simulador con estos nadadores", key=f"btn_sim_comp_{comp_id}", type="primary", use_container_width=True):
-                                # Guardamos los nombres en memoria para que el simulador los recoja
+                                # Guardamos los nombres en la memoria global
                                 st.session_state.simulador_pre_pool = nombres_inscriptos
+                                
+                                # FIX 2: Borramos el "recuerdo" de la selección anterior del simulador para obligarlo a leer esta nueva
+                                if "pool_opt_g" in st.session_state:
+                                    del st.session_state["pool_opt_g"]
+                                    
                                 st.switch_page("pages/3_simulador.py")
                         else:
                             st.warning("No podés acceder al simulador si no hay nadadores inscriptos.")
