@@ -268,6 +268,70 @@ if df_tiempos is not None and not df_tiempos.empty:
 st.title("📅 Agenda de Torneos")
 st.markdown(f"Usuario: **{mi_nombre}**")
 
+# ==========================================
+# NUEVO: CARRETE DE AGENDA VISUAL (TIMELINE)
+# ==========================================
+if df_competencias is not None and not df_competencias.empty:
+    df_timeline = df_competencias.copy()
+    df_timeline['fecha_dt'] = pd.to_datetime(df_timeline['fecha_evento'])
+    df_timeline = df_timeline.sort_values(by='fecha_dt', ascending=True)
+    
+    meses_es = {1: 'Enero', 2: 'Febrero', 3: 'Marzo', 4: 'Abril', 5: 'Mayo', 6: 'Junio', 7: 'Julio', 8: 'Agosto', 9: 'Septiembre', 10: 'Octubre', 11: 'Noviembre', 12: 'Diciembre'}
+    dias_es = {0: 'Lun', 1: 'Mar', 2: 'Mié', 3: 'Jue', 4: 'Vie', 5: 'Sáb', 6: 'Dom'}
+    
+    st.markdown("""
+    <style>
+    .timeline-container { display: flex; overflow-x: auto; gap: 15px; padding: 10px 0 20px 0; scrollbar-width: thin; }
+    .timeline-container::-webkit-scrollbar { height: 8px; }
+    .timeline-container::-webkit-scrollbar-thumb { background-color: #555; border-radius: 4px; }
+    .month-group { display: flex; flex-direction: column; background-color: #1e1e24; border: 1px solid #333; border-radius: 8px; padding: 12px; min-width: max-content; }
+    .month-title { color: #E30613; font-weight: bold; text-transform: uppercase; font-size: 14px; margin-bottom: 12px; border-bottom: 1px solid #444; padding-bottom: 5px; }
+    .events-row { display: flex; gap: 10px; }
+    .event-card { background-color: #2b2c36; border: 1px solid #444; border-radius: 6px; padding: 10px 8px; width: 120px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.2); display: flex; flex-direction: column; align-items: center; justify-content: center;}
+    .event-day { font-size: 28px; font-weight: 800; color: white; line-height: 1.1; margin-bottom: 2px; }
+    .event-dow { font-size: 11px; color: #aaa; text-transform: uppercase; }
+    .event-title { font-size: 11px; color: #ddd; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 6px; font-weight: 600; }
+    </style>
+    """, unsafe_allow_html=True)
+
+    html_timeline = "<div class='timeline-container'>"
+    df_timeline['YearMonth'] = df_timeline['fecha_dt'].dt.strftime('%Y-%m')
+    grouped = df_timeline.groupby('YearMonth')
+    hoy_tl = date.today()
+
+    for ym, group in grouped:
+        year, month = map(int, ym.split('-'))
+        mes_nombre = f"{meses_es[month]} {year}"
+        
+        html_timeline += f"<div class='month-group'><div class='month-title'>{mes_nombre}</div><div class='events-row'>"
+        
+        for _, row in group.iterrows():
+            f_dt = row['fecha_dt']
+            dia_num = f_dt.day
+            dia_sem = dias_es[f_dt.weekday()]
+            titulo = row['nombre_evento']
+            
+            estado_color = "#4CAF50" # Verde por defecto (Futuro)
+            if f_dt.date() < hoy_tl:
+                estado_color = "#555" # Gris (Pasado)
+            elif f_dt.date() == hoy_tl:
+                estado_color = "#E30613" # Rojo NOB (Hoy)
+            
+            html_timeline += f"""
+            <div class='event-card' style='border-top: 4px solid {estado_color};'>
+                <div class='event-dow'>{dia_sem}</div>
+                <div class='event-day'>{dia_num}</div>
+                <div class='event-title' title='{titulo}'>{titulo}</div>
+            </div>
+            """
+        html_timeline += "</div></div>"
+        
+    html_timeline += "</div>"
+    
+    st.markdown("#### 📆 Calendario General")
+    st.markdown(html_timeline, unsafe_allow_html=True)
+    st.divider()
+
 # --- ADMIN: CREAR ---
 if rol in ["M", "P"]:
     with st.expander("🛠️ Crear Nuevo Evento", expanded=False):
@@ -392,7 +456,7 @@ else:
                     if df_filtrado.empty:
                         st.info("No hay nadadores inscriptos que coincidan con estos filtros.")
                     else:
-                        # --- NUEVA LÓGICA DE ORDENAMIENTO POR TIEMPO ---
+                        # --- LÓGICA DE ORDENAMIENTO POR TIEMPO ---
                         def obtener_valor_orden(row):
                             df_t_nad = df_t_global[df_t_global['codnadador'] == row['codnadador']] if not df_t_global.empty else pd.DataFrame()
                             p_list = [p.strip() for p in str(row['pruebas']).split(",") if p.strip()]
