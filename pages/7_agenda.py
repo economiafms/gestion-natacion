@@ -40,6 +40,7 @@ LISTA_PRUEBAS = [
 # ==========================================
 
 def actualizar_con_retry(worksheet, data, max_retries=5):
+    """Manejo robusto de la API con reintentos."""
     for i in range(max_retries):
         try:
             conn.update(worksheet=worksheet, data=data)
@@ -53,6 +54,7 @@ def actualizar_con_retry(worksheet, data, max_retries=5):
     return False, "Tiempo de espera agotado."
 
 def calcular_categoria_master(anio_nac):
+    """Calcula la categoría Master completa."""
     if pd.isna(anio_nac) or anio_nac == "": return "-"
     try:
         edad = datetime.now().year - int(anio_nac)
@@ -73,6 +75,7 @@ def calcular_categoria_master(anio_nac):
     except: return "-"
 
 def tiempo_a_seg(t_str):
+    """Convierte string de tiempo a segundos para buscar el menor (mejor tiempo)"""
     try:
         partes = str(t_str).replace('.', ':').split(':')
         return float(partes[0]) * 60 + float(partes[1]) + (float(partes[2])/100 if len(partes)>2 else 0)
@@ -80,6 +83,7 @@ def tiempo_a_seg(t_str):
 
 @st.cache_data(ttl="5s")
 def cargar_datos_agenda():
+    """Carga todas las tablas necesarias, agregando tiempos para el Upgrade."""
     try:
         try:
             df_comp = conn.read(worksheet="Competencias").copy()
@@ -108,6 +112,7 @@ def cargar_datos_agenda():
         except:
             df_pil = pd.DataFrame(columns=["codpileta", "club", "medida", "ubicacion"])
 
+        # --- Tablas Extra para el cruce de mejores tiempos ---
         try: df_tiempos = conn.read(worksheet="Tiempos").copy()
         except: df_tiempos = pd.DataFrame()
         
@@ -124,10 +129,13 @@ def leer_dataset_fresco(worksheet):
     try: return conn.read(worksheet=worksheet, ttl=0).copy()
     except: return None
 
+# --- FUNCION PARA BUSCAR EL MEJOR TIEMPO DEL NADADOR ---
 def buscar_mejor_tiempo(prueba, df_t_nadador):
+    """Parse la prueba inscripta y busca la mejor marca personal en su historial."""
     if df_t_nadador.empty: return ""
     p_lower = prueba.lower()
     
+    # Extraer Distancia
     dist_k = ""
     if "50m" in p_lower or " 50" in p_lower: dist_k = "50"
     if "100m" in p_lower or " 100" in p_lower: dist_k = "100"
@@ -138,6 +146,7 @@ def buscar_mejor_tiempo(prueba, df_t_nadador):
     if "4x50" in p_lower: dist_k = "4x50"
     if "4x100" in p_lower: dist_k = "4x100"
     
+    # Extraer Estilo
     est_k = []
     if "libre" in p_lower or "crol" in p_lower: est_k = ["libre", "crol"]
     elif "espalda" in p_lower: est_k = ["espalda"]
@@ -244,6 +253,7 @@ def eliminar_inscripcion(id_comp, id_nadador):
 
 df_competencias, df_inscripciones, df_nadadores, df_piletas, df_tiempos, df_estilos, df_distancias = cargar_datos_agenda()
 
+# --- PREPROCESAR HISTORIAL DE TIEMPOS PARA PERFORMANCE ---
 df_t_global = pd.DataFrame()
 if df_tiempos is not None and not df_tiempos.empty:
     df_t_global = df_tiempos.copy()
@@ -304,6 +314,7 @@ else:
         nom_pil = f"{d_pil.iloc[0]['club']} ({d_pil.iloc[0]['medida']})" if not d_pil.empty else row['cod_pileta']
         ubic_pil = d_pil.iloc[0]['ubicacion'] if not d_pil.empty else "-"
 
+        # Fechas y Badge
         f_lim = pd.to_datetime(row['fecha_limite']).date()
         dias_ev = (row['fecha_dt'] - hoy).days
         dias_cie = (f_lim - hoy).days
@@ -313,7 +324,7 @@ else:
         elif dias_cie < 0: badge = "🔒 CERRADA"; bg = "#E30613"; abierta = False
         else: badge = f"🟢 ABIERTA ({dias_cie} días)"; bg = "#2E7D32"
 
-        # Tarjeta Visual Evento
+        # Tarjeta Visual
         with st.container():
             st.markdown(f"""
             <div style="background-color: #262730; border: 1px solid #555; border-radius: 8px; padding: 15px; margin-bottom: 10px;">
@@ -333,6 +344,7 @@ else:
                 <div style="font-size:13px; color:#ccc;">{row['descripcion'] or ''}</div>
             </div>""", unsafe_allow_html=True)
 
+            # Preparar cruce de inscripciones globalmente para este evento
             f_ins = df_inscripciones[df_inscripciones['id_competencia'] == comp_id]
             d_full = pd.DataFrame()
             if not f_ins.empty:
@@ -341,57 +353,45 @@ else:
                 d_full['Cat'] = d_full['Anio'].apply(calcular_categoria_master)
                 d_full['Nombre'] = d_full['apellido'] + ", " + d_full['nombre']
 
-            # === A. LISTA PÚBLICA DE INSCRIPTOS (NUEVA VISTA ORDENADA) ===
+            # === A. LISTA PÚBLICA DE INSCRIPTOS (CON CHIPS Y TIEMPOS) ===
             with st.expander("📋 Ver Lista de Inscriptos"):
                 if d_full.empty:
                     st.caption("Aún no hay nadadores inscriptos.")
                 else:
+                    # Generación de Tarjetas con Chips
                     for _, r_pub in d_full.iterrows():
                         nadador_nom = f"{r_pub['apellido']}, {r_pub['nombre']}"
+                        
+                        # Filtrar historial de tiempos del nadador
                         df_t_nadador = df_t_global[df_t_global['codnadador'] == r_pub['codnadador']] if not df_t_global.empty else pd.DataFrame()
 
-                        cat_chip = f"<span style='font-size: 11px; font-weight: bold; background-color: #E30613; padding: 4px 10px; border-radius: 12px; color: #fff;'>{r_pub['Cat']}</span>"
-                        gen_chip = f"<span style='font-size: 11px; font-weight: bold; background-color: #4CAF50; padding: 4px 10px; border-radius: 12px; color: #fff;'>{r_pub['codgenero']}</span>"
+                        # Chips para Categoría y Género
+                        cat_chip = f"<span style='font-size: 12px; font-weight: bold; background-color: #555; padding: 3px 8px; border-radius: 4px; color: #fff; margin-left: 5px;'>{r_pub['Cat']}</span>"
+                        gen_chip = f"<span style='font-size: 12px; font-weight: bold; background-color: #555; padding: 3px 8px; border-radius: 4px; color: #fff; margin-left: 5px;'>Gen. {r_pub['codgenero']}</span>"
                         
+                        # Chips para las pruebas (UPGRADE 1: Inserción de PBs)
                         pruebas_lista = [p.strip() for p in str(r_pub['pruebas']).split(",") if p.strip()]
-                        
-                        # NUEVA GRILLA DE TARJETAS PARA LAS PRUEBAS
-                        chips_html = "<div style='display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-top: 15px;'>"
-                        
+                        chips_html = ""
                         for p in pruebas_lista:
                             mejor_tiempo = buscar_mejor_tiempo(p, df_t_nadador)
-                            
-                            if mejor_tiempo:
-                                # Diseño destacado (con tiempo)
-                                tiempo_ui = f"<div style='background-color: rgba(255, 215, 0, 0.15); color: #FFD700; font-family: monospace; font-size: 14px; font-weight: bold; padding: 4px; border-radius: 4px; border: 1px solid rgba(255, 215, 0, 0.5); text-align: center; letter-spacing: 0.5px;'>⏱️ {mejor_tiempo}</div>"
-                            else:
-                                # Diseño sutil (sin tiempo)
-                                tiempo_ui = f"<div style='background-color: rgba(255, 255, 255, 0.05); color: #777; font-family: monospace; font-size: 12px; padding: 4px; border-radius: 4px; border: 1px dashed #555; text-align: center;'>S/T</div>"
-                                
-                            chips_html += f"""
-                            <div style='background-color: #1e1e24; border: 1px solid #333; border-radius: 8px; padding: 10px; display: flex; flex-direction: column; justify-content: space-between; gap: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);'>
-                                <div style='color: #ddd; font-size: 13px; font-weight: 600; text-align: center; line-height: 1.2;'>{p}</div>
-                                {tiempo_ui}
-                            </div>
-                            """
-                        chips_html += "</div>"
+                            tiempo_badge = f" <span style='color:#FFD700; font-family:monospace; font-weight:bold;'>({mejor_tiempo})</span>" if mejor_tiempo else ""
+                            chips_html += f"<span style='background-color:#444; padding:3px 8px; border-radius:4px; font-size:12px; margin-right:4px; display:inline-block; margin-bottom:4px; color:#eee; border: 1px solid #666;'>{p}{tiempo_badge}</span>"
 
                         st.markdown(f"""
                         <div style="
-                            background-color: #2b2c36; 
-                            padding: 15px 18px; 
-                            border-radius: 8px; 
-                            margin-bottom: 12px; 
-                            border-left: 5px solid #E30613;
-                            box-shadow: 0 4px 6px rgba(0,0,0,0.15);">
-                            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #444; padding-bottom: 10px;">
-                                <div style="font-weight: 800; color: white; font-size: 16px; text-transform: uppercase;">{nadador_nom}</div>
-                                <div style="display: flex; gap: 8px;">
+                            background-color: #383940; 
+                            padding: 10px 12px; 
+                            border-radius: 6px; 
+                            margin-bottom: 6px; 
+                            border-left: 4px solid #E30613;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <div style="font-weight: bold; color: white; font-size: 16px;">{nadador_nom}</div>
+                                <div style="display: flex;">
                                     {cat_chip}
                                     {gen_chip}
                                 </div>
                             </div>
-                            {chips_html}
+                            <div>{chips_html}</div>
                         </div>
                         """, unsafe_allow_html=True)
 
@@ -425,11 +425,13 @@ else:
             elif esta:
                 st.success(f"✅ Inscripto en: {ins_user.iloc[0]['pruebas']}")
 
-            # === C. PANEL ENTRENADOR ===
+            # === C. PANEL ENTRENADOR (TABLA + SELECTOR + SIMULADOR) ===
             if rol in ["M", "P"]:
                 with st.expander(f"🛡️ Panel Entrenador ({row['nombre_evento']})"):
+                    # UPGRADE 2: TERCERA PESTAÑA PARA EL SIMULADOR
                     t1, t2, t3 = st.tabs(["❌ Gestión Bajas", "⚙️ Editar Evento", "🚀 Simulador"])
                     
+                    # 1. Gestión Bajas
                     with t1:
                         if d_full.empty:
                             st.caption("Nada para gestionar.")
@@ -457,6 +459,7 @@ else:
                                     eliminar_inscripcion(comp_id, u_del)
                                     st.rerun()
 
+                    # 2. Edición
                     with t2:
                         l_pre = [x.strip() for x in str(row.get('pruebas_habilitadas', "")).split(",")] if str(row.get('pruebas_habilitadas', "")).strip() else LISTA_PRUEBAS
                         with st.form(f"ed_{comp_id}"):
@@ -478,17 +481,23 @@ else:
                             if st.form_submit_button("⚠️ ELIMINAR EVENTO", type="primary"):
                                 eliminar_competencia(comp_id); st.rerun()
 
+            # 3. Acceso directo al Simulador (Upgrade)
                     with t3:
                         st.markdown("##### 🚀 Enviar Inscriptos al Simulador")
                         st.info("Lleva a todos los inscriptos de este evento directamente al Simulador para armar estrategias de postas óptimas y automáticas.")
                         
                         if not d_full.empty:
+                            # FIX 1: Formateamos el nombre EXACTAMENTE como lo lee el simulador (APELLIDO, Nombre)
                             nombres_inscriptos = (d_full['apellido'].astype(str).str.upper() + ", " + d_full['nombre'].astype(str)).tolist()
                             
                             if st.button("Ir al Simulador con estos nadadores", key=f"btn_sim_comp_{comp_id}", type="primary", use_container_width=True):
+                                # Guardamos los nombres en la memoria global
                                 st.session_state.simulador_pre_pool = nombres_inscriptos
+                                
+                                # FIX 2: Borramos el "recuerdo" de la selección anterior del simulador para obligarlo a leer esta nueva
                                 if "pool_opt_g" in st.session_state:
                                     del st.session_state["pool_opt_g"]
+                                    
                                 st.switch_page("pages/3_simulador.py")
                         else:
                             st.warning("No podés acceder al simulador si no hay nadadores inscriptos.")
