@@ -358,23 +358,24 @@ else:
                 if d_full.empty:
                     st.caption("Aún no hay nadadores inscriptos.")
                 else:
-                    # --- FILTROS DE BÚSQUEDA ---
+                    # --- FILTROS ---
                     c_f1, c_f2, c_f3 = st.columns(3)
                     
-                    # 1. Filtro Prueba (El primero)
+                    # Filtro 1: Prueba (Generado a partir de las pruebas inscriptas en el evento)
                     lista_pruebas_inscriptas = []
                     for p_list in d_full['pruebas']:
                         if isinstance(p_list, str):
                             for p in p_list.split(','):
                                 if p.strip() not in lista_pruebas_inscriptas:
                                     lista_pruebas_inscriptas.append(p.strip())
+                    
                     filtro_prueba = c_f1.selectbox("Prueba", ["Todas"] + sorted(lista_pruebas_inscriptas), key=f"fpru_{comp_id}")
                     
-                    # 2. Filtro Categoría
+                    # Filtro 2: Categoría
                     lista_cats = ["Todas"] + sorted(d_full['Cat'].unique().tolist())
                     filtro_cat = c_f2.selectbox("Categoría", lista_cats, key=f"fcat_{comp_id}")
                     
-                    # 3. Filtro Género
+                    # Filtro 3: Género
                     lista_gen = ["Todos"] + sorted(d_full['codgenero'].unique().tolist())
                     filtro_gen = c_f3.selectbox("Género", lista_gen, key=f"fgen_{comp_id}")
                     
@@ -390,9 +391,9 @@ else:
                         df_filtrado = df_filtrado[df_filtrado['codgenero'] == filtro_gen]
                     
                     if df_filtrado.empty:
-                        st.info("No hay nadadores inscriptos que coincidan con estos filtros.")
+                        st.info("No hay inscriptos que coincidan con los filtros seleccionados.")
                     else:
-                        # Generación de Tarjetas con Chips (CÓDIGO ORIGINAL DEL USUARIO)
+                        # Generación de Tarjetas con Chips
                         for _, r_pub in df_filtrado.iterrows():
                             nadador_nom = f"{r_pub['apellido']}, {r_pub['nombre']}"
                             
@@ -405,6 +406,11 @@ else:
                             
                             # Chips para las pruebas (UPGRADE 1: Inserción de PBs)
                             pruebas_lista = [p.strip() for p in str(r_pub['pruebas']).split(",") if p.strip()]
+                            
+                            # DINAMISMO SOLICITADO: Si busco una prueba, la tarjeta solo muestra esa prueba.
+                            if filtro_prueba != "Todas":
+                                pruebas_lista = [p for p in pruebas_lista if p.lower() == filtro_prueba.lower()]
+
                             chips_html = ""
                             for p in pruebas_lista:
                                 mejor_tiempo = buscar_mejor_tiempo(p, df_t_nadador)
@@ -462,7 +468,6 @@ else:
             # === C. PANEL ENTRENADOR (TABLA + SELECTOR + SIMULADOR) ===
             if rol in ["M", "P"]:
                 with st.expander(f"🛡️ Panel Entrenador ({row['nombre_evento']})"):
-                    # UPGRADE 2: TERCERA PESTAÑA PARA EL SIMULADOR
                     t1, t2, t3 = st.tabs(["❌ Gestión Bajas", "⚙️ Editar Evento", "🚀 Simulador"])
                     
                     # 1. Gestión Bajas
@@ -515,23 +520,18 @@ else:
                             if st.form_submit_button("⚠️ ELIMINAR EVENTO", type="primary"):
                                 eliminar_competencia(comp_id); st.rerun()
 
-                    # 3. Acceso directo al Simulador (Upgrade)
+                    # 3. Acceso directo al Simulador
                     with t3:
                         st.markdown("##### 🚀 Enviar Inscriptos al Simulador")
                         st.info("Lleva a todos los inscriptos de este evento directamente al Simulador para armar estrategias de postas óptimas y automáticas.")
                         
                         if not d_full.empty:
-                            # FIX 1: Formateamos el nombre EXACTAMENTE como lo lee el simulador (APELLIDO, Nombre)
                             nombres_inscriptos = (d_full['apellido'].astype(str).str.upper() + ", " + d_full['nombre'].astype(str)).tolist()
                             
                             if st.button("Ir al Simulador con estos nadadores", key=f"btn_sim_comp_{comp_id}", type="primary", use_container_width=True):
-                                # Guardamos los nombres en la memoria global
                                 st.session_state.simulador_pre_pool = nombres_inscriptos
-                                
-                                # FIX 2: Borramos el "recuerdo" de la selección anterior del simulador para obligarlo a leer esta nueva
                                 if "pool_opt_g" in st.session_state:
                                     del st.session_state["pool_opt_g"]
-                                    
                                 st.switch_page("pages/3_simulador.py")
                         else:
                             st.warning("No podés acceder al simulador si no hay nadadores inscriptos.")
