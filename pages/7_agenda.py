@@ -208,14 +208,18 @@ if rol in ["M", "P"]:
             n_in = c1.text_input("Nombre Evento")
             opc_pil = df_piletas['codpileta'].tolist() if not df_piletas.empty else []
             p_in = c2.selectbox("Sede", opc_pil, format_func=lambda x: f"{df_piletas[df_piletas['codpileta']==x].iloc[0]['club']} - {df_piletas[df_piletas['codpileta']==x].iloc[0]['ubicacion']}" if opc_pil else x)
+            
             c3, c4 = st.columns(2)
             f_in = c3.date_input("Fecha", min_value=datetime.today(), format="DD/MM/YYYY")
             h_in = c4.time_input("Hora", value=datetime.strptime("08:30", "%H:%M").time())
+            
             c5, c6 = st.columns(2)
             fl_in = c5.date_input("Cierre Inscripción", min_value=datetime.today(), format="DD/MM/YYYY")
             cost_in = c6.number_input("Costo $", min_value=0, step=1000)
+            
             hab_in = st.multiselect("Pruebas Habilitadas", LISTA_PRUEBAS, default=LISTA_PRUEBAS)
             d_in = st.text_area("Descripción")
+            
             if st.form_submit_button("Guardar Evento"):
                 if n_in and p_in:
                     ok, m = guardar_competencia(None, n_in, f_in, h_in, p_in, fl_in, cost_in, d_in, hab_in)
@@ -278,34 +282,36 @@ else:
                 d_full['Cat'] = d_full['Anio'].apply(calcular_categoria_master)
                 d_full['Nombre'] = d_full['apellido'] + ", " + d_full['nombre']
 
+            # === A. LISTA PÚBLICA DE INSCRIPTOS (CON FILTROS AGREGADOS) ===
             with st.expander("📋 Ver Lista de Inscriptos"):
                 if d_full.empty:
                     st.caption("Aún no hay nadadores inscriptos.")
                 else:
                     # --- FILTROS ---
-                    st.markdown("#### 🔍 Filtros")
-                    col1, col2, col3 = st.columns(3)
+                    c_f1, c_f2, c_f3 = st.columns(3)
                     
-                    # Preparar listas únicas
+                    # Filtro Categoría
                     cats = ["Todas"] + sorted(d_full['Cat'].unique().tolist())
-                    generos = ["Todos"] + sorted(d_full['codgenero'].unique().tolist())
+                    filtro_cat = c_f1.selectbox("Categoría", cats, key=f"fcat_{comp_id}")
                     
-                    todas_las_pruebas = set()
-                    for p_raw in d_full['pruebas']:
-                        if isinstance(p_raw, str):
-                            for p in p_raw.split(','): todas_las_pruebas.add(p.strip())
-                    pruebas_lista = ["Todas"] + sorted(list(todas_las_pruebas))
-
-                    f_cat = col1.selectbox("Categoría", cats, key=f"cat_{comp_id}")
-                    f_gen = col2.selectbox("Género", generos, key=f"gen_{comp_id}")
-                    f_pru = col3.selectbox("Prueba", pruebas_lista, key=f"pru_{comp_id}")
-
-                    # Filtrar
+                    # Filtro Género
+                    gens = ["Todos"] + sorted(d_full['codgenero'].unique().tolist())
+                    filtro_gen = c_f2.selectbox("Género", gens, key=f"fgen_{comp_id}")
+                    
+                    # Filtro Prueba
+                    lista_pruebas_en_evento = []
+                    for prs in d_full['pruebas']:
+                        for p in str(prs).split(','):
+                            if p.strip() not in lista_pruebas_en_evento: lista_pruebas_en_evento.append(p.strip())
+                    
+                    filtro_prueba = c_f3.selectbox("Prueba", ["Todas"] + sorted(lista_pruebas_en_evento), key=f"fpru_{comp_id}")
+                    
+                    # Lógica de Filtrado
                     df_filtrado = d_full.copy()
-                    if f_cat != "Todas": df_filtrado = df_filtrado[df_filtrado['Cat'] == f_cat]
-                    if f_gen != "Todos": df_filtrado = df_filtrado[df_filtrado['codgenero'] == f_gen]
-                    if f_pru != "Todas": df_filtrado = df_filtrado[df_filtrado['pruebas'].str.contains(f_pru, case=False, na=False)]
-
+                    if filtro_cat != "Todas": df_filtrado = df_filtrado[df_filtrado['Cat'] == filtro_cat]
+                    if filtro_gen != "Todos": df_filtrado = df_filtrado[df_filtrado['codgenero'] == filtro_gen]
+                    if filtro_prueba != "Todas": df_filtrado = df_filtrado[df_filtrado['pruebas'].str.contains(filtro_prueba, case=False, na=False)]
+                    
                     st.dataframe(
                         df_filtrado[['Nombre', 'codgenero', 'Cat', 'pruebas']].rename(columns={'codgenero':'Gen', 'pruebas':'Pruebas'}),
                         hide_index=True,
@@ -315,6 +321,7 @@ else:
             # === B. INSCRIPCIÓN USUARIO ===
             ins_user = df_inscripciones[(df_inscripciones['id_competencia'] == comp_id) & (df_inscripciones['codnadador'] == mi_id)]
             esta = not ins_user.empty
+            
             p_hab_str = str(row.get('pruebas_habilitadas', ""))
             p_hab = [x.strip() for x in p_hab_str.split(",")] if p_hab_str.strip() else LISTA_PRUEBAS
 
@@ -329,6 +336,7 @@ else:
                         with c_no: 
                             delt = False
                             if esta: delt = st.form_submit_button("🗑️ Baja", type="secondary")
+                        
                         if sub:
                             if not sel: st.error("Selecciona pruebas.")
                             else:
@@ -344,18 +352,27 @@ else:
             if rol in ["M", "P"]:
                 with st.expander(f"🛡️ Panel Entrenador ({row['nombre_evento']})"):
                     t1, t2 = st.tabs(["❌ Gestión Bajas", "⚙️ Editar Evento"])
+                    
                     with t1:
-                        if d_full.empty: st.caption("Nada.")
+                        if d_full.empty:
+                            st.caption("Nada para gestionar.")
                         else:
-                            st.dataframe(d_full[['Nombre', 'codgenero', 'Cat', 'pruebas']].rename(columns={'codgenero':'Gen', 'pruebas':'Pruebas'}), hide_index=True, use_container_width=True)
-                            u_del = st.selectbox("Seleccionar:", d_full['codnadador'].unique(), format_func=lambda x: d_full[d_full['codnadador']==x]['Nombre'].values[0], key=f"s_del_{comp_id}")
+                            st.dataframe(
+                                d_full[['Nombre', 'codgenero', 'Cat', 'pruebas']].rename(columns={'codgenero':'Gen', 'pruebas':'Pruebas'}),
+                                hide_index=True,
+                                use_container_width=True
+                            )
+                            st.divider()
+                            st.markdown("##### ⚠️ Eliminar Inscripción")
+                            u_del = st.selectbox("Seleccionar nadador para dar de baja:", d_full['codnadador'].unique(), format_func=lambda x: d_full[d_full['codnadador']==x]['Nombre'].values[0], key=f"s_del_{comp_id}")
                             if st.button("Confirmar Baja", key=f"b_del_{comp_id}", type="primary", use_container_width=True):
                                 eliminar_inscripcion(comp_id, u_del); st.rerun()
+
                     with t2:
+                        l_pre = [x.strip() for x in str(row.get('pruebas_habilitadas', "")).split(",")] if str(row.get('pruebas_habilitadas', "")).strip() else LISTA_PRUEBAS
                         with st.form(f"ed_{comp_id}"):
                             ce1, ce2 = st.columns(2)
                             nn = ce1.text_input("Nombre", value=row['nombre_evento'])
                             nc = ce2.number_input("Costo", value=int(row['costo']) if pd.notna(row['costo']) else 0)
-                            # Edición simplificada de campos
                             if st.form_submit_button("Actualizar"): guardar_competencia(comp_id, nn, None, row['hora_inicio'], row['cod_pileta'], None, nc, None, None); st.rerun()
                             if st.form_submit_button("⚠️ ELIMINAR EVENTO", type="primary"): eliminar_competencia(comp_id); st.rerun()
