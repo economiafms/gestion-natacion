@@ -99,7 +99,6 @@ def render_tarjeta_resumen(tiempo, categoria, suma, dark=False):
 # --- 5. POSTA MANUAL ---
 st.subheader("🧪 Posta Manual")
 with st.container(border=True):
-    # Selectores generales (estos pueden ir en columnas o apilados, columnas está bien para ahorrar espacio vertical inicial)
     c1, c2, c3 = st.columns(3)
     s_reg_m = c1.selectbox("Reglamento", data['cat_relevos']['tipo_reglamento'].unique(), key="s_reg_m")
     s_tipo_m = c2.selectbox("Prueba", ["Libre (Crol)", "Combinado (Medley)"], key="s_tipo_m")
@@ -109,11 +108,9 @@ with st.container(border=True):
     legs = [("Espalda", "E2"), ("Pecho", "E3"), ("Mariposa", "E1"), ("Crol", "E4")] if "Medley" in s_tipo_m else [("Crol", "E4")] * 4
     n_sel = []
     
-    # --- CAMBIO AQUI: SIN COLUMNAS, UNA CAJA DEBAJO DE LA OTRA ---
     for i, (nom_e, cod_e) in enumerate(legs):
         aptos = df_nad[df_nad['codnadador'].isin(df_tiempos_50[df_tiempos_50['codestilo'] == cod_e]['codnadador'])]
         if s_gen != "X": aptos = aptos[aptos['codgenero'] == s_gen]
-        # Al no usar 'with cols:', Streamlit los apila verticalmente por defecto (100% ancho)
         n_sel.append(st.selectbox(f"{i+1}. {nom_e}", sorted(aptos['Nombre Completo'].tolist()), index=None, key=f"man_sel_{i}"))
 
     btn_manual = st.button("🚀 Calcular Posta", use_container_width=True)
@@ -122,7 +119,6 @@ with st.container(border=True):
 res_manual_container = st.container()
 
 if btn_manual:
-    # VALIDACIÓN DE DUPLICADOS
     if None in n_sel:
         st.warning("⚠️ Faltan nadadores. Selecciona los 4 integrantes.")
     elif len(set(n_sel)) < 4:
@@ -136,7 +132,6 @@ if btn_manual:
             se = sum([df_nad[df_nad['Nombre Completo'] == n]['Edad_Master'].iloc[0] for n in n_sel])
             cat_n, _ = get_cat_info(se, s_reg_m)
 
-            # Escribir en el contenedor reservado
             with res_manual_container:
                 st.write("") 
                 render_tarjeta_resumen(seg_a_tiempo(total), cat_n, se)
@@ -145,7 +140,6 @@ if btn_manual:
                 for i in range(4):
                     t_cols[i].metric(n_sel[i].split(',')[0], seg_a_tiempo(tiempos_p[i]), delta=legs[i][0])
 
-                # --- OBSERVACIONES ---
                 obs_lista = []
                 
                 comp = analizar_competitividad(total, se, s_gen)
@@ -174,9 +168,26 @@ if btn_manual:
 st.divider()
 st.subheader("🎯 Simulador por grupo de nadadores")
 with st.container(border=True):
+    # ========================================================
+    # UPGRADE: RECOGER NADADORES ENVIADOS DESDE LA AGENDA
+    # ========================================================
+    lista_nadadores_completa = sorted(df_nad['Nombre Completo'].tolist())
+    
+    # 1. Buscamos si la agenda guardó algo en memoria
     default_pool = st.session_state.get("simulador_pre_pool", [])
-    valid_default = [x for x in default_pool if x in sorted(df_nad['Nombre Completo'].tolist())]
-    pool = st.multiselect("Seleccionar nadadores:", sorted(df_nad['Nombre Completo'].tolist()), default=valid_default, key="pool_opt_g")
+    
+    # 2. Nos aseguramos de que los nombres guardados existan de verdad (evita errores)
+    valid_default = [x for x in default_pool if x in lista_nadadores_completa]
+    
+    # 3. Creamos el selector, cargando los inscriptos por defecto
+    pool = st.multiselect(
+        "Seleccionar nadadores:", 
+        options=lista_nadadores_completa, 
+        default=valid_default, 
+        key="pool_opt_g"
+    )
+    # ========================================================
+
     c1, c2, c3 = st.columns(3)
     o_reg = c1.selectbox("Reglamento", data['cat_relevos']['tipo_reglamento'].unique(), key="o_reg_g")
     o_tipo = c2.radio("Estilo de Prueba", ["Libre (Crol)", "Combinado (Medley)"], horizontal=True)
