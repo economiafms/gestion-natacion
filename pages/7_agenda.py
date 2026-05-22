@@ -102,7 +102,6 @@ def cargar_datos_agenda():
         
         df_pil = conn.read(worksheet="Piletas").copy()
 
-        # Tablas de Tiempos
         try: df_tiempos = conn.read(worksheet="Tiempos").copy()
         except: df_tiempos = pd.DataFrame()
         try: df_estilos = conn.read(worksheet="Estilos").copy()
@@ -144,7 +143,6 @@ def buscar_mejor_tiempo(prueba, df_t_nadador):
     try:
         mask_dist = df_t_nadador['dist_desc'].str.lower().str.contains(dist_k, na=False)
         mask_est = df_t_nadador['estilo_desc'].str.lower().apply(lambda x: any(k in str(x) for k in est_k))
-        
         matches = df_t_nadador[mask_dist & mask_est]
         if not matches.empty:
             best = matches.loc[matches['segundos'].idxmin()]
@@ -237,7 +235,7 @@ def eliminar_inscripcion(id_comp, id_nadador):
 
 df_competencias, df_inscripciones, df_nadadores, df_piletas, df_tiempos, df_estilos, df_distancias = cargar_datos_agenda()
 
-# Preprocesar tiempos
+# Preprocesar tiempos globalmente
 df_t_global = pd.DataFrame()
 if df_tiempos is not None and not df_tiempos.empty:
     df_t_global = df_tiempos.copy()
@@ -252,34 +250,90 @@ st.title("📅 Agenda de Torneos")
 st.markdown(f"Usuario: **{mi_nombre}**")
 
 # ==========================================
-# CAMINO A LA META (CANDY CRUSH STYLE)
+# CAMINO A LA META (GAMIFICADO) - BUGFIX Y DISEÑO ESTABLE
 # ==========================================
 if df_competencias is not None and not df_competencias.empty:
     st.markdown("#### 🏁 Camino a la Meta")
     st.markdown("""
     <style>
-        .road-container { display: flex; overflow-x: auto; gap: 0px; padding: 20px 10px; align-items: flex-start; scrollbar-width: thin; }
-        .road-container::-webkit-scrollbar { height: 8px; }
-        .road-container::-webkit-scrollbar-thumb { background-color: #555; border-radius: 4px; }
-        .pool-node { position: relative; display: flex; flex-direction: column; align-items: center; min-width: 100px; flex: 1; }
-        .pool-icon { font-size: 28px; width: 60px; height: 60px; display: flex; justify-content: center; align-items: center; background: #333; border-radius: 50%; border: 3px solid #555; z-index: 2; margin-bottom: 8px;}
-        .pool-active { background: #E30613; border-color: #fff; box-shadow: 0 0 12px rgba(227, 6, 19, 0.8); }
-        .pool-label { font-size: 11px; text-align: center; color: #ccc; font-weight: bold; line-height: 1.2; width: 90px; white-space: normal;}
-        .pool-date { font-size: 10px; color: #888; margin-top: 2px;}
-        .road-line { position: absolute; top: 30px; left: 50%; width: 100%; height: 4px; background: #444; z-index: 1; }
-        .road-line-active { background: #E30613; }
+        .road-container { 
+            display: flex; 
+            overflow-x: auto; 
+            padding: 20px 10px 30px 10px; /* Padding extra abajo para que entre el scrollbar */
+            justify-content: flex-start;
+            scrollbar-width: thin; 
+        }
+        .road-container::-webkit-scrollbar { height: 10px; }
+        .road-container::-webkit-scrollbar-thumb { background-color: #E30613; border-radius: 5px; }
+        .pool-node { 
+            position: relative; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            min-width: 140px; /* Mucho mas ancho para evitar que se pisen los titulos */
+        }
+        .pool-icon { 
+            font-size: 30px; 
+            width: 65px; 
+            height: 65px; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            background: #2b2c36; 
+            border-radius: 50%; 
+            border: 3px solid #555; 
+            z-index: 2; 
+            margin-bottom: 10px;
+        }
+        .pool-active { 
+            background: #E30613; 
+            border-color: #fff; 
+            box-shadow: 0 0 15px rgba(227, 6, 19, 0.8); 
+        }
+        .pool-label { 
+            font-size: 12px; 
+            text-align: center; 
+            color: #eee; 
+            font-weight: bold; 
+            line-height: 1.3; 
+            width: 130px; 
+            white-space: normal; 
+            word-wrap: break-word; /* Obliga a saltar renglon si es muy largo */
+        }
+        .pool-date { 
+            font-size: 13px; 
+            color: #4CAF50; 
+            margin-top: 5px; 
+            font-weight: 800;
+            background-color: #1e1e24;
+            padding: 2px 8px;
+            border-radius: 4px;
+            border: 1px solid #333;
+        }
+        .road-line { 
+            position: absolute; 
+            top: 32px; /* Mitad del height del circulo */
+            left: 50%; 
+            width: 100%; 
+            height: 5px; 
+            background: #444; 
+            z-index: 1; 
+        }
     </style>
     """, unsafe_allow_html=True)
 
     path_html = "<div class='road-container'>"
-    sorted_ev = df_competencias.sort_values('fecha_evento').reset_index(drop=True)
+    
+    # Manejo robusto de fechas y orden
+    df_comp_path = df_competencias.copy()
+    df_comp_path['fecha_evento_dt'] = pd.to_datetime(df_comp_path['fecha_evento'], errors='coerce')
+    sorted_ev = df_comp_path.sort_values('fecha_evento_dt').reset_index(drop=True)
     total_ev = len(sorted_ev)
     
     for i, row in sorted_ev.iterrows():
         comp_id = row['id_competencia']
         inscripto = False
         
-        # Validar si el usuario actual está inscripto
         if df_inscripciones is not None and not df_inscripciones.empty:
             ins_match = df_inscripciones[(df_inscripciones['id_competencia'] == comp_id) & (df_inscripciones['codnadador'] == mi_id)]
             if not ins_match.empty:
@@ -289,18 +343,22 @@ if df_competencias is not None and not df_competencias.empty:
         icon = "🏊‍♂️" if inscripto else "🔒"
         
         line_html = ""
-        # Dibuja la linea conectora hacia el siguiente nodo (excepto en el último)
+        # La linea dibuja el camino al SIGUIENTE nodo
         if i < total_ev - 1:
             line_html = f"<div class='road-line'></div>"
 
-        fecha_str = row['fecha_evento'].strftime('%d/%m') if pd.notnull(row['fecha_evento']) else ""
-        
+        # Parseo seguro de fecha
+        try:
+            fecha_str = row['fecha_evento_dt'].strftime('%d/%m/%Y')
+        except:
+            fecha_str = "TBD"
+
         path_html += f"""
         <div class='pool-node'>
             {line_html}
             <div class='pool-icon {status_class}'>{icon}</div>
             <div class='pool-label'>{row['nombre_evento']}</div>
-            <div class='pool-date'>{fecha_str}</div>
+            <div class='pool-date'>📅 {fecha_str}</div>
         </div>
         """
     path_html += "</div>"
@@ -392,15 +450,14 @@ else:
                 d_full['Cat'] = d_full['Anio'].apply(calcular_categoria_master)
                 d_full['Nombre'] = d_full['apellido'] + ", " + d_full['nombre']
 
-            # === A. LISTA PÚBLICA DE INSCRIPTOS ===
+            # === A. LISTA PÚBLICA DE INSCRIPTOS (CON FILTROS Y ORDENAMIENTO) ===
             with st.expander("📋 Ver Lista de Inscriptos"):
                 if d_full.empty:
                     st.caption("Aún no hay nadadores inscriptos.")
                 else:
-                    # --- FILTROS DE BÚSQUEDA ---
                     c_f1, c_f2, c_f3 = st.columns(3)
                     
-                    # 1. Filtro Prueba (El primero)
+                    # 1. Filtro Prueba
                     lista_pruebas_inscriptas = []
                     for p_list in d_full['pruebas']:
                         if isinstance(p_list, str):
@@ -431,31 +488,33 @@ else:
                     if df_filtrado.empty:
                         st.info("No hay nadadores inscriptos que coincidan con estos filtros.")
                     else:
-                        # --- ORDENAMIENTO POR TIEMPO ---
+                        # ORDENAMIENTO POR TIEMPO DE MENOR A MAYOR
                         def obtener_valor_orden(row):
                             df_t_nad = df_t_global[df_t_global['codnadador'] == row['codnadador']] if not df_t_global.empty else pd.DataFrame()
                             p_list = [p.strip() for p in str(row['pruebas']).split(",") if p.strip()]
+                            
                             if filtro_prueba != "Todas":
                                 p_list = [p for p in p_list if p.lower() == filtro_prueba.lower()]
+                            
                             if not p_list: return 999999.0
+                            
                             mejor_t = buscar_mejor_tiempo(p_list[0], df_t_nad)
-                            if mejor_t: return tiempo_a_seg(mejor_t)
+                            if mejor_t: 
+                                return tiempo_a_seg(mejor_t)
                             return 999999.0
                             
                         df_filtrado['sort_val'] = df_filtrado.apply(obtener_valor_orden, axis=1)
                         df_filtrado = df_filtrado.sort_values(by='sort_val', ascending=True)
 
-                        # Render de Tarjetas con Chips
+                        # Render de Tarjetas
                         for _, r_pub in df_filtrado.iterrows():
                             nadador_nom = f"{r_pub['apellido']}, {r_pub['nombre']}"
-                            
                             df_t_nadador = df_t_global[df_t_global['codnadador'] == r_pub['codnadador']] if not df_t_global.empty else pd.DataFrame()
 
                             cat_chip = f"<span style='font-size: 12px; font-weight: bold; background-color: #555; padding: 3px 8px; border-radius: 4px; color: #fff; margin-left: 5px;'>{r_pub['Cat']}</span>"
                             gen_chip = f"<span style='font-size: 12px; font-weight: bold; background-color: #555; padding: 3px 8px; border-radius: 4px; color: #fff; margin-left: 5px;'>Gen. {r_pub['codgenero']}</span>"
                             
                             pruebas_lista = [p.strip() for p in str(r_pub['pruebas']).split(",") if p.strip()]
-                            
                             if filtro_prueba != "Todas":
                                 pruebas_lista = [p for p in pruebas_lista if p.lower() == filtro_prueba.lower()]
 
@@ -513,7 +572,7 @@ else:
             elif esta:
                 st.success(f"✅ Inscripto en: {ins_user.iloc[0]['pruebas']}")
 
-            # === C. PANEL ENTRENADOR (TABLA + SELECTOR + SIMULADOR) ===
+            # === C. PANEL ENTRENADOR ===
             if rol in ["M", "P"]:
                 with st.expander(f"🛡️ Panel Entrenador ({row['nombre_evento']})"):
                     t1, t2, t3 = st.tabs(["❌ Gestión Bajas", "⚙️ Editar Evento", "🚀 Simulador"])
@@ -568,7 +627,6 @@ else:
                     with t3:
                         st.markdown("##### 🚀 Enviar Inscriptos al Simulador")
                         st.info("Lleva a todos los inscriptos de este evento directamente al Simulador para armar estrategias de postas óptimas y automáticas.")
-                        
                         if not d_full.empty:
                             nombres_inscriptos = (d_full['apellido'].astype(str).str.upper() + ", " + d_full['nombre'].astype(str)).tolist()
                             if st.button("Ir al Simulador con estos nadadores", key=f"btn_sim_comp_{comp_id}", type="primary", use_container_width=True):
