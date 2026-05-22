@@ -83,8 +83,8 @@ def cargar_datos_agenda():
     try:
         df_comp = conn.read(worksheet="Competencias").copy()
         if not df_comp.empty:
-            df_comp['fecha_evento'] = pd.to_datetime(df_comp['fecha_evento']).dt.date
-            df_comp['fecha_limite'] = pd.to_datetime(df_comp['fecha_limite']).dt.date
+            df_comp['fecha_evento'] = pd.to_datetime(df_comp['fecha_evento'], errors='coerce')
+            df_comp['fecha_limite'] = pd.to_datetime(df_comp['fecha_limite'], errors='coerce')
             if 'pruebas_habilitadas' not in df_comp.columns: df_comp['pruebas_habilitadas'] = ""
         else:
             df_comp = pd.DataFrame(columns=["id_competencia", "nombre_evento", "fecha_evento", "hora_inicio", "cod_pileta", "fecha_limite", "costo", "descripcion", "pruebas_habilitadas"])
@@ -102,6 +102,7 @@ def cargar_datos_agenda():
         
         df_pil = conn.read(worksheet="Piletas").copy()
 
+        # Tablas de Tiempos
         try: df_tiempos = conn.read(worksheet="Tiempos").copy()
         except: df_tiempos = pd.DataFrame()
         try: df_estilos = conn.read(worksheet="Estilos").copy()
@@ -143,6 +144,7 @@ def buscar_mejor_tiempo(prueba, df_t_nadador):
     try:
         mask_dist = df_t_nadador['dist_desc'].str.lower().str.contains(dist_k, na=False)
         mask_est = df_t_nadador['estilo_desc'].str.lower().apply(lambda x: any(k in str(x) for k in est_k))
+        
         matches = df_t_nadador[mask_dist & mask_est]
         if not matches.empty:
             best = matches.loc[matches['segundos'].idxmin()]
@@ -319,6 +321,10 @@ if df_competencias is not None and not df_competencias.empty:
             background: #444; 
             z-index: 1; 
         }
+        .flip-icon {
+            display: inline-block;
+            transform: scaleX(-1); /* Gira el emoji horizontalmente */
+        }
     </style>
     """, unsafe_allow_html=True)
 
@@ -327,7 +333,7 @@ if df_competencias is not None and not df_competencias.empty:
     # Manejo robusto de fechas y orden
     df_comp_path = df_competencias.copy()
     df_comp_path['fecha_evento_dt'] = pd.to_datetime(df_comp_path['fecha_evento'], errors='coerce')
-    sorted_ev = df_comp_path.sort_values('fecha_evento_dt').reset_index(drop=True)
+    sorted_ev = df_comp_path.sort_values('fecha_evento_dt', na_position='last').reset_index(drop=True)
     total_ev = len(sorted_ev)
     
     for i, row in sorted_ev.iterrows():
@@ -340,18 +346,21 @@ if df_competencias is not None and not df_competencias.empty:
                 inscripto = True
 
         status_class = "pool-active" if inscripto else ""
-        icon = "🏊‍♂️" if inscripto else "🔒"
+        icon = "<span class='flip-icon'>🏊‍♂️</span>" if inscripto else "🔒" # Emoji nadando a la derecha
         
         line_html = ""
         # La linea dibuja el camino al SIGUIENTE nodo
         if i < total_ev - 1:
             line_html = f"<div class='road-line'></div>"
 
-        # Parseo seguro de fecha
+        # Parseo SEGURO de fecha (Esto era lo que causaba el error)
         try:
-            fecha_str = row['fecha_evento_dt'].strftime('%d/%m/%Y')
+            if pd.notnull(row['fecha_evento_dt']):
+                fecha_str = row['fecha_evento_dt'].strftime('%d/%m/%Y')
+            else:
+                fecha_str = "S/F"
         except:
-            fecha_str = "TBD"
+            fecha_str = "S/F"
 
         path_html += f"""
         <div class='pool-node'>
@@ -400,8 +409,8 @@ else:
     hoy = date.today()
     df_view = df_competencias.copy()
     if not df_view.empty:
-        df_view['fecha_dt'] = pd.to_datetime(df_view['fecha_evento']).dt.date
-        df_view = df_view.sort_values(by='fecha_dt', ascending=True)
+        df_view['fecha_dt'] = pd.to_datetime(df_view['fecha_evento'], errors='coerce')
+        df_view = df_view.sort_values(by='fecha_dt', ascending=True, na_position='last')
 
     for _, row in df_view.iterrows():
         comp_id = row['id_competencia']
@@ -411,14 +420,17 @@ else:
         nom_pil = f"{d_pil.iloc[0]['club']} ({d_pil.iloc[0]['medida']})" if not d_pil.empty else row['cod_pileta']
         ubic_pil = d_pil.iloc[0]['ubicacion'] if not d_pil.empty else "-"
 
-        # Fechas y Badge
-        f_lim = pd.to_datetime(row['fecha_limite']).date()
-        dias_ev = (row['fecha_dt'] - hoy).days
-        dias_cie = (f_lim - hoy).days
+        # Fechas y Badge a prueba de errores
+        f_ev = pd.to_datetime(row['fecha_evento'], errors='coerce')
+        f_lim = pd.to_datetime(row['fecha_limite'], errors='coerce')
+        
+        dias_ev = (f_ev.date() - hoy).days if pd.notnull(f_ev) else 0
+        dias_cie = (f_lim.date() - hoy).days if pd.notnull(f_lim) else 0
+        fecha_str_ui = f_ev.strftime('%d/%m/%Y') if pd.notnull(f_ev) else "S/F"
         
         abierta = True
-        if dias_ev < 0: badge = "🔴 FINALIZADO"; bg = "#333"; abierta = False
-        elif dias_cie < 0: badge = "🔒 CERRADA"; bg = "#E30613"; abierta = False
+        if dias_ev < 0 and pd.notnull(f_ev): badge = "🔴 FINALIZADO"; bg = "#333"; abierta = False
+        elif dias_cie < 0 and pd.notnull(f_lim): badge = "🔒 CERRADA"; bg = "#E30613"; abierta = False
         else: badge = f"🟢 ABIERTA ({dias_cie} días)"; bg = "#2E7D32"
 
         # Tarjeta Visual
@@ -428,7 +440,7 @@ else:
                 <div style="display:flex; justify-content:space-between;">
                     <div>
                         <h3 style="margin:0; color:white;">{row['nombre_evento']}</h3>
-                        <div style="color:#4CAF50; font-weight:bold; font-size:14px; margin-top:4px;">📅 {row['fecha_dt'].strftime('%d/%m/%Y')} | ⏰ {row['hora_inicio']}</div>
+                        <div style="color:#4CAF50; font-weight:bold; font-size:14px; margin-top:4px;">📅 {fecha_str_ui} | ⏰ {row['hora_inicio']}</div>
                     </div>
                     <span style="background-color:{bg}; color:white; padding:4px 8px; border-radius:4px; font-size:11px; font-weight:bold; height:fit-content;">{badge}</span>
                 </div>
