@@ -40,6 +40,7 @@ LISTA_PRUEBAS = [
 # ==========================================
 
 def actualizar_con_retry(worksheet, data, max_retries=5):
+    """Manejo robusto de la API con reintentos."""
     for i in range(max_retries):
         try:
             conn.update(worksheet=worksheet, data=data)
@@ -53,6 +54,7 @@ def actualizar_con_retry(worksheet, data, max_retries=5):
     return False, "Tiempo de espera agotado."
 
 def calcular_categoria_master(anio_nac):
+    """Calcula la categoría Master completa."""
     if pd.isna(anio_nac) or anio_nac == "": return "-"
     try:
         edad = datetime.now().year - int(anio_nac)
@@ -73,55 +75,67 @@ def calcular_categoria_master(anio_nac):
     except: return "-"
 
 def tiempo_a_seg(t_str):
+    """Convierte string de tiempo a segundos para buscar el menor (mejor tiempo)"""
     try:
         partes = str(t_str).replace('.', ':').split(':')
         return float(partes[0]) * 60 + float(partes[1]) + (float(partes[2])/100 if len(partes)>2 else 0)
-    except: return 999999.0
+    except: return 9999.0
 
 @st.cache_data(ttl="5s")
 def cargar_datos_agenda():
+    """Carga todas las tablas necesarias, agregando tiempos para el Upgrade."""
     try:
-        df_comp = conn.read(worksheet="Competencias").copy()
-        if not df_comp.empty:
-            df_comp['fecha_evento'] = pd.to_datetime(df_comp['fecha_evento'], errors='coerce')
-            df_comp['fecha_limite'] = pd.to_datetime(df_comp['fecha_limite'], errors='coerce')
-            if 'pruebas_habilitadas' not in df_comp.columns: df_comp['pruebas_habilitadas'] = ""
-        else:
+        try:
+            df_comp = conn.read(worksheet="Competencias").copy()
+            if not df_comp.empty:
+                if 'fecha_evento' in df_comp.columns: df_comp['fecha_evento'] = pd.to_datetime(df_comp['fecha_evento']).dt.date
+                if 'fecha_limite' in df_comp.columns: df_comp['fecha_limite'] = pd.to_datetime(df_comp['fecha_limite']).dt.date
+                if 'pruebas_habilitadas' not in df_comp.columns: df_comp['pruebas_habilitadas'] = ""
+        except:
             df_comp = pd.DataFrame(columns=["id_competencia", "nombre_evento", "fecha_evento", "hora_inicio", "cod_pileta", "fecha_limite", "costo", "descripcion", "pruebas_habilitadas"])
 
-        df_ins = conn.read(worksheet="Inscripciones").copy()
-        if not df_ins.empty: 
-            df_ins['codnadador'] = pd.to_numeric(df_ins['codnadador'], errors='coerce').fillna(0).astype(int)
-        else:
+        try:
+            df_ins = conn.read(worksheet="Inscripciones").copy()
+            if not df_ins.empty: df_ins['codnadador'] = pd.to_numeric(df_ins['codnadador'], errors='coerce').fillna(0).astype(int)
+        except:
             df_ins = pd.DataFrame(columns=["id_inscripcion", "id_competencia", "codnadador", "pruebas", "fecha_inscripcion"])
 
-        df_nad = conn.read(worksheet="Nadadores").copy()
-        if not df_nad.empty:
+        try:
+            df_nad = conn.read(worksheet="Nadadores").copy()
             df_nad['codnadador'] = pd.to_numeric(df_nad['codnadador'], errors='coerce').fillna(0).astype(int)
             df_nad['fechanac'] = pd.to_datetime(df_nad['fechanac'], errors='coerce')
-        
-        df_pil = conn.read(worksheet="Piletas").copy()
+        except:
+            df_nad = pd.DataFrame(columns=["codnadador", "nombre", "apellido", "fechanac", "codgenero"])
 
-        # Tablas de Tiempos
+        try:
+            df_pil = conn.read(worksheet="Piletas").copy()
+        except:
+            df_pil = pd.DataFrame(columns=["codpileta", "club", "medida", "ubicacion"])
+
+        # --- Tablas Extra para el cruce de mejores tiempos ---
         try: df_tiempos = conn.read(worksheet="Tiempos").copy()
         except: df_tiempos = pd.DataFrame()
+        
         try: df_estilos = conn.read(worksheet="Estilos").copy()
         except: df_estilos = pd.DataFrame()
+        
         try: df_dist = conn.read(worksheet="Distancias").copy()
         except: df_dist = pd.DataFrame()
 
         return df_comp, df_ins, df_nad, df_pil, df_tiempos, df_estilos, df_dist
-    except Exception as e: 
-        return None, None, None, None, None, None, None
+    except: return None, None, None, None, None, None, None
 
 def leer_dataset_fresco(worksheet):
     try: return conn.read(worksheet=worksheet, ttl=0).copy()
     except: return None
 
+# --- FUNCION PARA BUSCAR EL MEJOR TIEMPO DEL NADADOR ---
 def buscar_mejor_tiempo(prueba, df_t_nadador):
+    """Parse la prueba inscripta y busca la mejor marca personal en su historial."""
     if df_t_nadador.empty: return ""
     p_lower = prueba.lower()
     
+    # Extraer Distancia
     dist_k = ""
     if "50m" in p_lower or " 50" in p_lower: dist_k = "50"
     if "100m" in p_lower or " 100" in p_lower: dist_k = "100"
@@ -132,6 +146,7 @@ def buscar_mejor_tiempo(prueba, df_t_nadador):
     if "4x50" in p_lower: dist_k = "4x50"
     if "4x100" in p_lower: dist_k = "4x100"
     
+    # Extraer Estilo
     est_k = []
     if "libre" in p_lower or "crol" in p_lower: est_k = ["libre", "crol"]
     elif "espalda" in p_lower: est_k = ["espalda"]
@@ -156,6 +171,7 @@ def buscar_mejor_tiempo(prueba, df_t_nadador):
 # ==========================================
 # 5. FUNCIONES CRUD
 # ==========================================
+
 def guardar_competencia(id_comp, nombre, fecha_ev, hora, cod_pil, fecha_lim, costo, desc, lista_pruebas_hab):
     df_comp = leer_dataset_fresco("Competencias")
     if df_comp is None: df_comp = pd.DataFrame(columns=["id_competencia", "nombre_evento", "fecha_evento", "hora_inicio", "cod_pileta", "fecha_limite", "costo", "descripcion", "pruebas_habilitadas"])
@@ -237,7 +253,7 @@ def eliminar_inscripcion(id_comp, id_nadador):
 
 df_competencias, df_inscripciones, df_nadadores, df_piletas, df_tiempos, df_estilos, df_distancias = cargar_datos_agenda()
 
-# Preprocesar tiempos globalmente
+# --- PREPROCESAR HISTORIAL DE TIEMPOS PARA PERFORMANCE ---
 df_t_global = pd.DataFrame()
 if df_tiempos is not None and not df_tiempos.empty:
     df_t_global = df_tiempos.copy()
@@ -245,133 +261,75 @@ if df_tiempos is not None and not df_tiempos.empty:
         df_t_global = df_t_global.merge(df_estilos.rename(columns={'descripcion': 'estilo_desc'}), on='codestilo', how='left')
     if not df_distancias.empty:
         df_t_global = df_t_global.merge(df_distancias.rename(columns={'descripcion': 'dist_desc'}), on='coddistancia', how='left')
-    df_t_global['segundos'] = df_t_global['tiempo'].apply(lambda x: tiempo_a_seg(x) if pd.notnull(x) else 999999.0)
+        
+    df_t_global['segundos'] = df_t_global['tiempo'].apply(lambda x: tiempo_a_seg(x) if pd.notnull(x) else 9999.0)
     df_t_global['codnadador'] = pd.to_numeric(df_t_global['codnadador'], errors='coerce').fillna(0).astype(int)
 
 st.title("📅 Agenda de Torneos")
 st.markdown(f"Usuario: **{mi_nombre}**")
 
 # ==========================================
-# CAMINO A LA META (GAMIFICADO) - BUGFIX Y DISEÑO ESTABLE
+# NUEVO: CARRETE DE AGENDA VISUAL (TIMELINE)
 # ==========================================
 if df_competencias is not None and not df_competencias.empty:
-    st.markdown("#### 🏁 Camino a la Meta")
+    df_timeline = df_competencias.copy()
+    df_timeline['fecha_dt'] = pd.to_datetime(df_timeline['fecha_evento'])
+    df_timeline = df_timeline.sort_values(by='fecha_dt', ascending=True)
+    
+    meses_es = {1: 'Enero', 2: 'Febrero', 3: 'Marzo', 4: 'Abril', 5: 'Mayo', 6: 'Junio', 7: 'Julio', 8: 'Agosto', 9: 'Septiembre', 10: 'Octubre', 11: 'Noviembre', 12: 'Diciembre'}
+    dias_es = {0: 'Lun', 1: 'Mar', 2: 'Mié', 3: 'Jue', 4: 'Vie', 5: 'Sáb', 6: 'Dom'}
+    
     st.markdown("""
     <style>
-        .road-container { 
-            display: flex; 
-            overflow-x: auto; 
-            padding: 20px 10px 30px 10px; /* Padding extra abajo para que entre el scrollbar */
-            justify-content: flex-start;
-            scrollbar-width: thin; 
-        }
-        .road-container::-webkit-scrollbar { height: 10px; }
-        .road-container::-webkit-scrollbar-thumb { background-color: #E30613; border-radius: 5px; }
-        .pool-node { 
-            position: relative; 
-            display: flex; 
-            flex-direction: column; 
-            align-items: center; 
-            min-width: 140px; /* Mucho mas ancho para evitar que se pisen los titulos */
-        }
-        .pool-icon { 
-            font-size: 30px; 
-            width: 65px; 
-            height: 65px; 
-            display: flex; 
-            justify-content: center; 
-            align-items: center; 
-            background: #2b2c36; 
-            border-radius: 50%; 
-            border: 3px solid #555; 
-            z-index: 2; 
-            margin-bottom: 10px;
-        }
-        .pool-active { 
-            background: #E30613; 
-            border-color: #fff; 
-            box-shadow: 0 0 15px rgba(227, 6, 19, 0.8); 
-        }
-        .pool-label { 
-            font-size: 12px; 
-            text-align: center; 
-            color: #eee; 
-            font-weight: bold; 
-            line-height: 1.3; 
-            width: 130px; 
-            white-space: normal; 
-            word-wrap: break-word; /* Obliga a saltar renglon si es muy largo */
-        }
-        .pool-date { 
-            font-size: 13px; 
-            color: #4CAF50; 
-            margin-top: 5px; 
-            font-weight: 800;
-            background-color: #1e1e24;
-            padding: 2px 8px;
-            border-radius: 4px;
-            border: 1px solid #333;
-        }
-        .road-line { 
-            position: absolute; 
-            top: 32px; /* Mitad del height del circulo */
-            left: 50%; 
-            width: 100%; 
-            height: 5px; 
-            background: #444; 
-            z-index: 1; 
-        }
-        .flip-icon {
-            display: inline-block;
-            transform: scaleX(-1); /* Gira el emoji horizontalmente */
-        }
+    .timeline-container { display: flex; overflow-x: auto; gap: 15px; padding: 10px 0 20px 0; scrollbar-width: thin; }
+    .timeline-container::-webkit-scrollbar { height: 8px; }
+    .timeline-container::-webkit-scrollbar-thumb { background-color: #555; border-radius: 4px; }
+    .month-group { display: flex; flex-direction: column; background-color: #1e1e24; border: 1px solid #333; border-radius: 8px; padding: 12px; min-width: max-content; }
+    .month-title { color: #E30613; font-weight: bold; text-transform: uppercase; font-size: 14px; margin-bottom: 12px; border-bottom: 1px solid #444; padding-bottom: 5px; }
+    .events-row { display: flex; gap: 10px; }
+    .event-card { background-color: #2b2c36; border: 1px solid #444; border-radius: 6px; padding: 10px 8px; width: 120px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.2); display: flex; flex-direction: column; align-items: center; justify-content: center;}
+    .event-day { font-size: 28px; font-weight: 800; color: white; line-height: 1.1; margin-bottom: 2px; }
+    .event-dow { font-size: 11px; color: #aaa; text-transform: uppercase; }
+    .event-title { font-size: 11px; color: #ddd; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 6px; font-weight: 600; }
     </style>
     """, unsafe_allow_html=True)
 
-    path_html = "<div class='road-container'>"
-    
-    # Manejo robusto de fechas y orden
-    df_comp_path = df_competencias.copy()
-    df_comp_path['fecha_evento_dt'] = pd.to_datetime(df_comp_path['fecha_evento'], errors='coerce')
-    sorted_ev = df_comp_path.sort_values('fecha_evento_dt', na_position='last').reset_index(drop=True)
-    total_ev = len(sorted_ev)
-    
-    for i, row in sorted_ev.iterrows():
-        comp_id = row['id_competencia']
-        inscripto = False
+    html_timeline = "<div class='timeline-container'>"
+    df_timeline['YearMonth'] = df_timeline['fecha_dt'].dt.strftime('%Y-%m')
+    grouped = df_timeline.groupby('YearMonth')
+    hoy_tl = date.today()
+
+    for ym, group in grouped:
+        year, month = map(int, ym.split('-'))
+        mes_nombre = f"{meses_es[month]} {year}"
         
-        if df_inscripciones is not None and not df_inscripciones.empty:
-            ins_match = df_inscripciones[(df_inscripciones['id_competencia'] == comp_id) & (df_inscripciones['codnadador'] == mi_id)]
-            if not ins_match.empty:
-                inscripto = True
-
-        status_class = "pool-active" if inscripto else ""
-        icon = "<span class='flip-icon'>🏊‍♂️</span>" if inscripto else "🔒" # Emoji nadando a la derecha
+        html_timeline += f"<div class='month-group'><div class='month-title'>{mes_nombre}</div><div class='events-row'>"
         
-        line_html = ""
-        # La linea dibuja el camino al SIGUIENTE nodo
-        if i < total_ev - 1:
-            line_html = f"<div class='road-line'></div>"
-
-        # Parseo SEGURO de fecha (Esto era lo que causaba el error)
-        try:
-            if pd.notnull(row['fecha_evento_dt']):
-                fecha_str = row['fecha_evento_dt'].strftime('%d/%m/%Y')
-            else:
-                fecha_str = "S/F"
-        except:
-            fecha_str = "S/F"
-
-        path_html += f"""
-        <div class='pool-node'>
-            {line_html}
-            <div class='pool-icon {status_class}'>{icon}</div>
-            <div class='pool-label'>{row['nombre_evento']}</div>
-            <div class='pool-date'>📅 {fecha_str}</div>
-        </div>
-        """
-    path_html += "</div>"
-    st.markdown(path_html, unsafe_allow_html=True)
+        for _, row in group.iterrows():
+            f_dt = row['fecha_dt']
+            dia_num = f_dt.day
+            dia_sem = dias_es[f_dt.weekday()]
+            titulo = row['nombre_evento']
+            
+            estado_color = "#4CAF50" # Verde por defecto (Futuro)
+            if f_dt.date() < hoy_tl:
+                estado_color = "#555" # Gris (Pasado)
+            elif f_dt.date() == hoy_tl:
+                estado_color = "#E30613" # Rojo NOB (Hoy)
+            
+            html_timeline += f"""
+            <div class='event-card' style='border-top: 4px solid {estado_color};'>
+                <div class='event-dow'>{dia_sem}</div>
+                <div class='event-day'>{dia_num}</div>
+                <div class='event-title' title='{titulo}'>{titulo}</div>
+            </div>
+            """
+        html_timeline += "</div></div>"
+        
+    html_timeline += "</div>"
+    
+    st.markdown("#### 📆 Calendario General")
+    st.markdown(html_timeline, unsafe_allow_html=True)
     st.divider()
 
 # --- ADMIN: CREAR ---
@@ -409,8 +367,8 @@ else:
     hoy = date.today()
     df_view = df_competencias.copy()
     if not df_view.empty:
-        df_view['fecha_dt'] = pd.to_datetime(df_view['fecha_evento'], errors='coerce')
-        df_view = df_view.sort_values(by='fecha_dt', ascending=True, na_position='last')
+        df_view['fecha_dt'] = pd.to_datetime(df_view['fecha_evento']).dt.date
+        df_view = df_view.sort_values(by='fecha_dt', ascending=True)
 
     for _, row in df_view.iterrows():
         comp_id = row['id_competencia']
@@ -420,17 +378,14 @@ else:
         nom_pil = f"{d_pil.iloc[0]['club']} ({d_pil.iloc[0]['medida']})" if not d_pil.empty else row['cod_pileta']
         ubic_pil = d_pil.iloc[0]['ubicacion'] if not d_pil.empty else "-"
 
-        # Fechas y Badge a prueba de errores
-        f_ev = pd.to_datetime(row['fecha_evento'], errors='coerce')
-        f_lim = pd.to_datetime(row['fecha_limite'], errors='coerce')
-        
-        dias_ev = (f_ev.date() - hoy).days if pd.notnull(f_ev) else 0
-        dias_cie = (f_lim.date() - hoy).days if pd.notnull(f_lim) else 0
-        fecha_str_ui = f_ev.strftime('%d/%m/%Y') if pd.notnull(f_ev) else "S/F"
+        # Fechas y Badge
+        f_lim = pd.to_datetime(row['fecha_limite']).date()
+        dias_ev = (row['fecha_dt'] - hoy).days
+        dias_cie = (f_lim - hoy).days
         
         abierta = True
-        if dias_ev < 0 and pd.notnull(f_ev): badge = "🔴 FINALIZADO"; bg = "#333"; abierta = False
-        elif dias_cie < 0 and pd.notnull(f_lim): badge = "🔒 CERRADA"; bg = "#E30613"; abierta = False
+        if dias_ev < 0: badge = "🔴 FINALIZADO"; bg = "#333"; abierta = False
+        elif dias_cie < 0: badge = "🔒 CERRADA"; bg = "#E30613"; abierta = False
         else: badge = f"🟢 ABIERTA ({dias_cie} días)"; bg = "#2E7D32"
 
         # Tarjeta Visual
@@ -440,7 +395,7 @@ else:
                 <div style="display:flex; justify-content:space-between;">
                     <div>
                         <h3 style="margin:0; color:white;">{row['nombre_evento']}</h3>
-                        <div style="color:#4CAF50; font-weight:bold; font-size:14px; margin-top:4px;">📅 {fecha_str_ui} | ⏰ {row['hora_inicio']}</div>
+                        <div style="color:#4CAF50; font-weight:bold; font-size:14px; margin-top:4px;">📅 {row['fecha_dt'].strftime('%d/%m/%Y')} | ⏰ {row['hora_inicio']}</div>
                     </div>
                     <span style="background-color:{bg}; color:white; padding:4px 8px; border-radius:4px; font-size:11px; font-weight:bold; height:fit-content;">{badge}</span>
                 </div>
@@ -462,14 +417,15 @@ else:
                 d_full['Cat'] = d_full['Anio'].apply(calcular_categoria_master)
                 d_full['Nombre'] = d_full['apellido'] + ", " + d_full['nombre']
 
-            # === A. LISTA PÚBLICA DE INSCRIPTOS (CON FILTROS Y ORDENAMIENTO) ===
+            # === A. LISTA PÚBLICA DE INSCRIPTOS (CON CHIPS Y TIEMPOS ORDENADOS) ===
             with st.expander("📋 Ver Lista de Inscriptos"):
                 if d_full.empty:
                     st.caption("Aún no hay nadadores inscriptos.")
                 else:
+                    # --- FILTROS DE BÚSQUEDA ---
                     c_f1, c_f2, c_f3 = st.columns(3)
                     
-                    # 1. Filtro Prueba
+                    # 1. Filtro Prueba (El primero)
                     lista_pruebas_inscriptas = []
                     for p_list in d_full['pruebas']:
                         if isinstance(p_list, str):
@@ -500,7 +456,7 @@ else:
                     if df_filtrado.empty:
                         st.info("No hay nadadores inscriptos que coincidan con estos filtros.")
                     else:
-                        # ORDENAMIENTO POR TIEMPO DE MENOR A MAYOR
+                        # --- LÓGICA DE ORDENAMIENTO POR TIEMPO ---
                         def obtener_valor_orden(row):
                             df_t_nad = df_t_global[df_t_global['codnadador'] == row['codnadador']] if not df_t_global.empty else pd.DataFrame()
                             p_list = [p.strip() for p in str(row['pruebas']).split(",") if p.strip()]
@@ -518,15 +474,21 @@ else:
                         df_filtrado['sort_val'] = df_filtrado.apply(obtener_valor_orden, axis=1)
                         df_filtrado = df_filtrado.sort_values(by='sort_val', ascending=True)
 
-                        # Render de Tarjetas
+                        # Generación de Tarjetas con Chips
                         for _, r_pub in df_filtrado.iterrows():
                             nadador_nom = f"{r_pub['apellido']}, {r_pub['nombre']}"
+                            
+                            # Filtrar historial de tiempos del nadador
                             df_t_nadador = df_t_global[df_t_global['codnadador'] == r_pub['codnadador']] if not df_t_global.empty else pd.DataFrame()
 
+                            # Chips para Categoría y Género
                             cat_chip = f"<span style='font-size: 12px; font-weight: bold; background-color: #555; padding: 3px 8px; border-radius: 4px; color: #fff; margin-left: 5px;'>{r_pub['Cat']}</span>"
                             gen_chip = f"<span style='font-size: 12px; font-weight: bold; background-color: #555; padding: 3px 8px; border-radius: 4px; color: #fff; margin-left: 5px;'>Gen. {r_pub['codgenero']}</span>"
                             
+                            # Chips para las pruebas
                             pruebas_lista = [p.strip() for p in str(r_pub['pruebas']).split(",") if p.strip()]
+                            
+                            # Si se filtró una prueba específica, solo mostramos esa
                             if filtro_prueba != "Todas":
                                 pruebas_lista = [p for p in pruebas_lista if p.lower() == filtro_prueba.lower()]
 
@@ -584,11 +546,13 @@ else:
             elif esta:
                 st.success(f"✅ Inscripto en: {ins_user.iloc[0]['pruebas']}")
 
-            # === C. PANEL ENTRENADOR ===
+            # === C. PANEL ENTRENADOR (TABLA + SELECTOR + SIMULADOR) ===
             if rol in ["M", "P"]:
                 with st.expander(f"🛡️ Panel Entrenador ({row['nombre_evento']})"):
+                    # UPGRADE 2: TERCERA PESTAÑA PARA EL SIMULADOR
                     t1, t2, t3 = st.tabs(["❌ Gestión Bajas", "⚙️ Editar Evento", "🚀 Simulador"])
                     
+                    # 1. Gestión Bajas
                     with t1:
                         if d_full.empty:
                             st.caption("Nada para gestionar.")
@@ -602,6 +566,7 @@ else:
                                     "Pruebas Inscriptas": st.column_config.TextColumn("Pruebas Inscriptas", width="large")
                                 }
                             )
+                            
                             st.divider()
                             st.markdown("##### ⚠️ Eliminar Inscripción")
                             with st.container(border=True):
@@ -615,6 +580,7 @@ else:
                                     eliminar_inscripcion(comp_id, u_del)
                                     st.rerun()
 
+                    # 2. Edición
                     with t2:
                         l_pre = [x.strip() for x in str(row.get('pruebas_habilitadas', "")).split(",")] if str(row.get('pruebas_habilitadas', "")).strip() else LISTA_PRUEBAS
                         with st.form(f"ed_{comp_id}"):
@@ -636,15 +602,20 @@ else:
                             if st.form_submit_button("⚠️ ELIMINAR EVENTO", type="primary"):
                                 eliminar_competencia(comp_id); st.rerun()
 
+                    # 3. Acceso directo al Simulador (Upgrade)
                     with t3:
                         st.markdown("##### 🚀 Enviar Inscriptos al Simulador")
                         st.info("Lleva a todos los inscriptos de este evento directamente al Simulador para armar estrategias de postas óptimas y automáticas.")
+                        
                         if not d_full.empty:
                             nombres_inscriptos = (d_full['apellido'].astype(str).str.upper() + ", " + d_full['nombre'].astype(str)).tolist()
+                            
                             if st.button("Ir al Simulador con estos nadadores", key=f"btn_sim_comp_{comp_id}", type="primary", use_container_width=True):
                                 st.session_state.simulador_pre_pool = nombres_inscriptos
+                                
                                 if "pool_opt_g" in st.session_state:
                                     del st.session_state["pool_opt_g"]
+                                    
                                 st.switch_page("pages/3_simulador.py")
                         else:
                             st.warning("No podés acceder al simulador si no hay nadadores inscriptos.")
