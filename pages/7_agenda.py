@@ -91,8 +91,10 @@ def cargar_datos_agenda():
                 if 'fecha_evento' in df_comp.columns: df_comp['fecha_evento'] = pd.to_datetime(df_comp['fecha_evento']).dt.date
                 if 'fecha_limite' in df_comp.columns: df_comp['fecha_limite'] = pd.to_datetime(df_comp['fecha_limite']).dt.date
                 if 'pruebas_habilitadas' not in df_comp.columns: df_comp['pruebas_habilitadas'] = ""
+                # SE AGREGA EL CAMPO MAX PRUEBAS A LA CARGA
+                if 'max_pruebas' not in df_comp.columns: df_comp['max_pruebas'] = 5
         except:
-            df_comp = pd.DataFrame(columns=["id_competencia", "nombre_evento", "fecha_evento", "hora_inicio", "cod_pileta", "fecha_limite", "costo", "descripcion", "pruebas_habilitadas"])
+            df_comp = pd.DataFrame(columns=["id_competencia", "nombre_evento", "fecha_evento", "hora_inicio", "cod_pileta", "fecha_limite", "costo", "descripcion", "pruebas_habilitadas", "max_pruebas"])
 
         try:
             df_ins = conn.read(worksheet="Inscripciones").copy()
@@ -172,10 +174,12 @@ def buscar_mejor_tiempo(prueba, df_t_nadador):
 # 5. FUNCIONES CRUD
 # ==========================================
 
-def guardar_competencia(id_comp, nombre, fecha_ev, hora, cod_pil, fecha_lim, costo, desc, lista_pruebas_hab):
+# SE AGREGA EL PARAMETRO max_pru
+def guardar_competencia(id_comp, nombre, fecha_ev, hora, cod_pil, fecha_lim, costo, desc, lista_pruebas_hab, max_pru):
     df_comp = leer_dataset_fresco("Competencias")
-    if df_comp is None: df_comp = pd.DataFrame(columns=["id_competencia", "nombre_evento", "fecha_evento", "hora_inicio", "cod_pileta", "fecha_limite", "costo", "descripcion", "pruebas_habilitadas"])
+    if df_comp is None: df_comp = pd.DataFrame(columns=["id_competencia", "nombre_evento", "fecha_evento", "hora_inicio", "cod_pileta", "fecha_limite", "costo", "descripcion", "pruebas_habilitadas", "max_pruebas"])
     if 'pruebas_habilitadas' not in df_comp.columns: df_comp['pruebas_habilitadas'] = ""
+    if 'max_pruebas' not in df_comp.columns: df_comp['max_pruebas'] = 5
 
     str_pruebas = ", ".join(lista_pruebas_hab) if lista_pruebas_hab else ""
     nuevo = {
@@ -187,7 +191,8 @@ def guardar_competencia(id_comp, nombre, fecha_ev, hora, cod_pil, fecha_lim, cos
         "fecha_limite": str(fecha_lim),
         "costo": costo,
         "descripcion": desc,
-        "pruebas_habilitadas": str_pruebas
+        "pruebas_habilitadas": str_pruebas,
+        "max_pruebas": int(max_pru)
     }
 
     if id_comp and not df_comp.empty and id_comp in df_comp['id_competencia'].values:
@@ -350,11 +355,13 @@ if rol in ["M", "P"]:
             cost_in = c6.number_input("Costo $", min_value=0, step=1000)
             
             hab_in = st.multiselect("Pruebas Habilitadas", LISTA_PRUEBAS, default=LISTA_PRUEBAS)
+            # SE AGREGA EL SELECTOR DE MAXIMO DE PRUEBAS
+            max_in = st.selectbox("Máximo de pruebas por inscripto", options=[1, 2, 3, 4, 5], index=4)
             d_in = st.text_area("Descripción")
             
             if st.form_submit_button("Guardar Evento"):
                 if n_in and p_in:
-                    ok, m = guardar_competencia(None, n_in, f_in, h_in, p_in, fl_in, cost_in, d_in, hab_in)
+                    ok, m = guardar_competencia(None, n_in, f_in, h_in, p_in, fl_in, cost_in, d_in, hab_in, max_in)
                     if ok: st.success(m); time.sleep(1); st.rerun()
                 else: st.warning("Faltan datos.")
 
@@ -457,9 +464,9 @@ else:
                         st.info("No hay nadadores inscriptos que coincidan con estos filtros.")
                     else:
                         # --- LÓGICA DE ORDENAMIENTO POR TIEMPO ---
-                        def obtener_valor_orden(row):
-                            df_t_nad = df_t_global[df_t_global['codnadador'] == row['codnadador']] if not df_t_global.empty else pd.DataFrame()
-                            p_list = [p.strip() for p in str(row['pruebas']).split(",") if p.strip()]
+                        def obtener_valor_orden(row_val):
+                            df_t_nad = df_t_global[df_t_global['codnadador'] == row_val['codnadador']] if not df_t_global.empty else pd.DataFrame()
+                            p_list = [p.strip() for p in str(row_val['pruebas']).split(",") if p.strip()]
                             
                             if filtro_prueba != "Todas":
                                 p_list = [p for p in p_list if p.lower() == filtro_prueba.lower()]
@@ -522,13 +529,23 @@ else:
             
             p_hab_str = str(row.get('pruebas_habilitadas', ""))
             p_hab = [x.strip() for x in p_hab_str.split(",")] if p_hab_str.strip() else LISTA_PRUEBAS
+            
+            # SE EXTRAE EL MAXIMO PERMITIDO (SI NO EXISTE, POR DEFECTO ES 5)
+            max_permitidas = int(row.get('max_pruebas', 5)) if pd.notna(row.get('max_pruebas')) else 5
 
             if abierta or rol in ["M", "P"]:
                 label = "✅ Gestionar Inscripción" if esta else "📝 Inscribirse"
                 with st.expander(label):
                     prev = [x.strip() for x in str(ins_user.iloc[0]['pruebas']).split(",")] if esta else []
                     with st.form(f"f_{comp_id}"):
-                        sel = st.multiselect("Pruebas Habilitadas", p_hab, default=[x for x in prev if x in p_hab])
+                        st.info(f"⚠️ Permitido hasta {max_permitidas} pruebas por nadador.")
+                        
+                        # Restricción de pre-selección si el nadador ya tenía guardadas más pruebas que las permitidas 
+                        def_sel = [x for x in prev if x in p_hab][:max_permitidas]
+                        
+                        # SE AGREGA EL MAX_SELECTIONS AL COMPONENTE MULTISELECT
+                        sel = st.multiselect("Pruebas Habilitadas", p_hab, default=def_sel, max_selections=max_permitidas)
+                        
                         c_ok, c_no = st.columns([3, 1])
                         with c_ok: sub = st.form_submit_button("💾 Guardar")
                         with c_no: 
@@ -549,7 +566,6 @@ else:
             # === C. PANEL ENTRENADOR (TABLA + SELECTOR + SIMULADOR) ===
             if rol in ["M", "P"]:
                 with st.expander(f"🛡️ Panel Entrenador ({row['nombre_evento']})"):
-                    # UPGRADE 2: TERCERA PESTAÑA PARA EL SIMULADOR
                     t1, t2, t3 = st.tabs(["❌ Gestión Bajas", "⚙️ Editar Evento", "🚀 Simulador"])
                     
                     # 1. Gestión Bajas
@@ -583,6 +599,8 @@ else:
                     # 2. Edición
                     with t2:
                         l_pre = [x.strip() for x in str(row.get('pruebas_habilitadas', "")).split(",")] if str(row.get('pruebas_habilitadas', "")).strip() else LISTA_PRUEBAS
+                        max_pre = int(row.get('max_pruebas', 5)) if pd.notna(row.get('max_pruebas')) else 5
+                        
                         with st.form(f"ed_{comp_id}"):
                             ce1, ce2 = st.columns(2)
                             nn = ce1.text_input("Nombre", value=row['nombre_evento'])
@@ -593,16 +611,21 @@ else:
                             nl = ce4.date_input("Cierre", value=pd.to_datetime(f_lim), format="DD/MM/YYYY")
                             
                             nh = st.multiselect("Pruebas", LISTA_PRUEBAS, default=[x for x in l_pre if x in LISTA_PRUEBAS])
+                            
+                            # SE AGREGA EL SELECTOR AL PANEL DE EDICIÓN
+                            idx_max = [1, 2, 3, 4, 5].index(max_pre) if max_pre in [1, 2, 3, 4, 5] else 4
+                            nm = st.selectbox("Máximo de pruebas por inscripto", options=[1, 2, 3, 4, 5], index=idx_max)
+                            
                             nd = st.text_area("Desc.", value=row['descripcion'])
                             
                             if st.form_submit_button("Actualizar"):
-                                guardar_competencia(comp_id, nn, nf, row['hora_inicio'], row['cod_pileta'], nl, nc, nd, nh)
+                                guardar_competencia(comp_id, nn, nf, row['hora_inicio'], row['cod_pileta'], nl, nc, nd, nh, nm)
                                 st.rerun()
                             
                             if st.form_submit_button("⚠️ ELIMINAR EVENTO", type="primary"):
                                 eliminar_competencia(comp_id); st.rerun()
 
-                    # 3. Acceso directo al Simulador (Upgrade)
+                    # 3. Acceso directo al Simulador
                     with t3:
                         st.markdown("##### 🚀 Enviar Inscriptos al Simulador")
                         st.info("Lleva a todos los inscriptos de este evento directamente al Simulador para armar estrategias de postas óptimas y automáticas.")
