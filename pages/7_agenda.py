@@ -209,7 +209,6 @@ def eliminar_competencia(id_comp):
     df_comp = leer_dataset_fresco("Competencias")
     df_ins = leer_dataset_fresco("Inscripciones")
     if df_comp is None: return False, "Error."
-    
     df_comp = df_comp[df_comp['id_competencia'] != id_comp]
     if df_ins is not None and not df_ins.empty:
         df_ins = df_ins[df_ins['id_competencia'] != id_comp]
@@ -235,7 +234,6 @@ def gestionar_inscripcion(id_comp, id_nadador, lista_pruebas):
         nuevo = {"id_inscripcion": str(uuid.uuid4()), "id_competencia": id_comp, "codnadador": int(id_nadador), "pruebas": pruebas_str, "fecha_inscripcion": datetime.now().strftime("%Y-%m-%d")}
         df_ins = pd.concat([df_ins, pd.DataFrame([nuevo])], ignore_index=True)
         msg = "✅ Inscripto."
-
     exito, _ = actualizar_con_retry("Inscripciones", df_ins)
     if exito: st.cache_data.clear(); return True, msg
     return False, "Error."
@@ -286,7 +284,7 @@ if df_competencias is not None and not df_competencias.empty:
     df_timeline = df_competencias.copy()
     df_timeline['fecha_dt'] = pd.to_datetime(df_timeline['fecha_evento'])
     df_timeline = df_timeline.sort_values(by='fecha_dt', ascending=True)
-    
+  
     meses_es = {1: 'Enero', 2: 'Febrero', 3: 'Marzo', 4: 'Abril', 5: 'Mayo', 6: 'Junio', 7: 'Julio', 8: 'Agosto', 9: 'Septiembre', 10: 'Octubre', 11: 'Noviembre', 12: 'Diciembre'}
     dias_es = {0: 'Lun', 1: 'Mar', 2: 'Mié', 3: 'Jue', 4: 'Vie', 5: 'Sáb', 6: 'Dom'}
     
@@ -355,7 +353,7 @@ if rol in ["M", "P"]:
             c3, c4 = st.columns(2)
             f_in = c3.date_input("Fecha", min_value=datetime.today(), format="DD/MM/YYYY")
             h_in = c4.time_input("Hora", value=datetime.strptime("08:30", "%H:%M").time())
-            
+           
             c5, c6 = st.columns(2)
             fl_in = c5.date_input("Cierre Inscripción", min_value=datetime.today(), format="DD/MM/YYYY")
             cost_in = c6.number_input("Costo $", min_value=0, step=1000)
@@ -410,7 +408,8 @@ else:
                         <h3 style="margin:0; color:white;">{row['nombre_evento']}</h3>
                         <div style="color:#4CAF50; font-weight:bold; font-size:14px; margin-top:4px;">📅 {row['fecha_dt'].strftime('%d/%m/%Y')} | ⏰ {row['hora_inicio']}</div>
                     </div>
-                    <span style="background-color:{bg}; color:white; padding:4px 8px; border-radius:4px; font-size:11px; font-weight:bold; height:fit-content;">{badge}</span>
+                    <span style="background-color:{bg}; color:white; padding:4px 8px; border-radius:4px; font-size:11px; 
+font-weight:bold; height:fit-content;">{badge}</span>
                 </div>
                 <hr style="border-color:#444; margin:8px 0;">
                 <div style="display:flex; gap:15px; color:#ddd; font-size:13px; margin-bottom:8px;">
@@ -469,23 +468,9 @@ else:
                     if df_filtrado.empty:
                         st.info("No hay nadadores inscriptos que coincidan con estos filtros.")
                     else:
-                        # --- LÓGICA DE ORDENAMIENTO POR TIEMPO ---
-                        def obtener_valor_orden(row):
-                            df_t_nad = df_t_global[df_t_global['codnadador'] == row['codnadador']] if not df_t_global.empty else pd.DataFrame()
-                            p_list = [p.strip() for p in str(row['pruebas']).split(",") if p.strip()]
-                            
-                            if filtro_prueba != "Todas":
-                                p_list = [p for p in p_list if p.lower() == filtro_prueba.lower()]
-                            
-                            if not p_list: return 999999.0
-                            
-                            mejor_t = buscar_mejor_tiempo(p_list[0], df_t_nad)
-                            if mejor_t: 
-                                return tiempo_a_seg(mejor_t)
-                            return 999999.0
-                            
-                        df_filtrado['sort_val'] = df_filtrado.apply(obtener_valor_orden, axis=1)
-                        df_filtrado = df_filtrado.sort_values(by='sort_val', ascending=True)
+                        # --- LÓGICA DE ORDENAMIENTO ---
+                        # Categoría (A-Z) -> Género (F -> M)
+                        df_filtrado = df_filtrado.sort_values(by=['Cat', 'codgenero'], ascending=[True, True])
 
                         # Generación de Tarjetas con Chips
                         for _, r_pub in df_filtrado.iterrows():
@@ -512,6 +497,9 @@ else:
                             if filtro_prueba != "Todas":
                                 pruebas_lista = [p for p in pruebas_lista if p.lower() == filtro_prueba.lower()]
 
+                            # ORDENAR PRUEBAS INTERNAMENTE (Ascendente según LISTA_PRUEBAS)
+                            pruebas_lista = sorted(pruebas_lista, key=lambda x: LISTA_PRUEBAS.index(x) if x in LISTA_PRUEBAS else 999)
+
                             chips_html = ""
                             for p in pruebas_lista:
                                 mejor_tiempo = buscar_mejor_tiempo(p, df_t_nadador)
@@ -527,7 +515,7 @@ else:
                                     if mostrar_tiempo:
                                         tiempo_badge = f" <span style='color:#FFD700; font-family:monospace; font-weight:bold;'>({mejor_tiempo})</span>"
                                     else:
-                                        tiempo_badge = f" <span style='color:#888; font-family:monospace; font-weight:bold;'>(Oculto)</span>"
+                                        tiempo_badge = ""
                                 else:
                                     tiempo_badge = ""
                                 
