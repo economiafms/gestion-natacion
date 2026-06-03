@@ -91,8 +91,7 @@ def cargar_datos_agenda():
                 if 'fecha_evento' in df_comp.columns: df_comp['fecha_evento'] = pd.to_datetime(df_comp['fecha_evento']).dt.date
                 if 'fecha_limite' in df_comp.columns: df_comp['fecha_limite'] = pd.to_datetime(df_comp['fecha_limite']).dt.date
                 if 'pruebas_habilitadas' not in df_comp.columns: df_comp['pruebas_habilitadas'] = ""
-                # SE AGREGA EL CAMPO MAX PRUEBAS A LA CARGA
-                if 'max_pruebas' not in df_comp.columns: df_comp['max_pruebas'] = 5
+                if 'max_pruebas' not in df_comp.columns: df_comp['max_pruebas'] = 10
         except:
             df_comp = pd.DataFrame(columns=["id_competencia", "nombre_evento", "fecha_evento", "hora_inicio", "cod_pileta", "fecha_limite", "costo", "descripcion", "pruebas_habilitadas", "max_pruebas"])
 
@@ -174,12 +173,11 @@ def buscar_mejor_tiempo(prueba, df_t_nadador):
 # 5. FUNCIONES CRUD
 # ==========================================
 
-# SE AGREGA EL PARAMETRO max_pru
-def guardar_competencia(id_comp, nombre, fecha_ev, hora, cod_pil, fecha_lim, costo, desc, lista_pruebas_hab, max_pru):
+def guardar_competencia(id_comp, nombre, fecha_ev, hora, cod_pil, fecha_lim, costo, desc, lista_pruebas_hab, max_pru=10):
     df_comp = leer_dataset_fresco("Competencias")
     if df_comp is None: df_comp = pd.DataFrame(columns=["id_competencia", "nombre_evento", "fecha_evento", "hora_inicio", "cod_pileta", "fecha_limite", "costo", "descripcion", "pruebas_habilitadas", "max_pruebas"])
     if 'pruebas_habilitadas' not in df_comp.columns: df_comp['pruebas_habilitadas'] = ""
-    if 'max_pruebas' not in df_comp.columns: df_comp['max_pruebas'] = 5
+    if 'max_pruebas' not in df_comp.columns: df_comp['max_pruebas'] = 10
 
     str_pruebas = ", ".join(lista_pruebas_hab) if lista_pruebas_hab else ""
     nuevo = {
@@ -257,6 +255,14 @@ def eliminar_inscripcion(id_comp, id_nadador):
 # ==========================================
 
 df_competencias, df_inscripciones, df_nadadores, df_piletas, df_tiempos, df_estilos, df_distancias = cargar_datos_agenda()
+
+# --- CALCULAR CATEGORIA DEL USUARIO ACTUAL PARA PRIVACIDAD ---
+mi_cat_actual = "-"
+if df_nadadores is not None and not df_nadadores.empty:
+    mi_row = df_nadadores[df_nadadores['codnadador'] == mi_id]
+    if not mi_row.empty:
+        mi_anio = pd.to_datetime(mi_row.iloc[0]['fechanac']).year
+        mi_cat_actual = calcular_categoria_master(mi_anio)
 
 # --- PREPROCESAR HISTORIAL DE TIEMPOS PARA PERFORMANCE ---
 df_t_global = pd.DataFrame()
@@ -355,8 +361,8 @@ if rol in ["M", "P"]:
             cost_in = c6.number_input("Costo $", min_value=0, step=1000)
             
             hab_in = st.multiselect("Pruebas Habilitadas", LISTA_PRUEBAS, default=LISTA_PRUEBAS)
-            # SE AGREGA EL SELECTOR DE MAXIMO DE PRUEBAS
-            max_in = st.selectbox("Máximo de pruebas por inscripto", options=[1, 2, 3, 4, 5], index=4)
+            # NUEVA FUNCIONALIDAD: SELECTOR DE MAX 10 PRUEBAS
+            max_in = st.selectbox("Máximo de pruebas por inscripto", options=list(range(1, 11)), index=9)
             d_in = st.text_area("Descripción")
             
             if st.form_submit_button("Guardar Evento"):
@@ -464,9 +470,9 @@ else:
                         st.info("No hay nadadores inscriptos que coincidan con estos filtros.")
                     else:
                         # --- LÓGICA DE ORDENAMIENTO POR TIEMPO ---
-                        def obtener_valor_orden(row_val):
-                            df_t_nad = df_t_global[df_t_global['codnadador'] == row_val['codnadador']] if not df_t_global.empty else pd.DataFrame()
-                            p_list = [p.strip() for p in str(row_val['pruebas']).split(",") if p.strip()]
+                        def obtener_valor_orden(row):
+                            df_t_nad = df_t_global[df_t_global['codnadador'] == row['codnadador']] if not df_t_global.empty else pd.DataFrame()
+                            p_list = [p.strip() for p in str(row['pruebas']).split(",") if p.strip()]
                             
                             if filtro_prueba != "Todas":
                                 p_list = [p for p in p_list if p.lower() == filtro_prueba.lower()]
@@ -485,33 +491,54 @@ else:
                         for _, r_pub in df_filtrado.iterrows():
                             nadador_nom = f"{r_pub['apellido']}, {r_pub['nombre']}"
                             
+                            # HIGHLIGHT: ¿Es el usuario actual?
+                            es_yo = (r_pub['codnadador'] == mi_id)
+                            
+                            if es_yo:
+                                borde_estilo = "border: 2px solid #FFD700; border-left: 6px solid #FFD700; background-color: #4a4a4a;"
+                                nadador_nom = f"⭐ {nadador_nom} (YO)"
+                            else:
+                                borde_estilo = "border-left: 4px solid #E30613; background-color: #383940;"
+
                             # Filtrar historial de tiempos del nadador
                             df_t_nadador = df_t_global[df_t_global['codnadador'] == r_pub['codnadador']] if not df_t_global.empty else pd.DataFrame()
 
-                            # Chips para Categoría y Género
                             cat_chip = f"<span style='font-size: 12px; font-weight: bold; background-color: #555; padding: 3px 8px; border-radius: 4px; color: #fff; margin-left: 5px;'>{r_pub['Cat']}</span>"
                             gen_chip = f"<span style='font-size: 12px; font-weight: bold; background-color: #555; padding: 3px 8px; border-radius: 4px; color: #fff; margin-left: 5px;'>Gen. {r_pub['codgenero']}</span>"
                             
                             # Chips para las pruebas
                             pruebas_lista = [p.strip() for p in str(r_pub['pruebas']).split(",") if p.strip()]
                             
-                            # Si se filtró una prueba específica, solo mostramos esa
                             if filtro_prueba != "Todas":
                                 pruebas_lista = [p for p in pruebas_lista if p.lower() == filtro_prueba.lower()]
 
                             chips_html = ""
                             for p in pruebas_lista:
                                 mejor_tiempo = buscar_mejor_tiempo(p, df_t_nadador)
-                                tiempo_badge = f" <span style='color:#FFD700; font-family:monospace; font-weight:bold;'>({mejor_tiempo})</span>" if mejor_tiempo else ""
+                                
+                                # LÓGICA DE PRIVACIDAD DE TIEMPOS
+                                mostrar_tiempo = False
+                                if rol in ["M", "P"]:
+                                    mostrar_tiempo = True
+                                elif es_yo or str(r_pub['Cat']) == str(mi_cat_actual):
+                                    mostrar_tiempo = True
+                                
+                                if mejor_tiempo:
+                                    if mostrar_tiempo:
+                                        tiempo_badge = f" <span style='color:#FFD700; font-family:monospace; font-weight:bold;'>({mejor_tiempo})</span>"
+                                    else:
+                                        tiempo_badge = f" <span style='color:#888; font-family:monospace; font-weight:bold;'>(Oculto)</span>"
+                                else:
+                                    tiempo_badge = ""
+                                
                                 chips_html += f"<span style='background-color:#444; padding:3px 8px; border-radius:4px; font-size:12px; margin-right:4px; display:inline-block; margin-bottom:4px; color:#eee; border: 1px solid #666;'>{p}{tiempo_badge}</span>"
 
                             st.markdown(f"""
                             <div style="
-                                background-color: #383940; 
+                                {borde_estilo}
                                 padding: 10px 12px; 
                                 border-radius: 6px; 
-                                margin-bottom: 6px; 
-                                border-left: 4px solid #E30613;">
+                                margin-bottom: 6px;">
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                                     <div style="font-weight: bold; color: white; font-size: 16px;">{nadador_nom}</div>
                                     <div style="display: flex;">
@@ -530,20 +557,18 @@ else:
             p_hab_str = str(row.get('pruebas_habilitadas', ""))
             p_hab = [x.strip() for x in p_hab_str.split(",")] if p_hab_str.strip() else LISTA_PRUEBAS
             
-            # SE EXTRAE EL MAXIMO PERMITIDO (SI NO EXISTE, POR DEFECTO ES 5)
-            max_permitidas = int(row.get('max_pruebas', 5)) if pd.notna(row.get('max_pruebas')) else 5
+            # CONTROL DE MAXIMO PERMITIDO
+            max_permitidas = int(row.get('max_pruebas', 10)) if pd.notna(row.get('max_pruebas')) else 10
 
             if abierta or rol in ["M", "P"]:
                 label = "✅ Gestionar Inscripción" if esta else "📝 Inscribirse"
                 with st.expander(label):
                     prev = [x.strip() for x in str(ins_user.iloc[0]['pruebas']).split(",")] if esta else []
                     with st.form(f"f_{comp_id}"):
-                        st.info(f"⚠️ Permitido hasta {max_permitidas} pruebas por nadador.")
+                        st.info(f"⚠️ Permitido hasta **{max_permitidas}** pruebas por nadador.")
                         
-                        # Restricción de pre-selección si el nadador ya tenía guardadas más pruebas que las permitidas 
                         def_sel = [x for x in prev if x in p_hab][:max_permitidas]
-                        
-                        # SE AGREGA EL MAX_SELECTIONS AL COMPONENTE MULTISELECT
+                        # LIMITE FISICO EN EL SELECTOR
                         sel = st.multiselect("Pruebas Habilitadas", p_hab, default=def_sel, max_selections=max_permitidas)
                         
                         c_ok, c_no = st.columns([3, 1])
@@ -568,7 +593,6 @@ else:
                 with st.expander(f"🛡️ Panel Entrenador ({row['nombre_evento']})"):
                     t1, t2, t3 = st.tabs(["❌ Gestión Bajas", "⚙️ Editar Evento", "🚀 Simulador"])
                     
-                    # 1. Gestión Bajas
                     with t1:
                         if d_full.empty:
                             st.caption("Nada para gestionar.")
@@ -596,11 +620,13 @@ else:
                                     eliminar_inscripcion(comp_id, u_del)
                                     st.rerun()
 
-                    # 2. Edición
                     with t2:
                         l_pre = [x.strip() for x in str(row.get('pruebas_habilitadas', "")).split(",")] if str(row.get('pruebas_habilitadas', "")).strip() else LISTA_PRUEBAS
-                        max_pre = int(row.get('max_pruebas', 5)) if pd.notna(row.get('max_pruebas')) else 5
                         
+                        # RECUPERA EL MÁXIMO CONFIGURADO PARA MOSTRARLO EN EL FORM DE EDICIÓN
+                        max_pre = int(row.get('max_pruebas', 10)) if pd.notna(row.get('max_pruebas')) else 10
+                        idx_max = list(range(1, 11)).index(max_pre) if max_pre in range(1, 11) else 9
+
                         with st.form(f"ed_{comp_id}"):
                             ce1, ce2 = st.columns(2)
                             nn = ce1.text_input("Nombre", value=row['nombre_evento'])
@@ -611,11 +637,7 @@ else:
                             nl = ce4.date_input("Cierre", value=pd.to_datetime(f_lim), format="DD/MM/YYYY")
                             
                             nh = st.multiselect("Pruebas", LISTA_PRUEBAS, default=[x for x in l_pre if x in LISTA_PRUEBAS])
-                            
-                            # SE AGREGA EL SELECTOR AL PANEL DE EDICIÓN
-                            idx_max = [1, 2, 3, 4, 5].index(max_pre) if max_pre in [1, 2, 3, 4, 5] else 4
-                            nm = st.selectbox("Máximo de pruebas por inscripto", options=[1, 2, 3, 4, 5], index=idx_max)
-                            
+                            nm = st.selectbox("Máximo de pruebas por inscripto", options=list(range(1, 11)), index=idx_max)
                             nd = st.text_area("Desc.", value=row['descripcion'])
                             
                             if st.form_submit_button("Actualizar"):
@@ -625,7 +647,6 @@ else:
                             if st.form_submit_button("⚠️ ELIMINAR EVENTO", type="primary"):
                                 eliminar_competencia(comp_id); st.rerun()
 
-                    # 3. Acceso directo al Simulador
                     with t3:
                         st.markdown("##### 🚀 Enviar Inscriptos al Simulador")
                         st.info("Lleva a todos los inscriptos de este evento directamente al Simulador para armar estrategias de postas óptimas y automáticas.")
