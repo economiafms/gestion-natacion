@@ -100,7 +100,10 @@ def gestionar_inscripcion_inicio(id_comp, id_nadador, lista_pruebas):
         msg = "Inscripto."
 
     exito, _ = actualizar_con_retry_inicio("Inscripciones", df_ins)
-    if exito: st.cache_data.clear(); return True, msg
+    if exito: 
+        # FIX: Solo borramos este caché, no el general, para no romper los gráficos de Altair
+        cargar_datos_inscripcion_inicio.clear()
+        return True, msg
     return False, "Error."
 
 def eliminar_inscripcion_inicio(id_comp, id_nadador):
@@ -110,7 +113,10 @@ def eliminar_inscripcion_inicio(id_comp, id_nadador):
     
     df_ins = df_ins[~((df_ins['id_competencia'] == id_comp) & (df_ins['codnadador'] == id_nadador))]
     exito, _ = actualizar_con_retry_inicio("Inscripciones", df_ins)
-    if exito: st.cache_data.clear(); return True, "Baja exitosa."
+    if exito: 
+        # FIX: Solo borramos este caché, no el general, para no romper los gráficos de Altair
+        cargar_datos_inscripcion_inicio.clear()
+        return True, "Baja exitosa."
     return False, "Error."
 
 # Función unificadora para mantener compatibilidad con el código existente
@@ -184,9 +190,7 @@ def guardar_seguimiento_inicio(id_rutina, id_nadador):
         df_final = pd.concat([df_seg, nuevo_registro], ignore_index=True)
         conn.update(worksheet="Rutinas_Seguimiento", data=df_final)
         
-        # --- FIX IMPORTANTE ---
         # Solo limpiamos el caché de RUTINAS, no el general.
-        # Esto evita recargar las 7 hojas y previene el error 429.
         cargar_datos_rutinas.clear()
         
         return True
@@ -446,7 +450,7 @@ if db and st.session_state.user_id:
         st.write("") 
 
         # // =========================================================
-        # // WIDGET INSCRIPCIÓN RÁPIDA (NUEVO)
+        # // WIDGET INSCRIPCIÓN RÁPIDA A TORNEOS
         # // =========================================================
         df_comp, df_ins = cargar_datos_inscripcion_inicio()
         if df_comp is not None and not df_comp.empty:
@@ -471,18 +475,28 @@ if db and st.session_state.user_id:
                 for row in activos:
                     comp_id = row['id_competencia']
                     nombre_ev = row['nombre_evento']
+                    fecha_ev_str = row['fecha_evento'].strftime('%d/%m/%Y') if pd.notnull(row['fecha_evento']) else "próximamente"
                     
                     ins_user = pd.DataFrame()
                     if df_ins is not None and not df_ins.empty:
                         ins_user = df_ins[(df_ins['id_competencia'] == comp_id) & (df_ins['codnadador'] == user_id)]
                     
                     esta = not ins_user.empty
+                    
+                    # LOGICA DESPLEGABLE INTELIGENTE: Si no está inscripto, lo abre por defecto para invitarlo.
+                    is_expanded = not esta
+
                     p_hab_str = str(row.get('pruebas_habilitadas', ""))
                     p_hab = [x.strip() for x in p_hab_str.split(",")] if p_hab_str.strip() else []
                     max_permitidas = int(row.get('max_pruebas', 10)) if pd.notna(row.get('max_pruebas')) else 10
                     
-                    with st.expander(f"{'✅ Inscripto en' if esta else '📝 Inscribirme a'} {nombre_ev}"):
+                    with st.expander(f"{'✅ Inscripto en' if esta else '📝 Inscribirme a'} {nombre_ev}", expanded=is_expanded):
                         prev = [x.strip() for x in str(ins_user.iloc[0]['pruebas']).split(",")] if esta else []
+                        
+                        # Si ya está inscripto, le recordamos las pruebas en un banner verde
+                        if esta:
+                            st.markdown(f"<div style='color: #4CAF50; font-weight: bold; margin-bottom: 10px; font-size: 14px;'>✅ Ya estás inscripto en: {', '.join(prev)}</div>", unsafe_allow_html=True)
+
                         with st.form(f"f_idx_{comp_id}"):
                             st.caption(f"Permitido hasta {max_permitidas} pruebas.")
                             def_sel = [x for x in prev if x in p_hab][:max_permitidas]
@@ -498,10 +512,16 @@ if db and st.session_state.user_id:
                                 if not sel: st.error("Selecciona pruebas.")
                                 else:
                                     ok, m = gestionar_inscripcion_inicio(comp_id, user_id, sel)
-                                    if ok: st.success("OK"); time.sleep(1); st.rerun()
+                                    if ok: 
+                                        st.success(f"🎯 **¡Inscripción guardada!** A entrenar con todo. ¡Te esperamos el {fecha_ev_str}, VAMOS NEWELL'S! 🔴⚫")
+                                        time.sleep(2.5) # Le damos tiempo para leer el mensaje motivacional
+                                        st.rerun()
                             if delt:
                                 ok, m = eliminar_inscripcion_inicio(comp_id, user_id)
-                                if ok: st.warning("Baja confirmada"); time.sleep(1); st.rerun()
+                                if ok: 
+                                    st.warning("Baja confirmada")
+                                    time.sleep(1)
+                                    st.rerun()
                 st.write("")
 
     # 2. MIS REGISTROS (FRECUENCIA DE ESTILOS)
