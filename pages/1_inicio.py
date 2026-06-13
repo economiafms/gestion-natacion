@@ -35,7 +35,8 @@ def cargar_datos_generales():
             "tiempos": conn.read(worksheet="Tiempos"),
             "relevos": conn.read(worksheet="Relevos"),
             "categorias": conn.read(worksheet="Categorias"),
-            "estilos": conn.read(worksheet="Estilos")
+            "estilos": conn.read(worksheet="Estilos"),
+            "distancias": conn.read(worksheet="Distancias")
         }
     except: return None
 
@@ -203,6 +204,48 @@ def guardar_seguimiento_inicio(id_rutina, id_nadador):
         st.error(f"Error al guardar: {e}")
         return False
 
+# FUNCIONES PARA BUSCAR TIEMPOS EN INSCRIPCIONES (COMO EN AGENDA)
+def tiempo_a_seg(t_str):
+    try:
+        partes = str(t_str).replace('.', ':').split(':')
+        return float(partes[0]) * 60 + float(partes[1]) + (float(partes[2])/100 if len(partes)>2 else 0)
+    except: return 999999.0
+
+def buscar_mejor_tiempo(prueba, df_t_nadador):
+    if df_t_nadador.empty: return ""
+    p_lower = prueba.lower()
+    
+    dist_k = ""
+    if "50m" in p_lower or " 50" in p_lower: dist_k = "50"
+    if "100m" in p_lower or " 100" in p_lower: dist_k = "100"
+    if "200m" in p_lower or " 200" in p_lower: dist_k = "200"
+    if "400m" in p_lower or " 400" in p_lower: dist_k = "400"
+    if "800m" in p_lower or " 800" in p_lower: dist_k = "800"
+    if "1500m" in p_lower or " 1500" in p_lower: dist_k = "1500"
+    if "4x50" in p_lower: dist_k = "4x50"
+    if "4x100" in p_lower: dist_k = "4x100"
+    
+    est_k = []
+    if "libre" in p_lower or "crol" in p_lower: est_k = ["libre", "crol"]
+    elif "espalda" in p_lower: est_k = ["espalda"]
+    elif "pecho" in p_lower: est_k = ["pecho"]
+    elif "mariposa" in p_lower: est_k = ["mariposa"]
+    elif "combinado" in p_lower or "medley" in p_lower: est_k = ["combinado", "medley"]
+    
+    if not dist_k or not est_k: return ""
+    
+    try:
+        mask_dist = df_t_nadador['dist_desc'].str.lower().str.contains(dist_k, na=False)
+        mask_est = df_t_nadador['estilo_desc'].str.lower().apply(lambda x: any(k in str(x) for k in est_k))
+        
+        matches = df_t_nadador[mask_dist & mask_est]
+        if not matches.empty:
+            best = matches.loc[matches['segundos'].idxmin()]
+            return best['tiempo']
+    except:
+        return ""
+    return ""
+
 # --- VISUALIZACIÓN ---
 
 # BANNER TÍTULO
@@ -355,22 +398,30 @@ if db and st.session_state.user_id:
     
     st.write("") 
 
-    # // ATAJO RUTINA DIARIA
+    # // ATAJO RUTINA DIARIA (Logica Completa de Gamificación)
     if st.session_state.role == "N":
         hoy_arg = datetime.now(timezone.utc) - timedelta(hours=3)
         df_rut = db.get('rutinas')
         df_seg = db.get('seguimiento')
         
         if df_rut is not None and df_seg is not None:
-            rutinas_mes = df_rut[(df_rut['anio_rutina'] == hoy_arg.year) & (df_rut['mes_rutina'] == hoy_arg.month)].copy()
+            rutinas_mes = df_rut[
+                (df_rut['anio_rutina'] == hoy_arg.year) & 
+                (df_rut['mes_rutina'] == hoy_arg.month)
+            ].copy()
+
+            # REGLA 1: Si no hay rutinas en el mes, NO mostrar el expander
             if not rutinas_mes.empty:
+                
                 with st.expander("🏊‍♂️ ¿Hice mi rutina de hoy?", expanded=False):
+                    
                     hoy_str_corto = hoy_arg.strftime("%Y-%m-%d")
                     rutina_hoy_completada = None
                     
                     if not df_seg.empty:
                         mis_seg = df_seg[df_seg['codnadador'] == user_id].copy()
                         mis_seg['fecha_dt'] = pd.to_datetime(mis_seg['fecha_realizada']).dt.strftime("%Y-%m-%d")
+                        
                         hecho_hoy = mis_seg[mis_seg['fecha_dt'] == hoy_str_corto]
                         
                         if not hecho_hoy.empty:
@@ -380,6 +431,7 @@ if db and st.session_state.user_id:
                     else:
                         realizadas_historicas = []
 
+                    # --- LÓGICA DE ESTADOS ---
                     if rutina_hoy_completada is not None and not rutina_hoy_completada.empty:
                         r_row = rutina_hoy_completada.iloc[0]
                         pendientes_check = rutinas_mes[~rutinas_mes['id_rutina'].isin(realizadas_historicas)]
@@ -398,8 +450,10 @@ if db and st.session_state.user_id:
                             """, unsafe_allow_html=True)
                         else:
                             st.success(f"🏆 **¡Misión Cumplida!** Completé la **Sesión {int(r_row['nro_sesion'])}** hoy.")
+                        
                     else:
                         rutinas_pendientes = rutinas_mes[~rutinas_mes['id_rutina'].isin(realizadas_historicas)].sort_values('nro_sesion')
+                        
                         if not rutinas_pendientes.empty:
                             prox_sesion = rutinas_pendientes.iloc[0]
                             r_id = prox_sesion['id_rutina']
@@ -417,15 +471,19 @@ if db and st.session_state.user_id:
                                     my_bar.progress(percent_complete + 1, text="Registrando entrenamiento...")
                                 time.sleep(0.2)
                                 my_bar.empty()
+                                
                                 st.toast(f"¡Excelente! Sesión {r_nro} registrada con éxito.", icon='🏆')
+                                
                                 if guardar_seguimiento_inicio(r_id, user_id):
-                                    time.sleep(1); st.rerun()
+                                    time.sleep(1) 
+                                    st.rerun()
                         else:
                             st.info("🏅 ¡Mes completo! No tengo más rutinas pendientes.")
+        
         st.write("") 
 
         # // =========================================================
-        # // WIDGET INSCRIPCIÓN RÁPIDA (CON INFO DEL TORNEO)
+        # // WIDGET INSCRIPCIÓN RÁPIDA (CON INFO DEL TORNEO Y TIEMPOS)
         # // =========================================================
         df_comp, df_ins, df_piletas = cargar_datos_inscripcion_inicio()
         if df_comp is not None and not df_comp.empty:
@@ -458,7 +516,23 @@ if db and st.session_state.user_id:
                             vista_eventos.append((row, esta, ins_user))
             
             if vista_eventos:
+                # PREPARAMOS EL HISTORIAL DE TIEMPOS DEL NADADOR
+                df_t_nadador = pd.DataFrame()
+                df_t_base = db.get('tiempos')
+                df_estilos = db.get('estilos')
+                df_dist = db.get('distancias')
+                
+                if df_t_base is not None and not df_t_base.empty:
+                    df_t_nadador = df_t_base[df_t_base['codnadador'] == user_id].copy()
+                    if not df_t_nadador.empty:
+                        if df_estilos is not None and not df_estilos.empty:
+                            df_t_nadador = df_t_nadador.merge(df_estilos.rename(columns={'descripcion': 'estilo_desc'}), on='codestilo', how='left')
+                        if df_dist is not None and not df_dist.empty:
+                            df_t_nadador = df_t_nadador.merge(df_dist.rename(columns={'descripcion': 'dist_desc'}), on='coddistancia', how='left')
+                        df_t_nadador['segundos'] = df_t_nadador['tiempo'].apply(lambda x: tiempo_a_seg(x) if pd.notnull(x) else 999999.0)
+
                 st.markdown("<h5 style='text-align: center; color: #E30613; margin-bottom: 15px;'>🏆 MIS TORNEOS E INSCRIPCIONES</h5>", unsafe_allow_html=True)
+                
                 for row, esta, ins_user in vista_eventos:
                     comp_id = row['id_competencia']
                     nombre_ev = row['nombre_evento']
@@ -500,8 +574,12 @@ if db and st.session_state.user_id:
                         """, unsafe_allow_html=True)
                         
                         if esta:
-                            # TARJETA INFORMATIVA
-                            chips_html = "".join([f"<span style='background-color:#444; color:#fff; padding:4px 10px; border-radius:15px; font-size:12px; margin-right:6px; margin-bottom:6px; display:inline-block; border:1px solid #555;'>{p}</span>" for p in prev])
+                            # TARJETA INFORMATIVA CON CHIPS + MEJORES TIEMPOS
+                            chips_html = ""
+                            for p in prev:
+                                mejor_tiempo = buscar_mejor_tiempo(p, df_t_nadador)
+                                tiempo_badge = f" <span style='color:#FFD700; font-family:monospace; font-weight:bold;'>({mejor_tiempo})</span>" if mejor_tiempo else ""
+                                chips_html += f"<span style='background-color:#444; color:#fff; padding:4px 10px; border-radius:15px; font-size:12px; margin-right:6px; margin-bottom:6px; display:inline-block; border:1px solid #555;'>{p}{tiempo_badge}</span>"
                             
                             st.markdown(f"""
                             <div style="background-color: #2b2c36; border-left: 5px solid #4CAF50; border-radius: 8px; padding: 15px; margin-bottom: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
