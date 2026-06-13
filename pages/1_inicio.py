@@ -101,9 +101,22 @@ def gestionar_inscripcion_inicio(id_comp, id_nadador, lista_pruebas):
 
     exito, _ = actualizar_con_retry_inicio("Inscripciones", df_ins)
     if exito: 
-        # FIX: Solo borramos este caché, no el general, para no romper los gráficos de Altair
+        # Solo borramos este caché, no el general, para no romper los gráficos de Altair
         cargar_datos_inscripcion_inicio.clear()
         return True, msg
+    return False, "Error."
+
+def eliminar_inscripcion_inicio(id_comp, id_nadador):
+    df_ins = leer_dataset_fresco_inicio("Inscripciones")
+    if df_ins is None: return False, "Error."
+    if not df_ins.empty: df_ins['codnadador'] = pd.to_numeric(df_ins['codnadador'], errors='coerce').fillna(0).astype(int)
+    
+    df_ins = df_ins[~((df_ins['id_competencia'] == id_comp) & (df_ins['codnadador'] == id_nadador))]
+    exito, _ = actualizar_con_retry_inicio("Inscripciones", df_ins)
+    if exito: 
+        # Solo borramos este caché, no el general, para no romper los gráficos de Altair
+        cargar_datos_inscripcion_inicio.clear()
+        return True, "Baja exitosa."
     return False, "Error."
 
 # Función unificadora para mantener compatibilidad con el código existente
@@ -437,7 +450,7 @@ if db and st.session_state.user_id:
         st.write("") 
 
         # // =========================================================
-        # // WIDGET INSCRIPCIÓN RÁPIDA A TORNEOS
+        # // WIDGET INSCRIPCIÓN RÁPIDA Y EVENTOS ACTUALES
         # // =========================================================
         df_comp, df_ins = cargar_datos_inscripcion_inicio()
         if df_comp is not None and not df_comp.empty:
@@ -445,24 +458,17 @@ if db and st.session_state.user_id:
             df_view = df_comp.copy()
             df_view = df_view.sort_values(by='fecha_evento', ascending=True, na_position='last')
             
-            # Filtramos solo las competencias activas
-            activos = []
+            vista_eventos = []
+            
             for _, row in df_view.iterrows():
                 f_ev = row['fecha_evento']
                 f_lim = row['fecha_limite']
                 dias_ev = (f_ev.date() - hoy).days if pd.notnull(f_ev) else 0
                 dias_cie = (f_lim.date() - hoy).days if pd.notnull(f_lim) else 0
                 
-                # Se considera activa si faltan días para el evento y no venció la fecha límite
-                if dias_ev >= 0 and dias_cie >= 0 and pd.notnull(f_ev) and pd.notnull(f_lim):
-                    activos.append(row)
-            
-            if activos:
-                st.markdown("<h5 style='text-align: center; color: #E30613; margin-bottom: 15px;'>🏆 TORNEOS ACTIVOS</h5>", unsafe_allow_html=True)
-                for row in activos:
+                # Solo filtramos eventos que no pasaron todavía
+                if dias_ev >= 0 and pd.notnull(f_ev):
                     comp_id = row['id_competencia']
-                    nombre_ev = row['nombre_evento']
-                    fecha_ev_str = row['fecha_evento'].strftime('%d/%m/%Y') if pd.notnull(row['fecha_evento']) else "próximamente"
                     
                     ins_user = pd.DataFrame()
                     if df_ins is not None and not df_ins.empty:
@@ -470,7 +476,22 @@ if db and st.session_state.user_id:
                     
                     esta = not ins_user.empty
                     
-                    # LOGICA DESPLEGABLE INTELIGENTE: Si NO está inscripto, lo abre por defecto para invitarlo.
+                    if esta:
+                        # Si está inscripto, SIEMPRE lo mostramos en el inicio (hasta que pase la fecha del evento)
+                        vista_eventos.append((row, esta, ins_user))
+                    else:
+                        # Si no está inscripto, SOLO se muestra si todavía está abierta la inscripción
+                        if dias_cie >= 0 and pd.notnull(f_lim):
+                            vista_eventos.append((row, esta, ins_user))
+            
+            if vista_eventos:
+                st.markdown("<h5 style='text-align: center; color: #E30613; margin-bottom: 15px;'>🏆 MIS TORNEOS E INSCRIPCIONES</h5>", unsafe_allow_html=True)
+                for row, esta, ins_user in vista_eventos:
+                    comp_id = row['id_competencia']
+                    nombre_ev = row['nombre_evento']
+                    fecha_ev_str = row['fecha_evento'].strftime('%d/%m/%Y')
+                    
+                    # LOGICA DESPLEGABLE INTELIGENTE: Si no está inscripto se expande por defecto.
                     is_expanded = not esta
 
                     p_hab_str = str(row.get('pruebas_habilitadas', ""))
@@ -481,11 +502,11 @@ if db and st.session_state.user_id:
                         prev = [x.strip() for x in str(ins_user.iloc[0]['pruebas']).split(",")] if esta else []
                         
                         if esta:
-                            # TARJETA NETAMENTE INFORMATIVA DE INSCRIPCIÓN (Oculta el formulario de modificar)
+                            # TARJETA INFORMATIVA SI YA ESTÁ INSCRIPTO
                             chips_html = "".join([f"<span style='background-color:#444; color:#fff; padding:4px 10px; border-radius:15px; font-size:12px; margin-right:6px; margin-bottom:6px; display:inline-block; border:1px solid #555;'>{p}</span>" for p in prev])
                             
                             st.markdown(f"""
-                            <div style="background-color: #2b2c36; border-left: 5px solid #4CAF50; border-radius: 8px; padding: 15px; margin-bottom: 5px; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
+                            <div style="background-color: #2b2c36; border-left: 5px solid #4CAF50; border-radius: 8px; padding: 15px; margin-bottom: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
                                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; border-bottom: 1px solid #444; padding-bottom: 8px;">
                                     <div style="font-size: 16px; font-weight: bold; color: white;">{nombre_ev}</div>
                                     <div style="font-size: 13px; color: #4CAF50; font-weight: 800; background: #1e1e24; padding: 4px 10px; border-radius: 6px; border: 1px solid #333;">
@@ -495,10 +516,23 @@ if db and st.session_state.user_id:
                                 <div style="font-size: 13px; color: #aaa; margin-bottom: 10px;">Estás inscripto en:</div>
                                 <div>{chips_html}</div>
                             </div>
-                            <div style="text-align: right; margin-top: 5px;">
-                                <small style="color: #666;">(Para modificar tu inscripción o darte de baja, ve a la sección <b>Agenda</b>)</small>
-                            </div>
                             """, unsafe_allow_html=True)
+                            
+                            # BOTÓN DE BAJA (En caso de que no pueda ir)
+                            with st.form(f"f_baja_{comp_id}"):
+                                c1, c2 = st.columns([3, 1])
+                                with c1:
+                                    st.caption("Si ya no vas a participar, puedes darte de baja:")
+                                with c2:
+                                    sub_baja = st.form_submit_button("🗑️ Darme de Baja")
+                                
+                                if sub_baja:
+                                    ok, m = eliminar_inscripcion_inicio(comp_id, user_id)
+                                    if ok: 
+                                        st.warning("Te has dado de baja. ¡Te esperamos en el próximo torneo!")
+                                        time.sleep(1.5)
+                                        st.rerun()
+
                         else:
                             # FORMULARIO DE INSCRIPCIÓN RÁPIDA (Si aún no está anotado)
                             with st.form(f"f_idx_{comp_id}"):
@@ -513,7 +547,7 @@ if db and st.session_state.user_id:
                                         ok, m = gestionar_inscripcion_inicio(comp_id, user_id, sel)
                                         if ok: 
                                             st.success(f"🎯 **¡Inscripción guardada!** A entrenar con todo. ¡Te esperamos el {fecha_ev_str}, VAMOS NEWELL'S! 🔴⚫")
-                                            time.sleep(2.5) # Le damos tiempo para leer el mensaje motivacional
+                                            time.sleep(2.5) # Tiempo extra para leer el mensaje motivacional
                                             st.rerun()
                 st.write("")
 
