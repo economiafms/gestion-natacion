@@ -106,19 +106,6 @@ def gestionar_inscripcion_inicio(id_comp, id_nadador, lista_pruebas):
         return True, msg
     return False, "Error."
 
-def eliminar_inscripcion_inicio(id_comp, id_nadador):
-    df_ins = leer_dataset_fresco_inicio("Inscripciones")
-    if df_ins is None: return False, "Error."
-    if not df_ins.empty: df_ins['codnadador'] = pd.to_numeric(df_ins['codnadador'], errors='coerce').fillna(0).astype(int)
-    
-    df_ins = df_ins[~((df_ins['id_competencia'] == id_comp) & (df_ins['codnadador'] == id_nadador))]
-    exito, _ = actualizar_con_retry_inicio("Inscripciones", df_ins)
-    if exito: 
-        # FIX: Solo borramos este caché, no el general, para no romper los gráficos de Altair
-        cargar_datos_inscripcion_inicio.clear()
-        return True, "Baja exitosa."
-    return False, "Error."
-
 # Función unificadora para mantener compatibilidad con el código existente
 def get_db():
     general = cargar_datos_generales()
@@ -471,7 +458,7 @@ if db and st.session_state.user_id:
                     activos.append(row)
             
             if activos:
-                st.markdown("<h5 style='text-align: center; color: #E30613; margin-bottom: 15px;'>🏆 TORNEOS ACTIVOS - INSCRIPCIÓN RÁPIDA</h5>", unsafe_allow_html=True)
+                st.markdown("<h5 style='text-align: center; color: #E30613; margin-bottom: 15px;'>🏆 TORNEOS ACTIVOS</h5>", unsafe_allow_html=True)
                 for row in activos:
                     comp_id = row['id_competencia']
                     nombre_ev = row['nombre_evento']
@@ -483,7 +470,7 @@ if db and st.session_state.user_id:
                     
                     esta = not ins_user.empty
                     
-                    # LOGICA DESPLEGABLE INTELIGENTE: Si no está inscripto, lo abre por defecto para invitarlo.
+                    # LOGICA DESPLEGABLE INTELIGENTE: Si NO está inscripto, lo abre por defecto para invitarlo.
                     is_expanded = not esta
 
                     p_hab_str = str(row.get('pruebas_habilitadas', ""))
@@ -493,35 +480,41 @@ if db and st.session_state.user_id:
                     with st.expander(f"{'✅ Inscripto en' if esta else '📝 Inscribirme a'} {nombre_ev}", expanded=is_expanded):
                         prev = [x.strip() for x in str(ins_user.iloc[0]['pruebas']).split(",")] if esta else []
                         
-                        # Si ya está inscripto, le recordamos las pruebas en un banner verde
                         if esta:
-                            st.markdown(f"<div style='color: #4CAF50; font-weight: bold; margin-bottom: 10px; font-size: 14px;'>✅ Ya estás inscripto en: {', '.join(prev)}</div>", unsafe_allow_html=True)
-
-                        with st.form(f"f_idx_{comp_id}"):
-                            st.caption(f"Permitido hasta {max_permitidas} pruebas.")
-                            def_sel = [x for x in prev if x in p_hab][:max_permitidas]
-                            sel = st.multiselect("Seleccionar Pruebas", p_hab, default=def_sel, max_selections=max_permitidas, label_visibility="collapsed")
+                            # TARJETA NETAMENTE INFORMATIVA DE INSCRIPCIÓN (Oculta el formulario de modificar)
+                            chips_html = "".join([f"<span style='background-color:#444; color:#fff; padding:4px 10px; border-radius:15px; font-size:12px; margin-right:6px; margin-bottom:6px; display:inline-block; border:1px solid #555;'>{p}</span>" for p in prev])
                             
-                            c_ok, c_no = st.columns([2, 1])
-                            with c_ok: sub = st.form_submit_button("Guardar")
-                            with c_no: 
-                                delt = False
-                                if esta: delt = st.form_submit_button("Baja")
-                            
-                            if sub:
-                                if not sel: st.error("Selecciona pruebas.")
-                                else:
-                                    ok, m = gestionar_inscripcion_inicio(comp_id, user_id, sel)
-                                    if ok: 
-                                        st.success(f"🎯 **¡Inscripción guardada!** A entrenar con todo. ¡Te esperamos el {fecha_ev_str}, VAMOS NEWELL'S! 🔴⚫")
-                                        time.sleep(2.5) # Le damos tiempo para leer el mensaje motivacional
-                                        st.rerun()
-                            if delt:
-                                ok, m = eliminar_inscripcion_inicio(comp_id, user_id)
-                                if ok: 
-                                    st.warning("Baja confirmada")
-                                    time.sleep(1)
-                                    st.rerun()
+                            st.markdown(f"""
+                            <div style="background-color: #2b2c36; border-left: 5px solid #4CAF50; border-radius: 8px; padding: 15px; margin-bottom: 5px; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
+                                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; border-bottom: 1px solid #444; padding-bottom: 8px;">
+                                    <div style="font-size: 16px; font-weight: bold; color: white;">{nombre_ev}</div>
+                                    <div style="font-size: 13px; color: #4CAF50; font-weight: 800; background: #1e1e24; padding: 4px 10px; border-radius: 6px; border: 1px solid #333;">
+                                        📅 {fecha_ev_str}
+                                    </div>
+                                </div>
+                                <div style="font-size: 13px; color: #aaa; margin-bottom: 10px;">Estás inscripto en:</div>
+                                <div>{chips_html}</div>
+                            </div>
+                            <div style="text-align: right; margin-top: 5px;">
+                                <small style="color: #666;">(Para modificar tu inscripción o darte de baja, ve a la sección <b>Agenda</b>)</small>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        else:
+                            # FORMULARIO DE INSCRIPCIÓN RÁPIDA (Si aún no está anotado)
+                            with st.form(f"f_idx_{comp_id}"):
+                                st.caption(f"Permitido hasta {max_permitidas} pruebas.")
+                                sel = st.multiselect("Seleccionar Pruebas", p_hab, default=[], max_selections=max_permitidas, label_visibility="collapsed")
+                                
+                                sub = st.form_submit_button("Guardar Inscripción", type="primary")
+                                
+                                if sub:
+                                    if not sel: st.error("Selecciona pruebas.")
+                                    else:
+                                        ok, m = gestionar_inscripcion_inicio(comp_id, user_id, sel)
+                                        if ok: 
+                                            st.success(f"🎯 **¡Inscripción guardada!** A entrenar con todo. ¡Te esperamos el {fecha_ev_str}, VAMOS NEWELL'S! 🔴⚫")
+                                            time.sleep(2.5) # Le damos tiempo para leer el mensaje motivacional
+                                            st.rerun()
                 st.write("")
 
     # 2. MIS REGISTROS (FRECUENCIA DE ESTILOS)
