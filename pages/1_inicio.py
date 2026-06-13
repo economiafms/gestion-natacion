@@ -2,8 +2,10 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 import altair as alt
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, date
 import time
+import uuid
+import random
 
 # --- CONFIGURACIÓN ---
 st.set_page_config(page_title="Inicio", layout="centered")
@@ -46,6 +48,70 @@ def cargar_datos_rutinas():
             "seguimiento": conn.read(worksheet="Rutinas_Seguimiento")
         }
     except: return None
+
+# --- FUNCIONES DE INSCRIPCIÓN RÁPIDA ---
+@st.cache_data(ttl="5s")
+def cargar_datos_inscripcion_inicio():
+    try:
+        df_comp = conn.read(worksheet="Competencias").copy()
+        if not df_comp.empty:
+            df_comp['fecha_evento'] = pd.to_datetime(df_comp['fecha_evento'], errors='coerce')
+            df_comp['fecha_limite'] = pd.to_datetime(df_comp['fecha_limite'], errors='coerce')
+            
+        df_ins = conn.read(worksheet="Inscripciones").copy()
+        if not df_ins.empty:
+            df_ins['codnadador'] = pd.to_numeric(df_ins['codnadador'], errors='coerce').fillna(0).astype(int)
+        return df_comp, df_ins
+    except:
+        return None, None
+
+def actualizar_con_retry_inicio(worksheet, data, max_retries=5):
+    for i in range(max_retries):
+        try:
+            conn.update(worksheet=worksheet, data=data)
+            return True, None 
+        except Exception as e:
+            if "429" in str(e) or "quota" in str(e):
+                time.sleep((2 ** i) + random.uniform(0, 1))
+                continue 
+            else:
+                return False, e
+    return False, "Error de conexión."
+
+def leer_dataset_fresco_inicio(worksheet):
+    try: return conn.read(worksheet=worksheet, ttl=0).copy()
+    except: return None
+
+def gestionar_inscripcion_inicio(id_comp, id_nadador, lista_pruebas):
+    df_ins = leer_dataset_fresco_inicio("Inscripciones")
+    if df_ins is None: df_ins = pd.DataFrame(columns=["id_inscripcion", "id_competencia", "codnadador", "pruebas", "fecha_inscripcion"])
+    if not df_ins.empty: df_ins['codnadador'] = pd.to_numeric(df_ins['codnadador'], errors='coerce').fillna(0).astype(int)
+
+    pruebas_str = ", ".join(lista_pruebas)
+    mask = (df_ins['id_competencia'] == id_comp) & (df_ins['codnadador'] == id_nadador)
+    
+    if not df_ins[mask].empty:
+        df_ins.loc[mask, 'pruebas'] = pruebas_str
+        df_ins.loc[mask, 'fecha_inscripcion'] = datetime.now().strftime("%Y-%m-%d")
+        msg = "Modificado."
+    else:
+        nuevo = {"id_inscripcion": str(uuid.uuid4()), "id_competencia": id_comp, "codnadador": int(id_nadador), "pruebas": pruebas_str, "fecha_inscripcion": datetime.now().strftime("%Y-%m-%d")}
+        df_ins = pd.concat([df_ins, pd.DataFrame([nuevo])], ignore_index=True)
+        msg = "Inscripto."
+
+    exito, _ = actualizar_con_retry_inicio("Inscripciones", df_ins)
+    if exito: st.cache_data.clear(); return True, msg
+    return False, "Error."
+
+def eliminar_inscripcion_inicio(id_comp, id_nadador):
+    df_ins = leer_dataset_fresco_inicio("Inscripciones")
+    if df_ins is None: return False, "Error."
+    if not df_ins.empty: df_ins['codnadador'] = pd.to_numeric(df_ins['codnadador'], errors='coerce').fillna(0).astype(int)
+    
+    df_ins = df_ins[~((df_ins['id_competencia'] == id_comp) & (df_ins['codnadador'] == id_nadador))]
+    exito, _ = actualizar_con_retry_inicio("Inscripciones", df_ins)
+    if exito: st.cache_data.clear(); return True, "Baja exitosa."
+    return False, "Error."
 
 # Función unificadora para mantener compatibilidad con el código existente
 def get_db():
@@ -378,6 +444,65 @@ if db and st.session_state.user_id:
                             st.info("🏅 ¡Mes completo! No tengo más rutinas pendientes.")
         
         st.write("") 
+
+        # // =========================================================
+        # // WIDGET INSCRIPCIÓN RÁPIDA (NUEVO)
+        # // =========================================================
+        df_comp, df_ins = cargar_datos_inscripcion_inicio()
+        if df_comp is not None and not df_comp.empty:
+            hoy = date.today()
+            df_view = df_comp.copy()
+            df_view = df_view.sort_values(by='fecha_evento', ascending=True, na_position='last')
+            
+            # Filtramos solo las competencias activas
+            activos = []
+            for _, row in df_view.iterrows():
+                f_ev = row['fecha_evento']
+                f_lim = row['fecha_limite']
+                dias_ev = (f_ev.date() - hoy).days if pd.notnull(f_ev) else 0
+                dias_cie = (f_lim.date() - hoy).days if pd.notnull(f_lim) else 0
+                
+                # Se considera activa si faltan días para el evento y no venció la fecha límite
+                if dias_ev >= 0 and dias_cie >= 0 and pd.notnull(f_ev) and pd.notnull(f_lim):
+                    activos.append(row)
+            
+            if activos:
+                st.markdown("<h5 style='text-align: center; color: #E30613; margin-bottom: 15px;'>🏆 TORNEOS ACTIVOS - INSCRIPCIÓN RÁPIDA</h5>", unsafe_allow_html=True)
+                for row in activos:
+                    comp_id = row['id_competencia']
+                    nombre_ev = row['nombre_evento']
+                    
+                    ins_user = pd.DataFrame()
+                    if df_ins is not None and not df_ins.empty:
+                        ins_user = df_ins[(df_ins['id_competencia'] == comp_id) & (df_ins['codnadador'] == user_id)]
+                    
+                    esta = not ins_user.empty
+                    p_hab_str = str(row.get('pruebas_habilitadas', ""))
+                    p_hab = [x.strip() for x in p_hab_str.split(",")] if p_hab_str.strip() else []
+                    max_permitidas = int(row.get('max_pruebas', 10)) if pd.notna(row.get('max_pruebas')) else 10
+                    
+                    with st.expander(f"{'✅ Inscripto en' if esta else '📝 Inscribirme a'} {nombre_ev}"):
+                        prev = [x.strip() for x in str(ins_user.iloc[0]['pruebas']).split(",")] if esta else []
+                        with st.form(f"f_idx_{comp_id}"):
+                            st.caption(f"Permitido hasta {max_permitidas} pruebas.")
+                            def_sel = [x for x in prev if x in p_hab][:max_permitidas]
+                            sel = st.multiselect("Seleccionar Pruebas", p_hab, default=def_sel, max_selections=max_permitidas, label_visibility="collapsed")
+                            
+                            c_ok, c_no = st.columns([2, 1])
+                            with c_ok: sub = st.form_submit_button("Guardar")
+                            with c_no: 
+                                delt = False
+                                if esta: delt = st.form_submit_button("Baja")
+                            
+                            if sub:
+                                if not sel: st.error("Selecciona pruebas.")
+                                else:
+                                    ok, m = gestionar_inscripcion_inicio(comp_id, user_id, sel)
+                                    if ok: st.success("OK"); time.sleep(1); st.rerun()
+                            if delt:
+                                ok, m = eliminar_inscripcion_inicio(comp_id, user_id)
+                                if ok: st.warning("Baja confirmada"); time.sleep(1); st.rerun()
+                st.write("")
 
     # 2. MIS REGISTROS (FRECUENCIA DE ESTILOS)
     mis_regs = db['tiempos'][db['tiempos']['codnadador'] == user_id].copy()
