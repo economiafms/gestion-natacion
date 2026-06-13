@@ -53,17 +53,26 @@ def cargar_datos_rutinas():
 @st.cache_data(ttl="5s")
 def cargar_datos_inscripcion_inicio():
     try:
-        df_comp = conn.read(worksheet="Competencias").copy()
-        if not df_comp.empty:
-            df_comp['fecha_evento'] = pd.to_datetime(df_comp['fecha_evento'], errors='coerce')
-            df_comp['fecha_limite'] = pd.to_datetime(df_comp['fecha_limite'], errors='coerce')
+        try:
+            df_comp = conn.read(worksheet="Competencias").copy()
+            if not df_comp.empty:
+                df_comp['fecha_evento'] = pd.to_datetime(df_comp['fecha_evento'], errors='coerce')
+                df_comp['fecha_limite'] = pd.to_datetime(df_comp['fecha_limite'], errors='coerce')
+        except: df_comp = pd.DataFrame()
             
-        df_ins = conn.read(worksheet="Inscripciones").copy()
-        if not df_ins.empty:
-            df_ins['codnadador'] = pd.to_numeric(df_ins['codnadador'], errors='coerce').fillna(0).astype(int)
-        return df_comp, df_ins
+        try:
+            df_ins = conn.read(worksheet="Inscripciones").copy()
+            if not df_ins.empty:
+                df_ins['codnadador'] = pd.to_numeric(df_ins['codnadador'], errors='coerce').fillna(0).astype(int)
+        except: df_ins = pd.DataFrame()
+            
+        try:
+            df_pil = conn.read(worksheet="Piletas").copy()
+        except: df_pil = pd.DataFrame()
+
+        return df_comp, df_ins, df_pil
     except:
-        return None, None
+        return None, None, None
 
 def actualizar_con_retry_inicio(worksheet, data, max_retries=5):
     for i in range(max_retries):
@@ -101,7 +110,6 @@ def gestionar_inscripcion_inicio(id_comp, id_nadador, lista_pruebas):
 
     exito, _ = actualizar_con_retry_inicio("Inscripciones", df_ins)
     if exito: 
-        # Solo borramos este caché, no el general, para no romper los gráficos de Altair
         cargar_datos_inscripcion_inicio.clear()
         return True, msg
     return False, "Error."
@@ -114,7 +122,6 @@ def eliminar_inscripcion_inicio(id_comp, id_nadador):
     df_ins = df_ins[~((df_ins['id_competencia'] == id_comp) & (df_ins['codnadador'] == id_nadador))]
     exito, _ = actualizar_con_retry_inicio("Inscripciones", df_ins)
     if exito: 
-        # Solo borramos este caché, no el general, para no romper los gráficos de Altair
         cargar_datos_inscripcion_inicio.clear()
         return True, "Baja exitosa."
     return False, "Error."
@@ -175,7 +182,6 @@ def intentar_desbloqueo():
 
 def guardar_seguimiento_inicio(id_rutina, id_nadador):
     try:
-        # Leemos solo la hoja necesaria sin caché para tener el último estado
         df_seg = conn.read(worksheet="Rutinas_Seguimiento", ttl=0)
         
         # OBTENER HORA ARGENTINA (UTC-3)
@@ -190,7 +196,6 @@ def guardar_seguimiento_inicio(id_rutina, id_nadador):
         df_final = pd.concat([df_seg, nuevo_registro], ignore_index=True)
         conn.update(worksheet="Rutinas_Seguimiento", data=df_final)
         
-        # Solo limpiamos el caché de RUTINAS, no el general.
         cargar_datos_rutinas.clear()
         
         return True
@@ -350,32 +355,22 @@ if db and st.session_state.user_id:
     
     st.write("") 
 
-    # // ATAJO RUTINA DIARIA (Logica Completa de Gamificación)
+    # // ATAJO RUTINA DIARIA
     if st.session_state.role == "N":
-        # HORA ARGENTINA (UTC-3)
         hoy_arg = datetime.now(timezone.utc) - timedelta(hours=3)
-        
         df_rut = db.get('rutinas')
         df_seg = db.get('seguimiento')
         
         if df_rut is not None and df_seg is not None:
-            rutinas_mes = df_rut[
-                (df_rut['anio_rutina'] == hoy_arg.year) & 
-                (df_rut['mes_rutina'] == hoy_arg.month)
-            ].copy()
-
-            # REGLA 1: Si no hay rutinas en el mes, NO mostrar el expander
+            rutinas_mes = df_rut[(df_rut['anio_rutina'] == hoy_arg.year) & (df_rut['mes_rutina'] == hoy_arg.month)].copy()
             if not rutinas_mes.empty:
-                
                 with st.expander("🏊‍♂️ ¿Hice mi rutina de hoy?", expanded=False):
-                    
                     hoy_str_corto = hoy_arg.strftime("%Y-%m-%d")
                     rutina_hoy_completada = None
                     
                     if not df_seg.empty:
                         mis_seg = df_seg[df_seg['codnadador'] == user_id].copy()
                         mis_seg['fecha_dt'] = pd.to_datetime(mis_seg['fecha_realizada']).dt.strftime("%Y-%m-%d")
-                        
                         hecho_hoy = mis_seg[mis_seg['fecha_dt'] == hoy_str_corto]
                         
                         if not hecho_hoy.empty:
@@ -385,26 +380,14 @@ if db and st.session_state.user_id:
                     else:
                         realizadas_historicas = []
 
-                    # --- LÓGICA DE ESTADOS ---
                     if rutina_hoy_completada is not None and not rutina_hoy_completada.empty:
-                        # HOY GANÓ. Verificamos si era la ÚLTIMA rutina disponible del mes.
                         r_row = rutina_hoy_completada.iloc[0]
-                        
-                        # Calculamos si quedan pendientes (excluyendo la que ya se sabe realizada)
                         pendientes_check = rutinas_mes[~rutinas_mes['id_rutina'].isin(realizadas_historicas)]
                         
                         if pendientes_check.empty:
-                            # REGLA 2: ULTIMA RUTINA -> PLACA DORADA + BALLOONS
                             st.balloons()
                             st.markdown(f"""
-                            <div style="
-                                border: 2px solid #FFD700; 
-                                border-radius: 12px; 
-                                background-color: #1a1a1a; 
-                                padding: 20px; 
-                                text-align: center;
-                                box-shadow: 0 4px 15px rgba(255, 215, 0, 0.2);
-                                margin-bottom: 20px;">
+                            <div style="border: 2px solid #FFD700; border-radius: 12px; background-color: #1a1a1a; padding: 20px; text-align: center; box-shadow: 0 4px 15px rgba(255, 215, 0, 0.2); margin-bottom: 20px;">
                                 <div style="font-size: 40px; margin-bottom: 10px;">🏆</div>
                                 <h3 style="margin: 0; color: #FFD700; font-weight: 800; letter-spacing: 1px;">¡MES COMPLETADO!</h3>
                                 <p style="color: #ccc; margin-top: 5px; font-size: 14px;">Sesión {int(r_row['nro_sesion'])} finalizada. ¡Completé todas las rutinas!</p>
@@ -414,13 +397,9 @@ if db and st.session_state.user_id:
                             </div>
                             """, unsafe_allow_html=True)
                         else:
-                            # REGLA 3: DÍA NORMAL -> MENSAJE SIMPLE
                             st.success(f"🏆 **¡Misión Cumplida!** Completé la **Sesión {int(r_row['nro_sesion'])}** hoy.")
-                        
                     else:
-                        # PENDIENTE
                         rutinas_pendientes = rutinas_mes[~rutinas_mes['id_rutina'].isin(realizadas_historicas)].sort_values('nro_sesion')
-                        
                         if not rutinas_pendientes.empty:
                             prox_sesion = rutinas_pendientes.iloc[0]
                             r_id = prox_sesion['id_rutina']
@@ -438,21 +417,17 @@ if db and st.session_state.user_id:
                                     my_bar.progress(percent_complete + 1, text="Registrando entrenamiento...")
                                 time.sleep(0.2)
                                 my_bar.empty()
-                                
                                 st.toast(f"¡Excelente! Sesión {r_nro} registrada con éxito.", icon='🏆')
-                                
                                 if guardar_seguimiento_inicio(r_id, user_id):
-                                    time.sleep(1) 
-                                    st.rerun()
+                                    time.sleep(1); st.rerun()
                         else:
                             st.info("🏅 ¡Mes completo! No tengo más rutinas pendientes.")
-        
         st.write("") 
 
         # // =========================================================
-        # // WIDGET INSCRIPCIÓN RÁPIDA Y EVENTOS ACTUALES
+        # // WIDGET INSCRIPCIÓN RÁPIDA (CON INFO DEL TORNEO)
         # // =========================================================
-        df_comp, df_ins = cargar_datos_inscripcion_inicio()
+        df_comp, df_ins, df_piletas = cargar_datos_inscripcion_inicio()
         if df_comp is not None and not df_comp.empty:
             hoy = date.today()
             df_view = df_comp.copy()
@@ -477,10 +452,8 @@ if db and st.session_state.user_id:
                     esta = not ins_user.empty
                     
                     if esta:
-                        # Si está inscripto, SIEMPRE lo mostramos en el inicio (hasta que pase la fecha del evento)
                         vista_eventos.append((row, esta, ins_user))
                     else:
-                        # Si no está inscripto, SOLO se muestra si todavía está abierta la inscripción
                         if dias_cie >= 0 and pd.notnull(f_lim):
                             vista_eventos.append((row, esta, ins_user))
             
@@ -490,10 +463,22 @@ if db and st.session_state.user_id:
                     comp_id = row['id_competencia']
                     nombre_ev = row['nombre_evento']
                     fecha_ev_str = row['fecha_evento'].strftime('%d/%m/%Y')
+                    hora_inicio = row.get('hora_inicio', '')
+                    costo = int(row['costo']) if pd.notna(row.get('costo')) else 0
+                    desc = row.get('descripcion', '')
                     
-                    # LOGICA DESPLEGABLE INTELIGENTE: Si no está inscripto se expande por defecto.
+                    # Info Pileta formateada
+                    nom_pil = str(row.get('cod_pileta', '-'))
+                    ubic_pil = "-"
+                    if df_piletas is not None and not df_piletas.empty and 'codpileta' in df_piletas.columns:
+                        d_pil = df_piletas[df_piletas['codpileta'] == nom_pil]
+                        if not d_pil.empty:
+                            club_val = d_pil.iloc[0].get('club', '')
+                            med_val = d_pil.iloc[0].get('medida', '')
+                            nom_pil = f"{club_val} ({med_val})" if med_val else str(club_val)
+                            ubic_pil = str(d_pil.iloc[0].get('ubicacion', '-'))
+                    
                     is_expanded = not esta
-
                     p_hab_str = str(row.get('pruebas_habilitadas', ""))
                     p_hab = [x.strip() for x in p_hab_str.split(",")] if p_hab_str.strip() else []
                     max_permitidas = int(row.get('max_pruebas', 10)) if pd.notna(row.get('max_pruebas')) else 10
@@ -501,44 +486,47 @@ if db and st.session_state.user_id:
                     with st.expander(f"{'✅ Inscripto en' if esta else '📝 Inscribirme a'} {nombre_ev}", expanded=is_expanded):
                         prev = [x.strip() for x in str(ins_user.iloc[0]['pruebas']).split(",")] if esta else []
                         
+                        # --- INFO BÁSICA DEL TORNEO (ESTILO AGENDA) ---
+                        st.markdown(f"""
+                        <div style="background-color: #1e1e24; border: 1px solid #444; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+                            <div style="color:#4CAF50; font-weight:bold; font-size:13px; margin-bottom:8px;">📅 {fecha_ev_str} | ⏰ {hora_inicio}</div>
+                            <div style="display:flex; gap:15px; color:#ddd; font-size:12px; margin-bottom:6px;">
+                                <div>📍 {nom_pil}</div>
+                                <div>🏙️ {ubic_pil}</div>
+                                <div>💰 ${costo}</div>
+                            </div>
+                            <div style="font-size:12px; color:#aaa; font-style: italic;">{desc}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        
                         if esta:
-                            # TARJETA INFORMATIVA SI YA ESTÁ INSCRIPTO
+                            # TARJETA INFORMATIVA
                             chips_html = "".join([f"<span style='background-color:#444; color:#fff; padding:4px 10px; border-radius:15px; font-size:12px; margin-right:6px; margin-bottom:6px; display:inline-block; border:1px solid #555;'>{p}</span>" for p in prev])
                             
                             st.markdown(f"""
                             <div style="background-color: #2b2c36; border-left: 5px solid #4CAF50; border-radius: 8px; padding: 15px; margin-bottom: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
-                                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; border-bottom: 1px solid #444; padding-bottom: 8px;">
-                                    <div style="font-size: 16px; font-weight: bold; color: white;">{nombre_ev}</div>
-                                    <div style="font-size: 13px; color: #4CAF50; font-weight: 800; background: #1e1e24; padding: 4px 10px; border-radius: 6px; border: 1px solid #333;">
-                                        📅 {fecha_ev_str}
-                                    </div>
-                                </div>
-                                <div style="font-size: 13px; color: #aaa; margin-bottom: 10px;">Estás inscripto en:</div>
+                                <div style="font-size: 13px; color: #aaa; margin-bottom: 10px;">Mis pruebas seleccionadas:</div>
                                 <div>{chips_html}</div>
                             </div>
                             """, unsafe_allow_html=True)
                             
-                            # BOTÓN DE BAJA (En caso de que no pueda ir)
+                            # BOTÓN DE BAJA
                             with st.form(f"f_baja_{comp_id}"):
                                 c1, c2 = st.columns([3, 1])
-                                with c1:
-                                    st.caption("Si ya no vas a participar, puedes darte de baja:")
-                                with c2:
-                                    sub_baja = st.form_submit_button("🗑️ Darme de Baja")
+                                with c1: st.caption("Si ya no vas a participar, puedes darte de baja:")
+                                with c2: sub_baja = st.form_submit_button("🗑️ Darme de Baja")
                                 
                                 if sub_baja:
                                     ok, m = eliminar_inscripcion_inicio(comp_id, user_id)
                                     if ok: 
                                         st.warning("Te has dado de baja. ¡Te esperamos en el próximo torneo!")
-                                        time.sleep(1.5)
-                                        st.rerun()
+                                        time.sleep(1.5); st.rerun()
 
                         else:
-                            # FORMULARIO DE INSCRIPCIÓN RÁPIDA (Si aún no está anotado)
+                            # FORMULARIO DE INSCRIPCIÓN
                             with st.form(f"f_idx_{comp_id}"):
                                 st.caption(f"Permitido hasta {max_permitidas} pruebas.")
                                 sel = st.multiselect("Seleccionar Pruebas", p_hab, default=[], max_selections=max_permitidas, label_visibility="collapsed")
-                                
                                 sub = st.form_submit_button("Guardar Inscripción", type="primary")
                                 
                                 if sub:
@@ -547,8 +535,7 @@ if db and st.session_state.user_id:
                                         ok, m = gestionar_inscripcion_inicio(comp_id, user_id, sel)
                                         if ok: 
                                             st.success(f"🎯 **¡Inscripción guardada!** A entrenar con todo. ¡Te esperamos el {fecha_ev_str}, VAMOS NEWELL'S! 🔴⚫")
-                                            time.sleep(2.5) # Tiempo extra para leer el mensaje motivacional
-                                            st.rerun()
+                                            time.sleep(2.5); st.rerun()
                 st.write("")
 
     # 2. MIS REGISTROS (FRECUENCIA DE ESTILOS)
