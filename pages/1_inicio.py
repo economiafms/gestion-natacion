@@ -279,6 +279,19 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
+# =====================================================================
+# SISTEMA DE MENSAJES FLASH (PARA EVITAR ERRORES DE WEBSOCKET)
+# =====================================================================
+if "flash_msg" in st.session_state:
+    if st.session_state.flash_type == "success":
+        st.success(st.session_state.flash_msg)
+    elif st.session_state.flash_type == "warning":
+        st.warning(st.session_state.flash_msg)
+    
+    del st.session_state.flash_msg
+    del st.session_state.flash_type
+
+
 # 1. GUÍA RÁPIDA
 if st.session_state.role == "M":
     with st.expander("📖 Guía rápida de uso – Perfil Manager", expanded=False):
@@ -398,30 +411,22 @@ if db and st.session_state.user_id:
     
     st.write("") 
 
-    # // ATAJO RUTINA DIARIA (Logica Completa de Gamificación)
+    # // ATAJO RUTINA DIARIA
     if st.session_state.role == "N":
         hoy_arg = datetime.now(timezone.utc) - timedelta(hours=3)
         df_rut = db.get('rutinas')
         df_seg = db.get('seguimiento')
         
         if df_rut is not None and df_seg is not None:
-            rutinas_mes = df_rut[
-                (df_rut['anio_rutina'] == hoy_arg.year) & 
-                (df_rut['mes_rutina'] == hoy_arg.month)
-            ].copy()
-
-            # REGLA 1: Si no hay rutinas en el mes, NO mostrar el expander
+            rutinas_mes = df_rut[(df_rut['anio_rutina'] == hoy_arg.year) & (df_rut['mes_rutina'] == hoy_arg.month)].copy()
             if not rutinas_mes.empty:
-                
                 with st.expander("🏊‍♂️ ¿Hice mi rutina de hoy?", expanded=False):
-                    
                     hoy_str_corto = hoy_arg.strftime("%Y-%m-%d")
                     rutina_hoy_completada = None
                     
                     if not df_seg.empty:
                         mis_seg = df_seg[df_seg['codnadador'] == user_id].copy()
                         mis_seg['fecha_dt'] = pd.to_datetime(mis_seg['fecha_realizada']).dt.strftime("%Y-%m-%d")
-                        
                         hecho_hoy = mis_seg[mis_seg['fecha_dt'] == hoy_str_corto]
                         
                         if not hecho_hoy.empty:
@@ -431,7 +436,6 @@ if db and st.session_state.user_id:
                     else:
                         realizadas_historicas = []
 
-                    # --- LÓGICA DE ESTADOS ---
                     if rutina_hoy_completada is not None and not rutina_hoy_completada.empty:
                         r_row = rutina_hoy_completada.iloc[0]
                         pendientes_check = rutinas_mes[~rutinas_mes['id_rutina'].isin(realizadas_historicas)]
@@ -450,10 +454,8 @@ if db and st.session_state.user_id:
                             """, unsafe_allow_html=True)
                         else:
                             st.success(f"🏆 **¡Misión Cumplida!** Completé la **Sesión {int(r_row['nro_sesion'])}** hoy.")
-                        
                     else:
                         rutinas_pendientes = rutinas_mes[~rutinas_mes['id_rutina'].isin(realizadas_historicas)].sort_values('nro_sesion')
-                        
                         if not rutinas_pendientes.empty:
                             prox_sesion = rutinas_pendientes.iloc[0]
                             r_id = prox_sesion['id_rutina']
@@ -465,21 +467,12 @@ if db and st.session_state.user_id:
                             st.write("") 
                             
                             if st.button("✅ DÍA GANADO", key=f"btn_ganado_inicio_{r_id}", type="primary", use_container_width=True):
-                                my_bar = st.progress(0, text="Registrando entrenamiento...")
-                                for percent_complete in range(100):
-                                    time.sleep(0.01) 
-                                    my_bar.progress(percent_complete + 1, text="Registrando entrenamiento...")
-                                time.sleep(0.2)
-                                my_bar.empty()
-                                
+                                # Evitamos usar progress bar con time.sleep para no romper websockets
                                 st.toast(f"¡Excelente! Sesión {r_nro} registrada con éxito.", icon='🏆')
-                                
                                 if guardar_seguimiento_inicio(r_id, user_id):
-                                    time.sleep(1) 
                                     st.rerun()
                         else:
                             st.info("🏅 ¡Mes completo! No tengo más rutinas pendientes.")
-        
         st.write("") 
 
         # // =========================================================
@@ -588,7 +581,7 @@ if db and st.session_state.user_id:
                             </div>
                             """, unsafe_allow_html=True)
                             
-                            # BOTÓN DE BAJA
+                            # BOTÓN DE BAJA SIN BLOCKING SLEEP
                             with st.form(f"f_baja_{comp_id}"):
                                 c1, c2 = st.columns([3, 1])
                                 with c1: st.caption("Si ya no vas a participar, puedes darte de baja:")
@@ -597,11 +590,12 @@ if db and st.session_state.user_id:
                                 if sub_baja:
                                     ok, m = eliminar_inscripcion_inicio(comp_id, user_id)
                                     if ok: 
-                                        st.warning("Te has dado de baja. ¡Te esperamos en el próximo torneo!")
-                                        time.sleep(1.5); st.rerun()
+                                        st.session_state.flash_msg = "🗑️ Te has dado de baja. ¡Te esperamos en el próximo torneo!"
+                                        st.session_state.flash_type = "warning"
+                                        st.rerun()
 
                         else:
-                            # FORMULARIO DE INSCRIPCIÓN
+                            # FORMULARIO DE INSCRIPCIÓN SIN BLOCKING SLEEP
                             with st.form(f"f_idx_{comp_id}"):
                                 st.caption(f"Permitido hasta {max_permitidas} pruebas.")
                                 sel = st.multiselect("Seleccionar Pruebas", p_hab, default=[], max_selections=max_permitidas, label_visibility="collapsed")
@@ -612,8 +606,9 @@ if db and st.session_state.user_id:
                                     else:
                                         ok, m = gestionar_inscripcion_inicio(comp_id, user_id, sel)
                                         if ok: 
-                                            st.success(f"🎯 **¡Inscripción guardada!** A entrenar con todo. ¡Te esperamos el {fecha_ev_str}, VAMOS NEWELL'S! 🔴⚫")
-                                            time.sleep(2.5); st.rerun()
+                                            st.session_state.flash_msg = f"🎯 **¡Inscripción guardada!** A entrenar con todo. ¡Te esperamos el {fecha_ev_str}, VAMOS NEWELL'S! 🔴⚫"
+                                            st.session_state.flash_type = "success"
+                                            st.rerun()
                 st.write("")
 
     # 2. MIS REGISTROS (FRECUENCIA DE ESTILOS)
