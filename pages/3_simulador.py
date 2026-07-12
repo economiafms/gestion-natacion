@@ -96,7 +96,7 @@ def render_tarjeta_resumen(tiempo, categoria, suma, dark=False):
         </div>
     """, unsafe_allow_html=True)
 
-# --- INICIALIZACIÓN DE ESTADO PARA BORRADOR DE EQUIPOS ---
+# --- INICIALIZACIÓN DE ESTADO Y CALLBACKS PARA BORRADOR ---
 if "equipos_borrador" not in st.session_state:
     st.session_state.equipos_borrador = []
 
@@ -253,19 +253,21 @@ if st.button("🪄 Generar Estrategia Óptima", type="primary", use_container_wi
                                 st.markdown("**Observaciones:**")
                                 st.success(comp_g)
                                 
-                            # Botón para guardar equipo en el borrador
-                            if st.button(f"💾 Guardar {label} en Borrador", key=f"save_draft_{idx}"):
-                                equipo_guardar = {
-                                    'etiqueta': f"{label} - {cat_nombre.upper()}",
-                                    'eq': row['eq'],
-                                    't': row['t'],
-                                    'cat': row['cat'],
-                                    'se': row['se'],
-                                    'estilos': [l[1] for l in legs_o]
-                                }
-                                guardar_equipo_borrador(equipo_guardar)
-                                st.success(f"Equipo guardado en borrador. Los 4 nadadores han sido liberados del pool.")
-                                st.rerun()
+                            # FIX DE BOTÓN: Callback para ejecutar el guardado antes de recargar
+                            equipo_guardar = {
+                                'etiqueta': f"{label} - {cat_nombre.upper()}",
+                                'eq': row['eq'],
+                                't': row['t'],
+                                'cat': row['cat'],
+                                'se': row['se'],
+                                'estilos': [l[1] for l in legs_o]
+                            }
+                            st.button(
+                                f"💾 Guardar {label} en Borrador", 
+                                key=f"save_draft_{idx}_{cat_nombre}", 
+                                on_click=guardar_equipo_borrador, 
+                                args=(equipo_guardar,)
+                            )
 
 # --- 7. GRILLA DE EQUIPOS GUARDADOS (BORRADOR) ---
 if st.session_state.equipos_borrador:
@@ -279,18 +281,23 @@ if st.session_state.equipos_borrador:
             with cols_head[0]:
                 st.markdown(f"#### {equipo['etiqueta']}")
             with cols_head[1]:
-                if st.button("🗑️ Desarmar", key=f"del_draft_{i}", use_container_width=True):
-                    eliminar_equipo_borrador(i)
-                    st.rerun()
+                # FIX DE BOTÓN: Callback para eliminar
+                st.button(
+                    "🗑️ Desarmar", 
+                    key=f"del_draft_{i}", 
+                    use_container_width=True, 
+                    on_click=eliminar_equipo_borrador, 
+                    args=(i,)
+                )
                     
             render_tarjeta_resumen(seg_a_tiempo(equipo['t']), equipo['cat'], equipo['se'])
             
             c_n1, c_n2, c_n3, c_n4 = st.columns(4)
             c_n1.caption(f"**1. {equipo['estilos'][0]}**")
-            c_n1.write(equipo['eq'][0])
+            c_n1.write(equipo['eq'][0].split(',')[0])
             c_n2.caption(f"**2. {equipo['estilos'][1]}**")
-            c_n2.write(equipo['eq'][1])
+            c_n2.write(equipo['eq'][1].split(',')[0])
             c_n3.caption(f"**3. {equipo['estilos'][2]}**")
-            c_n3.write(equipo['eq'][2])
+            c_n3.write(equipo['eq'][2].split(',')[0])
             c_n4.caption(f"**4. {equipo['estilos'][3]}**")
-            c_n4.write(equipo['eq'][3])
+            c_n4.write(equipo['eq'][3].split(',')[0])
