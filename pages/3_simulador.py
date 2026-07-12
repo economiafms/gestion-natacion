@@ -33,16 +33,7 @@ def cargar_datos_sim():
             "cat_relevos": conn.read(worksheet="Categorias_Relevos"),
             "piletas": conn.read(worksheet="Piletas")
         }
-        # Intentamos cargar datos de la agenda para el cruce
-        try:
-            data["competencias"] = conn.read(worksheet="Competencias")
-            data["inscripciones"] = conn.read(worksheet="Inscripciones")
-        except:
-            data["competencias"] = pd.DataFrame()
-            data["inscripciones"] = pd.DataFrame()
-
         df_n = data['nadadores'].copy()
-        df_n['codnadador'] = pd.to_numeric(df_n['codnadador'], errors='coerce').fillna(0).astype(int)
         df_n['Nombre Completo'] = df_n['apellido'].astype(str).str.upper() + ", " + df_n['nombre'].astype(str)
         df_n['Edad_Master'] = datetime.now().year - pd.to_datetime(df_n['fechanac']).dt.year
         
@@ -117,13 +108,17 @@ if "last_agenda_pool" not in st.session_state:
 
 # =====================================================================
 # TRUCO PARA DETECTAR LA ENTRADA A LA PÁGINA Y REINICIAR DE CERO
+# Streamlit destruye las keys de los widgets al cambiar de página.
+# Si "o_reg_g" (nuestro widget) no existe, significa que acabamos de entrar.
 # =====================================================================
 if "o_reg_g" not in st.session_state:
+    # Formateo absoluto: entramos limpios
     st.session_state.equipos_borrador = []
     agenda_pool = st.session_state.get("simulador_pre_pool", [])
     st.session_state.current_pool = agenda_pool.copy()
     st.session_state.last_agenda_pool = agenda_pool.copy()
 else:
+    # Ya estamos en la página. Solo miramos si la Agenda se actualizó
     agenda_pool = st.session_state.get("simulador_pre_pool", [])
     if st.session_state.last_agenda_pool != agenda_pool:
         st.session_state.equipos_borrador = []
@@ -135,11 +130,13 @@ def sync_pool():
 
 def guardar_equipo_borrador(equipo_dict):
     st.session_state.equipos_borrador.append(equipo_dict)
+    # Excluimos a los 4 nadadores del pool actual en memoria
     if "pool_opt_g" in st.session_state:
         st.session_state.current_pool = [n for n in st.session_state.pool_opt_g if n not in equipo_dict['eq']]
 
 def eliminar_equipo_borrador(index):
     equipo_recuperado = st.session_state.equipos_borrador.pop(index)
+    # Al desarmar, los devolvemos al pool actual en memoria
     if "pool_opt_g" in st.session_state:
         for n in equipo_recuperado['eq']:
             if n not in st.session_state.current_pool:
@@ -216,49 +213,17 @@ if btn_manual:
 # --- 6. SIMULADOR POR GRUPO ---
 st.divider()
 
-c_title, c_btn = st.columns([0.6, 0.4])
+c_title, c_btn = st.columns([0.8, 0.2])
 with c_title:
     st.subheader("🎯 Simulador por grupo de nadadores")
 with c_btn:
-    # REEMPLAZO DE POPOVER POR EXPANDER PARA CARGA AUTOMÁTICA
-    with st.expander("📥 Cargar inscriptos desde un Torneo", expanded=False):
-        df_comp = data.get('competencias', pd.DataFrame())
-        df_ins = data.get('inscripciones', pd.DataFrame())
-        
-        if not df_comp.empty and not df_ins.empty:
-            # Aseguramos formato texto limpio para no fallar en el cruce de IDs
-            df_comp['id_competencia'] = df_comp['id_competencia'].astype(str).str.strip()
-            df_ins['id_competencia'] = df_ins['id_competencia'].astype(str).str.strip()
-            
-            if 'fecha_evento' in df_comp.columns:
-                df_comp['fecha_evento'] = pd.to_datetime(df_comp['fecha_evento'], errors='coerce')
-                df_comp = df_comp.sort_values(by='fecha_evento', ascending=False)
-                
-            opc_comp = dict(zip(df_comp['id_competencia'], df_comp['nombre_evento']))
-            
-            def cargar_inscriptos_torneo():
-                torneo_sel = st.session_state.torneo_sel_agenda
-                if torneo_sel:
-                    df_ins['codnadador'] = pd.to_numeric(df_ins['codnadador'], errors='coerce').fillna(0).astype(int)
-                    ids_inscriptos = df_ins[df_ins['id_competencia'] == torneo_sel]['codnadador'].tolist()
-                    
-                    df_nad_filtrado = df_nad[df_nad['codnadador'].isin(ids_inscriptos)]
-                    nombres_inscriptos = df_nad_filtrado['Nombre Completo'].tolist()
-                    
-                    st.session_state.equipos_borrador = []
-                    st.session_state.current_pool = nombres_inscriptos.copy()
-                    st.session_state.simulador_pre_pool = nombres_inscriptos.copy()
-                    st.session_state.last_agenda_pool = nombres_inscriptos.copy()
-
-            st.selectbox(
-                "Selecciona el torneo a simular:", 
-                options=[""] + list(opc_comp.keys()), 
-                format_func=lambda x: opc_comp[x] if x != "" else "Seleccionar torneo...", 
-                key="torneo_sel_agenda",
-                on_change=cargar_inscriptos_torneo
-            )
-        else:
-            st.info("No hay datos de inscripciones disponibles en la base de datos.")
+    if st.button("🔄 Reiniciar Todo", use_container_width=True, help="Vacía el borrador y la selección actual"):
+        st.session_state.equipos_borrador = []
+        st.session_state.current_pool = []
+        if "simulador_pre_pool" in st.session_state:
+            st.session_state.simulador_pre_pool = []
+        st.session_state.last_agenda_pool = []
+        st.rerun()
 
 with st.container(border=True):
     # ========================================================
