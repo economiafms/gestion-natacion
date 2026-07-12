@@ -100,19 +100,24 @@ def render_tarjeta_resumen(tiempo, categoria, suma, dark=False):
 if "equipos_borrador" not in st.session_state:
     st.session_state.equipos_borrador = []
 
+# Memoria intermedia que evitará que Streamlit "olvide" a los nadadores seleccionados
+if "current_pool" not in st.session_state:
+    st.session_state.current_pool = st.session_state.get("simulador_pre_pool", [])
+
+def sync_pool():
+    st.session_state.current_pool = st.session_state.pool_opt_g
+
 def guardar_equipo_borrador(equipo_dict):
     st.session_state.equipos_borrador.append(equipo_dict)
-    # Al guardar, quitamos a esos 4 nadadores de los seleccionados actuales para limpiar la caja
-    if "pool_opt_g" in st.session_state:
-        st.session_state.pool_opt_g = [n for n in st.session_state.pool_opt_g if n not in equipo_dict['eq']]
+    # Excluímos a los 4 nadadores del selector actual
+    st.session_state.current_pool = [n for n in st.session_state.current_pool if n not in equipo_dict['eq']]
 
 def eliminar_equipo_borrador(index):
     equipo_recuperado = st.session_state.equipos_borrador.pop(index)
-    # Al desarmar, los volvemos a inyectar automáticamente en los seleccionados
-    if "pool_opt_g" in st.session_state:
-        for n in equipo_recuperado['eq']:
-            if n not in st.session_state.pool_opt_g:
-                st.session_state.pool_opt_g.append(n)
+    # Al desarmar, los inyectamos nuevamente a la memoria del selector para que no haya que buscarlos
+    for n in equipo_recuperado['eq']:
+        if n not in st.session_state.current_pool:
+            st.session_state.current_pool.append(n)
 
 # --- 5. POSTA MANUAL ---
 st.subheader("🧪 Posta Manual")
@@ -200,9 +205,8 @@ with st.container(border=True):
     # Filtrar la lista completa excluyendo los ya asignados
     lista_nadadores_disponibles = [n for n in lista_nadadores_completa if n not in nadadores_en_borrador]
     
-    # Manejo del default_pool (proveniente de la Agenda)
-    default_pool = st.session_state.get("simulador_pre_pool", [])
-    valid_default = [x for x in default_pool if x in lista_nadadores_disponibles]
+    # FIX: Validamos que los del current_pool sigan disponibles en la lista de opciones
+    valid_default = [x for x in st.session_state.current_pool if x in lista_nadadores_disponibles]
     
     st.info(f"Nadadores disponibles en el pool: **{len(lista_nadadores_disponibles)}**")
     
@@ -210,7 +214,8 @@ with st.container(border=True):
         "Seleccionar nadadores (Los ya asignados en el borrador no aparecerán aquí):", 
         options=lista_nadadores_disponibles, 
         default=valid_default, 
-        key="pool_opt_g"
+        key="pool_opt_g",
+        on_change=sync_pool
     )
     # ========================================================
 
@@ -261,7 +266,6 @@ if st.button("🪄 Generar Estrategia Óptima", type="primary", use_container_wi
                                 st.markdown("**Observaciones:**")
                                 st.success(comp_g)
                                 
-                            # FIX DE BOTÓN: Callback para ejecutar el guardado antes de recargar
                             equipo_guardar = {
                                 'etiqueta': f"{label} - {cat_nombre.upper()}",
                                 'eq': row['eq'],
@@ -289,7 +293,6 @@ if st.session_state.equipos_borrador:
             with cols_head[0]:
                 st.markdown(f"#### {equipo['etiqueta']}")
             with cols_head[1]:
-                # FIX DE BOTÓN: Callback para eliminar
                 st.button(
                     "🗑️ Desarmar", 
                     key=f"del_draft_{i}", 
