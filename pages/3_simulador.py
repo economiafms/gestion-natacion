@@ -102,9 +102,17 @@ if "equipos_borrador" not in st.session_state:
 
 def guardar_equipo_borrador(equipo_dict):
     st.session_state.equipos_borrador.append(equipo_dict)
+    # Al guardar, quitamos a esos 4 nadadores de los seleccionados actuales para limpiar la caja
+    if "pool_opt_g" in st.session_state:
+        st.session_state.pool_opt_g = [n for n in st.session_state.pool_opt_g if n not in equipo_dict['eq']]
 
 def eliminar_equipo_borrador(index):
-    st.session_state.equipos_borrador.pop(index)
+    equipo_recuperado = st.session_state.equipos_borrador.pop(index)
+    # Al desarmar, los volvemos a inyectar automáticamente en los seleccionados
+    if "pool_opt_g" in st.session_state:
+        for n in equipo_recuperado['eq']:
+            if n not in st.session_state.pool_opt_g:
+                st.session_state.pool_opt_g.append(n)
 
 # --- 5. POSTA MANUAL ---
 st.subheader("🧪 Posta Manual")
