@@ -217,12 +217,11 @@ c_title, c_btn = st.columns([0.8, 0.2])
 with c_title:
     st.subheader("🎯 Simulador por grupo de nadadores")
 with c_btn:
-    if st.button("🔄 Reiniciar Todo", use_container_width=True, help="Vacía el borrador y la selección actual"):
+    if st.button("📅 Traer de Agenda", use_container_width=True, help="Reinicia el simulador restaurando a los inscriptos de la Agenda"):
         st.session_state.equipos_borrador = []
-        st.session_state.current_pool = []
-        if "simulador_pre_pool" in st.session_state:
-            st.session_state.simulador_pre_pool = []
-        st.session_state.last_agenda_pool = []
+        agenda_pool = st.session_state.get("simulador_pre_pool", [])
+        st.session_state.current_pool = agenda_pool.copy()
+        st.session_state.last_agenda_pool = agenda_pool.copy()
         st.rerun()
 
 with st.container(border=True):
