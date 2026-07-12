@@ -216,28 +216,31 @@ if btn_manual:
 # --- 6. SIMULADOR POR GRUPO ---
 st.divider()
 
-c_title, c_btn = st.columns([0.8, 0.2])
+c_title, c_btn = st.columns([0.6, 0.4])
 with c_title:
     st.subheader("🎯 Simulador por grupo de nadadores")
 with c_btn:
-    # POPOVER DE CARGA DE AGENDA
-    with st.popover("📅 Traer de Agenda", use_container_width=True):
-        st.write("Cargar inscriptos de un torneo:")
+    # REEMPLAZO DE POPOVER POR EXPANDER PARA CARGA AUTOMÁTICA
+    with st.expander("📥 Cargar inscriptos desde un Torneo", expanded=False):
         df_comp = data.get('competencias', pd.DataFrame())
         df_ins = data.get('inscripciones', pd.DataFrame())
         
         if not df_comp.empty and not df_ins.empty:
+            # Aseguramos formato texto limpio para no fallar en el cruce de IDs
+            df_comp['id_competencia'] = df_comp['id_competencia'].astype(str).str.strip()
+            df_ins['id_competencia'] = df_ins['id_competencia'].astype(str).str.strip()
+            
             if 'fecha_evento' in df_comp.columns:
                 df_comp['fecha_evento'] = pd.to_datetime(df_comp['fecha_evento'], errors='coerce')
                 df_comp = df_comp.sort_values(by='fecha_evento', ascending=False)
                 
             opc_comp = dict(zip(df_comp['id_competencia'], df_comp['nombre_evento']))
-            sel_comp = st.selectbox("Torneo", options=[""] + list(opc_comp.keys()), format_func=lambda x: opc_comp[x] if x != "" else "Seleccionar torneo...", label_visibility="collapsed")
             
-            if st.button("📥 Cargar Inscriptos", use_container_width=True, type="primary"):
-                if sel_comp != "":
+            def cargar_inscriptos_torneo():
+                torneo_sel = st.session_state.torneo_sel_agenda
+                if torneo_sel:
                     df_ins['codnadador'] = pd.to_numeric(df_ins['codnadador'], errors='coerce').fillna(0).astype(int)
-                    ids_inscriptos = df_ins[df_ins['id_competencia'] == sel_comp]['codnadador'].tolist()
+                    ids_inscriptos = df_ins[df_ins['id_competencia'] == torneo_sel]['codnadador'].tolist()
                     
                     df_nad_filtrado = df_nad[df_nad['codnadador'].isin(ids_inscriptos)]
                     nombres_inscriptos = df_nad_filtrado['Nombre Completo'].tolist()
@@ -246,11 +249,16 @@ with c_btn:
                     st.session_state.current_pool = nombres_inscriptos.copy()
                     st.session_state.simulador_pre_pool = nombres_inscriptos.copy()
                     st.session_state.last_agenda_pool = nombres_inscriptos.copy()
-                    st.rerun()
-                else:
-                    st.warning("Selecciona un torneo de la lista.")
+
+            st.selectbox(
+                "Selecciona el torneo a simular:", 
+                options=[""] + list(opc_comp.keys()), 
+                format_func=lambda x: opc_comp[x] if x != "" else "Seleccionar torneo...", 
+                key="torneo_sel_agenda",
+                on_change=cargar_inscriptos_torneo
+            )
         else:
-            st.info("No hay inscripciones registradas.")
+            st.info("No hay datos de inscripciones disponibles en la base de datos.")
 
 with st.container(border=True):
     # ========================================================
