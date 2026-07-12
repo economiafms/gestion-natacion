@@ -96,6 +96,16 @@ def render_tarjeta_resumen(tiempo, categoria, suma, dark=False):
         </div>
     """, unsafe_allow_html=True)
 
+# --- INICIALIZACIÓN DE ESTADO PARA BORRADOR DE EQUIPOS ---
+if "equipos_borrador" not in st.session_state:
+    st.session_state.equipos_borrador = []
+
+def guardar_equipo_borrador(equipo_dict):
+    st.session_state.equipos_borrador.append(equipo_dict)
+
+def eliminar_equipo_borrador(index):
+    st.session_state.equipos_borrador.pop(index)
+
 # --- 5. POSTA MANUAL ---
 st.subheader("🧪 Posta Manual")
 with st.container(border=True):
@@ -167,22 +177,30 @@ if btn_manual:
 # --- 6. SIMULADOR POR GRUPO ---
 st.divider()
 st.subheader("🎯 Simulador por grupo de nadadores")
+
 with st.container(border=True):
     # ========================================================
-    # UPGRADE: RECOGER NADADORES ENVIADOS DESDE LA AGENDA
+    # LÓGICA DE EXCLUSIÓN PARA EL BORRADOR
     # ========================================================
     lista_nadadores_completa = sorted(df_nad['Nombre Completo'].tolist())
     
-    # 1. Buscamos si la agenda guardó algo en memoria
+    # Identificar nadadores ya asignados a equipos en el borrador
+    nadadores_en_borrador = set()
+    for equipo in st.session_state.equipos_borrador:
+        nadadores_en_borrador.update(equipo['eq'])
+        
+    # Filtrar la lista completa excluyendo los ya asignados
+    lista_nadadores_disponibles = [n for n in lista_nadadores_completa if n not in nadadores_en_borrador]
+    
+    # Manejo del default_pool (proveniente de la Agenda)
     default_pool = st.session_state.get("simulador_pre_pool", [])
+    valid_default = [x for x in default_pool if x in lista_nadadores_disponibles]
     
-    # 2. Nos aseguramos de que los nombres guardados existan de verdad (evita errores)
-    valid_default = [x for x in default_pool if x in lista_nadadores_completa]
+    st.info(f"Nadadores disponibles en el pool: **{len(lista_nadadores_disponibles)}**")
     
-    # 3. Creamos el selector, cargando los inscriptos por defecto
     pool = st.multiselect(
-        "Seleccionar nadadores:", 
-        options=lista_nadadores_completa, 
+        "Seleccionar nadadores (Los ya asignados en el borrador no aparecerán aquí):", 
+        options=lista_nadadores_disponibles, 
         default=valid_default, 
         key="pool_opt_g"
     )
@@ -195,7 +213,7 @@ with st.container(border=True):
     o_gen = "X" if "Mixto" in o_gen_sel else ("M" if "(M)" in o_gen_sel else "F")
 
 if st.button("🪄 Generar Estrategia Óptima", type="primary", use_container_width=True):
-    if len(pool) < 4: st.warning("Seleccione al menos 4 nadadores.")
+    if len(pool) < 4: st.warning("Seleccione al menos 4 nadadores del pool disponible.")
     else:
         with st.spinner("Calculando..."):
             m_map = {n: {r['codestilo']: r['segundos_calc'] for _, r in df_tiempos_50[df_tiempos_50['codnadador'] == df_nad[df_nad['Nombre Completo'] == n]['codnadador'].iloc[0]].iterrows()} for n in pool}
@@ -234,3 +252,45 @@ if st.button("🪄 Generar Estrategia Óptima", type="primary", use_container_wi
                             if comp_g:
                                 st.markdown("**Observaciones:**")
                                 st.success(comp_g)
+                                
+                            # Botón para guardar equipo en el borrador
+                            if st.button(f"💾 Guardar {label} en Borrador", key=f"save_draft_{idx}"):
+                                equipo_guardar = {
+                                    'etiqueta': f"{label} - {cat_nombre.upper()}",
+                                    'eq': row['eq'],
+                                    't': row['t'],
+                                    'cat': row['cat'],
+                                    'se': row['se'],
+                                    'estilos': [l[1] for l in legs_o]
+                                }
+                                guardar_equipo_borrador(equipo_guardar)
+                                st.success(f"Equipo guardado en borrador. Los 4 nadadores han sido liberados del pool.")
+                                st.rerun()
+
+# --- 7. GRILLA DE EQUIPOS GUARDADOS (BORRADOR) ---
+if st.session_state.equipos_borrador:
+    st.divider()
+    st.subheader("📋 Equipos Confirmados (Borrador)")
+    st.info("Los nadadores de estos equipos ya no están disponibles en el pool de arriba para generar nuevas estrategias.")
+    
+    for i, equipo in enumerate(st.session_state.equipos_borrador):
+        with st.container(border=True):
+            cols_head = st.columns([0.8, 0.2])
+            with cols_head[0]:
+                st.markdown(f"#### {equipo['etiqueta']}")
+            with cols_head[1]:
+                if st.button("🗑️ Desarmar", key=f"del_draft_{i}", use_container_width=True):
+                    eliminar_equipo_borrador(i)
+                    st.rerun()
+                    
+            render_tarjeta_resumen(seg_a_tiempo(equipo['t']), equipo['cat'], equipo['se'])
+            
+            c_n1, c_n2, c_n3, c_n4 = st.columns(4)
+            c_n1.caption(f"**1. {equipo['estilos'][0]}**")
+            c_n1.write(equipo['eq'][0])
+            c_n2.caption(f"**2. {equipo['estilos'][1]}**")
+            c_n2.write(equipo['eq'][1])
+            c_n3.caption(f"**3. {equipo['estilos'][2]}**")
+            c_n3.write(equipo['eq'][2])
+            c_n4.caption(f"**4. {equipo['estilos'][3]}**")
+            c_n4.write(equipo['eq'][3])
