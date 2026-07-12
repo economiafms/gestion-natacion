@@ -100,24 +100,47 @@ def render_tarjeta_resumen(tiempo, categoria, suma, dark=False):
 if "equipos_borrador" not in st.session_state:
     st.session_state.equipos_borrador = []
 
-# Memoria intermedia que evitará que Streamlit "olvide" a los nadadores seleccionados
 if "current_pool" not in st.session_state:
-    st.session_state.current_pool = st.session_state.get("simulador_pre_pool", [])
+    st.session_state.current_pool = []
+
+if "last_agenda_pool" not in st.session_state:
+    st.session_state.last_agenda_pool = None
+
+# =====================================================================
+# TRUCO PARA DETECTAR LA ENTRADA A LA PÁGINA Y REINICIAR DE CERO
+# Streamlit destruye las keys de los widgets al cambiar de página.
+# Si "o_reg_g" (nuestro widget) no existe, significa que acabamos de entrar.
+# =====================================================================
+if "o_reg_g" not in st.session_state:
+    # Formateo absoluto: entramos limpios
+    st.session_state.equipos_borrador = []
+    agenda_pool = st.session_state.get("simulador_pre_pool", [])
+    st.session_state.current_pool = agenda_pool.copy()
+    st.session_state.last_agenda_pool = agenda_pool.copy()
+else:
+    # Ya estamos en la página. Solo miramos si la Agenda se actualizó
+    agenda_pool = st.session_state.get("simulador_pre_pool", [])
+    if st.session_state.last_agenda_pool != agenda_pool:
+        st.session_state.equipos_borrador = []
+        st.session_state.current_pool = agenda_pool.copy()
+        st.session_state.last_agenda_pool = agenda_pool.copy()
 
 def sync_pool():
     st.session_state.current_pool = st.session_state.pool_opt_g
 
 def guardar_equipo_borrador(equipo_dict):
     st.session_state.equipos_borrador.append(equipo_dict)
-    # Excluímos a los 4 nadadores del selector actual
-    st.session_state.current_pool = [n for n in st.session_state.current_pool if n not in equipo_dict['eq']]
+    # Excluimos a los 4 nadadores del pool actual en memoria
+    if "pool_opt_g" in st.session_state:
+        st.session_state.current_pool = [n for n in st.session_state.pool_opt_g if n not in equipo_dict['eq']]
 
 def eliminar_equipo_borrador(index):
     equipo_recuperado = st.session_state.equipos_borrador.pop(index)
-    # Al desarmar, los inyectamos nuevamente a la memoria del selector para que no haya que buscarlos
-    for n in equipo_recuperado['eq']:
-        if n not in st.session_state.current_pool:
-            st.session_state.current_pool.append(n)
+    # Al desarmar, los devolvemos al pool actual en memoria
+    if "pool_opt_g" in st.session_state:
+        for n in equipo_recuperado['eq']:
+            if n not in st.session_state.current_pool:
+                st.session_state.current_pool.append(n)
 
 # --- 5. POSTA MANUAL ---
 st.subheader("🧪 Posta Manual")
@@ -189,7 +212,18 @@ if btn_manual:
 
 # --- 6. SIMULADOR POR GRUPO ---
 st.divider()
-st.subheader("🎯 Simulador por grupo de nadadores")
+
+c_title, c_btn = st.columns([0.8, 0.2])
+with c_title:
+    st.subheader("🎯 Simulador por grupo de nadadores")
+with c_btn:
+    if st.button("🔄 Reiniciar Todo", use_container_width=True, help="Vacía el borrador y la selección actual"):
+        st.session_state.equipos_borrador = []
+        st.session_state.current_pool = []
+        if "simulador_pre_pool" in st.session_state:
+            st.session_state.simulador_pre_pool = []
+        st.session_state.last_agenda_pool = []
+        st.rerun()
 
 with st.container(border=True):
     # ========================================================
@@ -205,7 +239,6 @@ with st.container(border=True):
     # Filtrar la lista completa excluyendo los ya asignados
     lista_nadadores_disponibles = [n for n in lista_nadadores_completa if n not in nadadores_en_borrador]
     
-    # FIX: Validamos que los del current_pool sigan disponibles en la lista de opciones
     valid_default = [x for x in st.session_state.current_pool if x in lista_nadadores_disponibles]
     
     st.info(f"Nadadores disponibles en el pool: **{len(lista_nadadores_disponibles)}**")
