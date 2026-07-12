@@ -267,12 +267,15 @@ elif seccion_activa == "🏊‍♂️ Relevos":
     with st.container(border=True):
         r_gen = st.selectbox("Género del Equipo", ["M", "F", "X"], index=None, placeholder="Seleccionar género primero...")
         
-        # Corrección: Filtrar los nombres basándose en el género asegurando que no haya valores nulos
+        # --- CORRECCIÓN BUG RELEVOS ---
+        # Filtro estricto que limpia la columna género y la convierte a lista para evitar errores del selectbox
         ld = []
-        if r_gen == "M":
-            ld = sorted(df_nad[df_nad['codgenero'].astype(str).str.upper() == 'M']['Nombre Completo'].dropna().unique())
-        elif r_gen == "F":
-            ld = sorted(df_nad[df_nad['codgenero'].astype(str).str.upper() == 'F']['Nombre Completo'].dropna().unique())
+        if r_gen in ["M", "F"]:
+            mask_gen = df_nad['codgenero'].astype(str).str.strip().str.upper()
+            if r_gen == "M":
+                ld = df_nad[mask_gen.isin(['M', 'MASCULINO'])]['Nombre Completo'].dropna().sort_values().tolist()
+            else:
+                ld = df_nad[mask_gen.isin(['F', 'FEMENINO'])]['Nombre Completo'].dropna().sort_values().tolist()
         elif r_gen == "X":
             ld = lista_nombres 
         
@@ -318,7 +321,7 @@ elif seccion_activa == "🏊‍♂️ Relevos":
                         base_id = data['relevos']['id_relevo'].max() if not data['relevos'].empty else 0
                         cola_id = pd.DataFrame(st.session_state.cola_relevos)['id_relevo'].max() if st.session_state.cola_relevos else 0
                         
-                        # Corrección: Extraer IDs asegurando tipo numérico
+                        # Extraer IDs asegurando tipo int y previendo nulos
                         ids_n = []
                         for n in r_n:
                             idx = df_nad[df_nad['Nombre Completo'] == n]['codnadador'].values[0]
@@ -383,6 +386,9 @@ elif seccion_activa == "🔑 Gestión Permisos":
             if st.button("💾 Actualizar Permisos", type="primary"):
                 if nuevo_perfil_code != perfil_actual:
                     try:
+                        # Actualizar en el DF original (el que subimos a Sheets)
+                        # Nota: data['users'] puede tener basura, asi que buscamos donde coincida el numero (como float o int)
+                        
                         # Estrategia segura: Convertir la columna del DF original temporalmente para encontrar el index
                         idx_match = data['users'][pd.to_numeric(data['users']['nrosocio'], errors='coerce') == int(nro_socio_sel)].index
                         
