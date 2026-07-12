@@ -67,7 +67,7 @@ df_t = data['tiempos'].copy()
 df_t['hash_validacion'] = df_t['codnadador'].astype(str) + "_" + df_t['codestilo'].astype(str) + "_" + df_t['coddistancia'].astype(str) + "_" + df_t['fecha'].astype(str)
 set_tiempos_existentes = set(df_t['hash_validacion'].unique())
 
-lista_nombres = sorted(df_nad['Nombre Completo'].unique())
+lista_nombres = sorted(df_nad['Nombre Completo'].dropna().unique())
 df_pil = data['piletas'].copy()
 col_club_pil = 'club' if 'club' in df_pil.columns else df_pil.columns[1] 
 df_pil['Detalle'] = df_pil[col_club_pil].astype(str) + " (" + df_pil['medida'].astype(str) + ")"
@@ -267,11 +267,12 @@ elif seccion_activa == "🏊‍♂️ Relevos":
     with st.container(border=True):
         r_gen = st.selectbox("Género del Equipo", ["M", "F", "X"], index=None, placeholder="Seleccionar género primero...")
         
+        # Corrección: Filtrar los nombres basándose en el género asegurando que no haya valores nulos
         ld = []
         if r_gen == "M":
-            ld = df_nad[df_nad['codgenero'] == 'M']['Nombre Completo'].sort_values().unique()
+            ld = sorted(df_nad[df_nad['codgenero'].astype(str).str.upper() == 'M']['Nombre Completo'].dropna().unique())
         elif r_gen == "F":
-            ld = df_nad[df_nad['codgenero'] == 'F']['Nombre Completo'].sort_values().unique()
+            ld = sorted(df_nad[df_nad['codgenero'].astype(str).str.upper() == 'F']['Nombre Completo'].dropna().unique())
         elif r_gen == "X":
             ld = lista_nombres 
         
@@ -316,7 +317,13 @@ elif seccion_activa == "🏊‍♂️ Relevos":
                     else:
                         base_id = data['relevos']['id_relevo'].max() if not data['relevos'].empty else 0
                         cola_id = pd.DataFrame(st.session_state.cola_relevos)['id_relevo'].max() if st.session_state.cola_relevos else 0
-                        ids_n = [df_nad[df_nad['Nombre Completo'] == n]['codnadador'].values[0] for n in r_n]
+                        
+                        # Corrección: Extraer IDs asegurando tipo numérico
+                        ids_n = []
+                        for n in r_n:
+                            idx = df_nad[df_nad['Nombre Completo'] == n]['codnadador'].values[0]
+                            ids_n.append(int(idx))
+
                         id_pil_rel = df_pil[df_pil['Detalle'] == r_pil]['codpileta'].values[0]
 
                         st.session_state.cola_relevos.append({
@@ -376,9 +383,6 @@ elif seccion_activa == "🔑 Gestión Permisos":
             if st.button("💾 Actualizar Permisos", type="primary"):
                 if nuevo_perfil_code != perfil_actual:
                     try:
-                        # Actualizar en el DF original (el que subimos a Sheets)
-                        # Nota: data['users'] puede tener basura, asi que buscamos donde coincida el numero (como float o int)
-                        
                         # Estrategia segura: Convertir la columna del DF original temporalmente para encontrar el index
                         idx_match = data['users'][pd.to_numeric(data['users']['nrosocio'], errors='coerce') == int(nro_socio_sel)].index
                         
