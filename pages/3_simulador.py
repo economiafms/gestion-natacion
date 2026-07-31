@@ -108,17 +108,13 @@ if "last_agenda_pool" not in st.session_state:
 
 # =====================================================================
 # TRUCO PARA DETECTAR LA ENTRADA A LA PÁGINA Y REINICIAR DE CERO
-# Streamlit destruye las keys de los widgets al cambiar de página.
-# Si "o_reg_g" (nuestro widget) no existe, significa que acabamos de entrar.
 # =====================================================================
 if "o_reg_g" not in st.session_state:
-    # Formateo absoluto: entramos limpios
     st.session_state.equipos_borrador = []
     agenda_pool = st.session_state.get("simulador_pre_pool", [])
     st.session_state.current_pool = agenda_pool.copy()
     st.session_state.last_agenda_pool = agenda_pool.copy()
 else:
-    # Ya estamos en la página. Solo miramos si la Agenda se actualizó
     agenda_pool = st.session_state.get("simulador_pre_pool", [])
     if st.session_state.last_agenda_pool != agenda_pool:
         st.session_state.equipos_borrador = []
@@ -130,13 +126,11 @@ def sync_pool():
 
 def guardar_equipo_borrador(equipo_dict):
     st.session_state.equipos_borrador.append(equipo_dict)
-    # Excluimos a los 4 nadadores del pool actual en memoria
     if "pool_opt_g" in st.session_state:
         st.session_state.current_pool = [n for n in st.session_state.pool_opt_g if n not in equipo_dict['eq']]
 
 def eliminar_equipo_borrador(index):
     equipo_recuperado = st.session_state.equipos_borrador.pop(index)
-    # Al desarmar, los devolvemos al pool actual en memoria
     if "pool_opt_g" in st.session_state:
         for n in equipo_recuperado['eq']:
             if n not in st.session_state.current_pool:
@@ -161,7 +155,6 @@ with st.container(border=True):
 
     btn_manual = st.button("🚀 Calcular Posta", use_container_width=True)
 
-# Contenedor para resultados manuales
 res_manual_container = st.container()
 
 if btn_manual:
@@ -226,17 +219,12 @@ with c_btn:
         st.rerun()
 
 with st.container(border=True):
-    # ========================================================
-    # LÓGICA DE EXCLUSIÓN PARA EL BORRADOR
-    # ========================================================
     lista_nadadores_completa = sorted(df_nad['Nombre Completo'].tolist())
     
-    # Identificar nadadores ya asignados a equipos en el borrador
     nadadores_en_borrador = set()
     for equipo in st.session_state.equipos_borrador:
         nadadores_en_borrador.update(equipo['eq'])
         
-    # Filtrar la lista completa excluyendo los ya asignados
     lista_nadadores_disponibles = [n for n in lista_nadadores_completa if n not in nadadores_en_borrador]
     
     valid_default = [x for x in st.session_state.current_pool if x in lista_nadadores_disponibles]
@@ -250,7 +238,6 @@ with st.container(border=True):
         key="pool_opt_g",
         on_change=sync_pool
     )
-    # ========================================================
 
     c1, c2, c3 = st.columns(3)
     o_reg = c1.selectbox("Reglamento", data['cat_relevos']['tipo_reglamento'].unique(), key="o_reg_g")
@@ -294,11 +281,33 @@ if st.button("🪄 Generar Estrategia Óptima", type="primary", use_container_wi
                                 cs[j].write(row['eq'][j].split(',')[0]) # Solo apellido
                                 cs[j].code(seg_a_tiempo(m_map[row['eq'][j]].get(legs_o[j][0], 999.0)))
                             
+                            # --- OBSERVACIONES Y ANTECEDENTES PARA SIMULADOR GRUPO ---
+                            obs_lista_g = []
+                            
+                            # 1. Competitividad
                             comp_g = analizar_competitividad(row['t'], row['se'], o_gen)
                             if comp_g:
-                                st.markdown("**Observaciones:**")
-                                st.success(comp_g)
+                                obs_lista_g.append(comp_g)
                                 
+                            # 2. Historial de los 4 nadadores
+                            ids_eq = sorted([int(df_nad[df_nad['Nombre Completo'] == n]['codnadador'].iloc[0]) for n in row['eq']])
+                            hist_g = data['relevos'][data['relevos'].apply(lambda r: sorted([int(r['nadador_1']), int(r['nadador_2']), int(r['nadador_3']), int(r['nadador_4'])]) == ids_eq if pd.notnull(r['nadador_1']) else False, axis=1)]
+                            
+                            if not hist_g.empty:
+                                ant_g = hist_g.sort_values('tiempo_final').iloc[0]
+                                ip_g = dict_piletas.get(ant_g['codpileta'], {"club": "Sede ?", "medida": "-"})
+                                obs_lista_g.append(f"⏱️ **YA NADARON JUNTOS:** Tienen un registro oficial de **{ant_g['tiempo_final']}** en {ip_g['club']} ({ip_g['medida']}) el {ant_g['fecha']}.")
+                            
+                            # Renderizar observaciones si hay alguna
+                            if obs_lista_g:
+                                st.markdown("---")
+                                st.markdown("### 📋 Observaciones")
+                                for obs in obs_lista_g:
+                                    if "COMPETITIVO" in obs or "PODIO" in obs:
+                                        st.success(obs)
+                                    else:
+                                        st.info(obs)
+                            
                             equipo_guardar = {
                                 'etiqueta': f"{label} - {cat_nombre.upper()}",
                                 'eq': row['eq'],
