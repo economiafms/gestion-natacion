@@ -496,21 +496,30 @@ font-weight:bold; height:fit-content;">{badge}</span>
                         st.caption("No hay inscriptos todavía.")
                     else:
                         st.markdown("##### 🏊‍♂️ Nómina de Nadadores")
-                        st.dataframe(
-                            d_full[['Nombre', 'codgenero', 'Cat', 'pruebas']].rename(columns={'codgenero':'Gen', 'pruebas':'Pruebas Inscriptas'}),
-                            hide_index=True,
-                            use_container_width=True,
-                            column_config={
-                                "Pruebas Inscriptas": st.column_config.TextColumn("Pruebas Inscriptas", width="large")
-                            }
-                        )
+                        
+                        # Grilla Custom con botón de borrado en línea
+                        enc1, enc2, enc3, enc4, enc5 = st.columns([3, 1, 1, 4, 1])
+                        enc1.caption("**Nombre**")
+                        enc2.caption("**Gen**")
+                        enc3.caption("**Cat**")
+                        enc4.caption("**Pruebas Inscriptas**")
+                        enc5.caption("**Baja**")
+                        
+                        for _, row_ins in d_full.iterrows():
+                            c1, c2, c3, c4, c5 = st.columns([3, 1, 1, 4, 1])
+                            c1.write(row_ins['Nombre'])
+                            c2.write(row_ins['codgenero'])
+                            c3.write(row_ins['Cat'])
+                            c4.write(row_ins['pruebas'])
+                            if c5.button("❌", key=f"del_ins_{comp_id}_{row_ins['codnadador']}", help="Eliminar a este nadador"):
+                                eliminar_inscripcion(comp_id, row_ins['codnadador'])
+                                set_flash_message(f"Inscripción de {row_ins['Nombre']} eliminada.", "warning")
+                                st.rerun()
                     
                     st.divider()
                     st.markdown("##### ➕ Alta / Modificación Manual")
                     with st.container(border=True):
-                        # Preparamos el diccionario de todos los nadadores disponibles
                         opc_nadadores = dict(zip(df_nadadores['codnadador'], df_nadadores['apellido'] + ", " + df_nadadores['nombre']))
-                        # Ordenamos alfabéticamente para facilitar la búsqueda
                         opc_nadadores = {k: v for k, v in sorted(opc_nadadores.items(), key=lambda item: item[1])}
                         
                         nad_sel = st.selectbox(
@@ -520,7 +529,6 @@ font-weight:bold; height:fit-content;">{badge}</span>
                             key=f"admin_nad_{comp_id}"
                         )
                         
-                        # Recuperar pruebas si el nadador seleccionado ya está inscripto
                         prev_admin = []
                         if not d_full.empty:
                             nad_existente = d_full[d_full['codnadador'] == nad_sel]
@@ -529,8 +537,6 @@ font-weight:bold; height:fit-content;">{badge}</span>
                         
                         def_sel_admin = [x for x in prev_admin if x in p_hab][:max_permitidas]
 
-                        # Usamos una clave dinámica atada al ID del nadador para forzar 
-                        # la recarga de las opciones por defecto al cambiar el SelectBox
                         pruebas_sel = st.multiselect(
                             "Seleccionar pruebas (se autocompleta si ya está inscripto):", 
                             p_hab, 
@@ -547,21 +553,6 @@ font-weight:bold; height:fit-content;">{badge}</span>
                                 if ok:
                                     set_flash_message("Inscripción registrada por el entrenador.", "success")
                                     st.rerun()
-
-                    if not d_full.empty:
-                        st.divider()
-                        st.markdown("##### ⚠️ Eliminar Inscripción")
-                        with st.container(border=True):
-                            u_del = st.selectbox(
-                                "Seleccionar nadador para dar de baja:", 
-                                d_full['codnadador'].unique(), 
-                                format_func=lambda x: d_full[d_full['codnadador']==x]['Nombre'].values[0],
-                                key=f"s_del_{comp_id}"
-                            )
-                            if st.button("Confirmar Baja", key=f"b_del_{comp_id}", type="primary", use_container_width=True):
-                                eliminar_inscripcion(comp_id, u_del)
-                                set_flash_message("Baja procesada correctamente.", "warning")
-                                st.rerun()
 
                 with t2:
                     l_pre = [x.strip() for x in str(row.get('pruebas_habilitadas', "")).split(",")] if str(row.get('pruebas_habilitadas', "")).strip() else LISTA_PRUEBAS
