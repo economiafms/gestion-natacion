@@ -83,7 +83,7 @@ def tiempo_a_seg(t_str):
 
 @st.cache_data(ttl="5s")
 def cargar_datos_agenda():
-    """Carga todas las tablas necesarias, agregando tiempos para el Upgrade."""
+    """Carga todas las tablas necesarias."""
     try:
         try:
             df_comp = conn.read(worksheet="Competencias").copy()
@@ -108,10 +108,8 @@ def cargar_datos_agenda():
         except:
             df_nad = pd.DataFrame(columns=["codnadador", "nombre", "apellido", "fechanac", "codgenero"])
 
-        try:
-            df_pil = conn.read(worksheet="Piletas").copy()
-        except:
-            df_pil = pd.DataFrame(columns=["codpileta", "club", "medida", "ubicacion"])
+        try: df_pil = conn.read(worksheet="Piletas").copy()
+        except: df_pil = pd.DataFrame(columns=["codpileta", "club", "medida", "ubicacion"])
 
         try: df_tiempos = conn.read(worksheet="Tiempos").copy()
         except: df_tiempos = pd.DataFrame()
@@ -164,10 +162,12 @@ def buscar_mejor_tiempo(prueba, df_t_nadador):
         return ""
     return ""
 
-# ==========================================
-# 5. FUNCIONES CRUD
-# ==========================================
+def set_flash_message(mensaje, tipo="success"):
+    st.session_state.flash_msg = {"texto": mensaje, "tipo": tipo}
 
+# ==========================================
+# 5. FUNCIONES CRUD (USANDO CALLBACKS)
+# ==========================================
 def guardar_competencia(id_comp, nombre, fecha_ev, hora, cod_pil, fecha_lim, costo, desc, lista_pruebas_hab, max_pru=10):
     df_comp = leer_dataset_fresco("Competencias")
     if df_comp is None: df_comp = pd.DataFrame(columns=["id_competencia", "nombre_evento", "fecha_evento", "hora_inicio", "cod_pileta", "fecha_limite", "costo", "descripcion", "pruebas_habilitadas", "max_pruebas"])
@@ -243,8 +243,62 @@ def eliminar_inscripcion(id_comp, id_nadador):
     if exito: st.cache_data.clear(); return True, "Baja exitosa."
     return False, "Error."
 
-def set_flash_message(mensaje, tipo="success"):
-    st.session_state.flash_msg = {"texto": mensaje, "tipo": tipo}
+# --- LOGICA DE CALLBACKS (Sin reruns manuales) ---
+def cb_crear_evento():
+    n = st.session_state.f_cr_nom
+    p = st.session_state.f_cr_sede
+    f = st.session_state.f_cr_fec
+    h = st.session_state.f_cr_hor
+    c = st.session_state.f_cr_cie
+    cost = st.session_state.f_cr_cost
+    hab = st.session_state.f_cr_pru
+    m = st.session_state.f_cr_max
+    d = st.session_state.f_cr_desc
+    if n and p:
+        ok, msg = guardar_competencia(None, n, f, h, p, c, cost, d, hab, m)
+        if ok: set_flash_message(msg, "success")
+    else:
+        set_flash_message("Faltan datos obligatorios.", "warning")
+
+def cb_guardar_usr(c_id):
+    sel = st.session_state[f"usr_pru_{c_id}"]
+    if not sel:
+        set_flash_message("Selecciona al menos una prueba.", "error")
+    else:
+        ok, m = gestionar_inscripcion(c_id, mi_id, sel)
+        if ok: set_flash_message(m, "success")
+
+def cb_baja_usr(c_id):
+    ok, m = eliminar_inscripcion(c_id, mi_id)
+    if ok: set_flash_message("Inscripción cancelada.", "warning")
+
+def cb_baja_grid(c_id, n_id, nom):
+    ok, m = eliminar_inscripcion(c_id, n_id)
+    if ok: set_flash_message(f"Inscripción de {nom} eliminada.", "warning")
+
+def cb_alta_adm(c_id, k_nad, k_pru):
+    nad = st.session_state[k_nad]
+    pru = st.session_state[k_pru]
+    if not pru:
+        set_flash_message("Selecciona al menos una prueba.", "error")
+    else:
+        ok, m = gestionar_inscripcion(c_id, nad, pru)
+        if ok: set_flash_message("Inscripción registrada por el entrenador.", "success")
+
+def cb_editar_evento(c_id, h_in, p_in):
+    nn = st.session_state[f"ed_nom_{c_id}"]
+    nc = st.session_state[f"ed_cost_{c_id}"]
+    nf = st.session_state[f"ed_fec_{c_id}"]
+    nl = st.session_state[f"ed_cie_{c_id}"]
+    nh = st.session_state[f"ed_hab_{c_id}"]
+    nm = st.session_state[f"ed_max_{c_id}"]
+    nd = st.session_state[f"ed_desc_{c_id}"]
+    ok, m = guardar_competencia(c_id, nn, nf, h_in, p_in, nl, nc, nd, nh, nm)
+    if ok: set_flash_message("Evento actualizado correctamente.", "success")
+
+def cb_elim_evento(c_id):
+    ok, m = eliminar_competencia(c_id)
+    if ok: set_flash_message("Evento eliminado.", "warning")
 
 # ==========================================
 # 6. UI PRINCIPAL
@@ -284,30 +338,23 @@ if rol in ["M", "P"]:
     with st.expander("🛠️ Crear Nuevo Evento", expanded=False):
         with st.form("form_crear"):
             c1, c2 = st.columns(2)
-            n_in = c1.text_input("Nombre Evento")
+            c1.text_input("Nombre Evento", key="f_cr_nom")
             opc_pil = df_piletas['codpileta'].tolist() if not df_piletas.empty else []
-            p_in = c2.selectbox("Sede", opc_pil, format_func=lambda x: f"{df_piletas[df_piletas['codpileta']==x].iloc[0]['club']} - {df_piletas[df_piletas['codpileta']==x].iloc[0]['ubicacion']}" if opc_pil else x)
+            c2.selectbox("Sede", opc_pil, format_func=lambda x: f"{df_piletas[df_piletas['codpileta']==x].iloc[0]['club']} - {df_piletas[df_piletas['codpileta']==x].iloc[0]['ubicacion']}" if opc_pil else x, key="f_cr_sede")
             
             c3, c4 = st.columns(2)
-            f_in = c3.date_input("Fecha", min_value=datetime.today(), format="DD/MM/YYYY")
-            h_in = c4.time_input("Hora", value=datetime.strptime("08:30", "%H:%M").time())
+            c3.date_input("Fecha", min_value=datetime.today(), format="DD/MM/YYYY", key="f_cr_fec")
+            c4.time_input("Hora", value=datetime.strptime("08:30", "%H:%M").time(), key="f_cr_hor")
            
             c5, c6 = st.columns(2)
-            fl_in = c5.date_input("Cierre Inscripción", min_value=datetime.today(), format="DD/MM/YYYY")
-            cost_in = c6.number_input("Costo $", min_value=0, step=1000)
+            c5.date_input("Cierre Inscripción", min_value=datetime.today(), format="DD/MM/YYYY", key="f_cr_cie")
+            c6.number_input("Costo $", min_value=0, step=1000, key="f_cr_cost")
             
-            hab_in = st.multiselect("Pruebas Habilitadas", LISTA_PRUEBAS, default=LISTA_PRUEBAS)
-            max_in = st.selectbox("Máximo de pruebas por inscripto", options=list(range(1, 11)), index=9)
-            d_in = st.text_area("Descripción")
+            st.multiselect("Pruebas Habilitadas", LISTA_PRUEBAS, default=LISTA_PRUEBAS, key="f_cr_pru")
+            st.selectbox("Máximo de pruebas por inscripto", options=list(range(1, 11)), index=9, key="f_cr_max")
+            st.text_area("Descripción", key="f_cr_desc")
             
-            if st.form_submit_button("Guardar Evento"):
-                if n_in and p_in:
-                    ok, m = guardar_competencia(None, n_in, f_in, h_in, p_in, fl_in, cost_in, d_in, hab_in, max_in)
-                    if ok:
-                        set_flash_message(m, "success")
-                        st.rerun()
-                else: 
-                    st.warning("Faltan datos.")
+            st.form_submit_button("Guardar Evento", on_click=cb_crear_evento)
 
 st.divider()
 
@@ -458,31 +505,15 @@ font-weight:bold; height:fit-content;">{badge}</span>
             label = "✅ Gestionar Inscripción" if esta else "📝 Inscribirse"
             with st.expander(label):
                 prev = [x.strip() for x in str(ins_user.iloc[0]['pruebas']).split(",")] if esta else []
-                with st.form(f"f_{comp_id}"):
+                with st.form(f"f_usr_{comp_id}"):
                     st.info(f"⚠️ Permitido hasta **{max_permitidas}** pruebas por nadador.")
-                    
                     def_sel = [x for x in prev if x in p_hab][:max_permitidas]
-                    sel = st.multiselect("Pruebas Habilitadas", p_hab, default=def_sel, max_selections=max_permitidas)
+                    st.multiselect("Pruebas Habilitadas", p_hab, default=def_sel, max_selections=max_permitidas, key=f"usr_pru_{comp_id}")
                     
                     c_ok, c_no = st.columns([3, 1])
-                    with c_ok: sub = st.form_submit_button("💾 Guardar")
+                    with c_ok: st.form_submit_button("💾 Guardar", on_click=cb_guardar_usr, args=(comp_id,))
                     with c_no: 
-                        delt = False
-                        if esta: delt = st.form_submit_button("🗑️ Baja", type="secondary")
-                    
-                    if sub:
-                        if not sel: 
-                            st.error("Selecciona pruebas.")
-                        else:
-                            ok, m = gestionar_inscripcion(comp_id, mi_id, sel)
-                            if ok:
-                                set_flash_message(m, "success")
-                                st.rerun()
-                    if delt:
-                        ok, m = eliminar_inscripcion(comp_id, mi_id)
-                        if ok:
-                            set_flash_message(m, "warning")
-                            st.rerun()
+                        if esta: st.form_submit_button("🗑️ Baja", type="secondary", on_click=cb_baja_usr, args=(comp_id,))
         elif esta:
             st.success(f"✅ Inscripto en: {ins_user.iloc[0]['pruebas']}")
 
@@ -497,18 +528,19 @@ font-weight:bold; height:fit-content;">{badge}</span>
                     else:
                         st.markdown("##### 🏊‍♂️ Nómina de Nadadores")
                         
-                        # Grilla Custom con botón de borrado en línea (Ajuste de anchos y salto de línea)
-                        col_ratios = [3.5, 0.5, 1.5, 4.0, 0.5]
+                        # Grilla Custom con botón de borrado en línea (Ajuste de anchos y salto de línea en titulos)
+                        col_ratios = [3.2, 0.8, 1.2, 4.0, 0.6]
                         enc1, enc2, enc3, enc4, enc5 = st.columns(col_ratios)
-                        enc1.caption("**Nombre**")
-                        enc2.caption("**Gen**")
-                        enc3.caption("**Cat**")
-                        enc4.caption("**Pruebas Inscriptas**")
-                        enc5.caption("**Baja**")
+                        
+                        estilo_enc = "style='white-space: nowrap; font-size: 13px; color: #aaa; font-weight: bold;'"
+                        enc1.markdown(f"<div {estilo_enc}>Nombre</div>", unsafe_allow_html=True)
+                        enc2.markdown(f"<div {estilo_enc}>Gen</div>", unsafe_allow_html=True)
+                        enc3.markdown(f"<div {estilo_enc}>Cat</div>", unsafe_allow_html=True)
+                        enc4.markdown(f"<div {estilo_enc}>Pruebas Inscriptas</div>", unsafe_allow_html=True)
+                        enc5.markdown(f"<div {estilo_enc}>Baja</div>", unsafe_allow_html=True)
                         
                         for _, row_ins in d_full.iterrows():
                             c1, c2, c3, c4, c5 = st.columns(col_ratios)
-                            # Estilo para alinear verticalmente con el botón y forzar a que no haya salto de línea (nowrap)
                             estilo_texto = "style='margin-top: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px;'"
                             
                             c1.markdown(f"<div {estilo_texto}>{row_ins['Nombre']}</div>", unsafe_allow_html=True)
@@ -516,10 +548,8 @@ font-weight:bold; height:fit-content;">{badge}</span>
                             c3.markdown(f"<div {estilo_texto}>{row_ins['Cat']}</div>", unsafe_allow_html=True)
                             c4.markdown(f"<div style='margin-top: 8px; font-size: 14px;'>{row_ins['pruebas']}</div>", unsafe_allow_html=True)
                             
-                            if c5.button("❌", key=f"del_ins_{comp_id}_{row_ins['codnadador']}", help="Eliminar a este nadador"):
-                                eliminar_inscripcion(comp_id, row_ins['codnadador'])
-                                set_flash_message(f"Inscripción de {row_ins['Nombre']} eliminada.", "warning")
-                                st.rerun()
+                            # Botón tipo "tertiary" elimina el recuadro de fondo nativo del botón
+                            c5.button("❌", key=f"del_ins_{comp_id}_{row_ins['codnadador']}", help="Eliminar a este nadador", type="tertiary", on_click=cb_baja_grid, args=(comp_id, row_ins['codnadador'], row_ins['Nombre']))
                     
                     st.divider()
                     st.markdown("##### ➕ Alta / Modificación Manual")
@@ -531,7 +561,7 @@ font-weight:bold; height:fit-content;">{badge}</span>
                             "Seleccionar nadador:", 
                             options=list(opc_nadadores.keys()), 
                             format_func=lambda x: opc_nadadores[x],
-                            key=f"admin_nad_{comp_id}"
+                            key=f"adm_nad_{comp_id}"
                         )
                         
                         prev_admin = []
@@ -541,23 +571,17 @@ font-weight:bold; height:fit-content;">{badge}</span>
                                 prev_admin = [x.strip() for x in str(nad_existente.iloc[0]['pruebas']).split(",") if x.strip()]
                         
                         def_sel_admin = [x for x in prev_admin if x in p_hab][:max_permitidas]
-
-                        pruebas_sel = st.multiselect(
+                        k_pru_admin = f"adm_pru_{comp_id}_{nad_sel}"
+                        
+                        st.multiselect(
                             "Seleccionar pruebas (se autocompleta si ya está inscripto):", 
                             p_hab, 
                             default=def_sel_admin,
                             max_selections=max_permitidas,
-                            key=f"admin_pru_{comp_id}_{nad_sel}"
+                            key=k_pru_admin
                         )
                         
-                        if st.button("💾 Guardar Inscripción", key=f"btn_admin_save_{comp_id}", type="primary"):
-                            if not pruebas_sel:
-                                st.warning("Selecciona al menos una prueba.")
-                            else:
-                                ok, m = gestionar_inscripcion(comp_id, nad_sel, pruebas_sel)
-                                if ok:
-                                    set_flash_message("Inscripción registrada por el entrenador.", "success")
-                                    st.rerun()
+                        st.button("💾 Guardar Inscripción", key=f"btn_adm_save_{comp_id}", type="primary", on_click=cb_alta_adm, args=(comp_id, f"adm_nad_{comp_id}", k_pru_admin))
 
                 with t2:
                     l_pre = [x.strip() for x in str(row.get('pruebas_habilitadas', "")).split(",")] if str(row.get('pruebas_habilitadas', "")).strip() else LISTA_PRUEBAS
@@ -566,26 +590,19 @@ font-weight:bold; height:fit-content;">{badge}</span>
 
                     with st.form(f"ed_{comp_id}"):
                         ce1, ce2 = st.columns(2)
-                        nn = ce1.text_input("Nombre", value=row['nombre_evento'])
-                        nc = ce2.number_input("Costo", value=int(row['costo']) if pd.notna(row['costo']) else 0)
+                        ce1.text_input("Nombre", value=row['nombre_evento'], key=f"ed_nom_{comp_id}")
+                        ce2.number_input("Costo", value=int(row['costo']) if pd.notna(row['costo']) else 0, key=f"ed_cost_{comp_id}")
                         
                         ce3, ce4 = st.columns(2)
-                        nf = ce3.date_input("Fecha", value=pd.to_datetime(row['fecha_dt']), format="DD/MM/YYYY")
-                        nl = ce4.date_input("Cierre", value=pd.to_datetime(f_lim), format="DD/MM/YYYY")
+                        ce3.date_input("Fecha", value=pd.to_datetime(row['fecha_dt']), format="DD/MM/YYYY", key=f"ed_fec_{comp_id}")
+                        ce4.date_input("Cierre", value=pd.to_datetime(f_lim), format="DD/MM/YYYY", key=f"ed_cie_{comp_id}")
                         
-                        nh = st.multiselect("Pruebas", LISTA_PRUEBAS, default=[x for x in l_pre if x in LISTA_PRUEBAS])
-                        nm = st.selectbox("Máximo de pruebas por inscripto", options=list(range(1, 11)), index=idx_max)
-                        nd = st.text_area("Desc.", value=row['descripcion'])
+                        st.multiselect("Pruebas", LISTA_PRUEBAS, default=[x for x in l_pre if x in LISTA_PRUEBAS], key=f"ed_hab_{comp_id}")
+                        st.selectbox("Máximo de pruebas por inscripto", options=list(range(1, 11)), index=idx_max, key=f"ed_max_{comp_id}")
+                        st.text_area("Desc.", value=row['descripcion'], key=f"ed_desc_{comp_id}")
                         
-                        if st.form_submit_button("Actualizar"):
-                            guardar_competencia(comp_id, nn, nf, row['hora_inicio'], row['cod_pileta'], nl, nc, nd, nh, nm)
-                            set_flash_message("Evento actualizado correctamente.", "success")
-                            st.rerun()
-                        
-                        if st.form_submit_button("⚠️ ELIMINAR EVENTO", type="primary"):
-                            eliminar_competencia(comp_id)
-                            set_flash_message("Evento eliminado.", "warning")
-                            st.rerun()
+                        st.form_submit_button("Actualizar", on_click=cb_editar_evento, args=(comp_id, row['hora_inicio'], row['cod_pileta']))
+                        st.form_submit_button("⚠️ ELIMINAR EVENTO", type="primary", on_click=cb_elim_evento, args=(comp_id,))
 
                 with t3:
                     st.markdown("##### 🚀 Enviar Inscriptos al Simulador")
@@ -594,10 +611,12 @@ font-weight:bold; height:fit-content;">{badge}</span>
                     if not d_full.empty:
                         nombres_inscriptos = (d_full['apellido'].astype(str).str.upper() + ", " + d_full['nombre'].astype(str)).tolist()
                         
-                        if st.button("Ir al Simulador con estos nadadores", key=f"btn_sim_comp_{comp_id}", type="primary", use_container_width=True):
+                        # Aquí el st.switch_page va en un callback porque los botones puros no frenan la ejecución hasta el final.
+                        def cb_ir_sim():
                             st.session_state.simulador_pre_pool = nombres_inscriptos
-                            if "pool_opt_g" in st.session_state:
-                                del st.session_state["pool_opt_g"]
+                            if "pool_opt_g" in st.session_state: del st.session_state["pool_opt_g"]
+                            
+                        if st.button("Ir al Simulador con estos nadadores", key=f"btn_sim_comp_{comp_id}", type="primary", use_container_width=True, on_click=cb_ir_sim):
                             st.switch_page("pages/3_simulador.py")
                     else:
                         st.warning("No podés acceder al simulador si no hay nadadores inscriptos.")
