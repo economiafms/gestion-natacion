@@ -497,8 +497,9 @@ font-weight:bold; height:fit-content;">{badge}</span>
                     else:
                         st.markdown("##### 🏊‍♂️ Nómina de Nadadores")
                         
-                        # Grilla Custom con botón de borrado en línea
-                        enc1, enc2, enc3, enc4, enc5 = st.columns([3, 1, 1, 4, 1])
+                        # Grilla Custom con botón de borrado en línea (Ajuste de anchos y salto de línea)
+                        col_ratios = [3.5, 0.5, 1.5, 4.0, 0.5]
+                        enc1, enc2, enc3, enc4, enc5 = st.columns(col_ratios)
                         enc1.caption("**Nombre**")
                         enc2.caption("**Gen**")
                         enc3.caption("**Cat**")
@@ -506,11 +507,15 @@ font-weight:bold; height:fit-content;">{badge}</span>
                         enc5.caption("**Baja**")
                         
                         for _, row_ins in d_full.iterrows():
-                            c1, c2, c3, c4, c5 = st.columns([3, 1, 1, 4, 1])
-                            c1.write(row_ins['Nombre'])
-                            c2.write(row_ins['codgenero'])
-                            c3.write(row_ins['Cat'])
-                            c4.write(row_ins['pruebas'])
+                            c1, c2, c3, c4, c5 = st.columns(col_ratios)
+                            # Estilo para alinear verticalmente con el botón y forzar a que no haya salto de línea (nowrap)
+                            estilo_texto = "style='margin-top: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px;'"
+                            
+                            c1.markdown(f"<div {estilo_texto}>{row_ins['Nombre']}</div>", unsafe_allow_html=True)
+                            c2.markdown(f"<div {estilo_texto}>{row_ins['codgenero']}</div>", unsafe_allow_html=True)
+                            c3.markdown(f"<div {estilo_texto}>{row_ins['Cat']}</div>", unsafe_allow_html=True)
+                            c4.markdown(f"<div style='margin-top: 8px; font-size: 14px;'>{row_ins['pruebas']}</div>", unsafe_allow_html=True)
+                            
                             if c5.button("❌", key=f"del_ins_{comp_id}_{row_ins['codnadador']}", help="Eliminar a este nadador"):
                                 eliminar_inscripcion(comp_id, row_ins['codnadador'])
                                 set_flash_message(f"Inscripción de {row_ins['Nombre']} eliminada.", "warning")
