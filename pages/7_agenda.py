@@ -46,7 +46,6 @@ def actualizar_con_retry(worksheet, data, max_retries=5):
             return True, None 
         except Exception as e:
             if "429" in str(e) or "quota" in str(e):
-                # Usamos un delay muy corto solo si hay error 429 de Google
                 import time
                 time.sleep((2 ** i) + random.uniform(0, 1))
                 continue 
@@ -114,7 +113,6 @@ def cargar_datos_agenda():
         except:
             df_pil = pd.DataFrame(columns=["codpileta", "club", "medida", "ubicacion"])
 
-        # --- Tablas Extra para el cruce de mejores tiempos ---
         try: df_tiempos = conn.read(worksheet="Tiempos").copy()
         except: df_tiempos = pd.DataFrame()
         
@@ -131,13 +129,10 @@ def leer_dataset_fresco(worksheet):
     try: return conn.read(worksheet=worksheet, ttl=0).copy()
     except: return None
 
-# --- FUNCION PARA BUSCAR EL MEJOR TIEMPO DEL NADADOR ---
 def buscar_mejor_tiempo(prueba, df_t_nadador):
-    """Parse la prueba inscripta y busca la mejor marca personal en su historial."""
     if df_t_nadador.empty: return ""
     p_lower = prueba.lower()
     
-    # Extraer Distancia
     dist_k = ""
     if "50m" in p_lower or " 50" in p_lower: dist_k = "50"
     if "100m" in p_lower or " 100" in p_lower: dist_k = "100"
@@ -148,7 +143,6 @@ def buscar_mejor_tiempo(prueba, df_t_nadador):
     if "4x50" in p_lower: dist_k = "4x50"
     if "4x100" in p_lower: dist_k = "4x100"
     
-    # Extraer Estilo
     est_k = []
     if "libre" in p_lower or "crol" in p_lower: est_k = ["libre", "crol"]
     elif "espalda" in p_lower: est_k = ["espalda"]
@@ -250,7 +244,6 @@ def eliminar_inscripcion(id_comp, id_nadador):
     return False, "Error."
 
 def set_flash_message(mensaje, tipo="success"):
-    """Guarda un mensaje en sesión para mostrarlo después del rerun"""
     st.session_state.flash_msg = {"texto": mensaje, "tipo": tipo}
 
 # ==========================================
@@ -259,7 +252,6 @@ def set_flash_message(mensaje, tipo="success"):
 
 df_competencias, df_inscripciones, df_nadadores, df_piletas, df_tiempos, df_estilos, df_distancias = cargar_datos_agenda()
 
-# --- CALCULAR CATEGORIA DEL USUARIO ACTUAL PARA PRIVACIDAD ---
 mi_cat_actual = "-"
 if df_nadadores is not None and not df_nadadores.empty:
     mi_row = df_nadadores[df_nadadores['codnadador'] == mi_id]
@@ -267,7 +259,6 @@ if df_nadadores is not None and not df_nadadores.empty:
         mi_anio = pd.to_datetime(mi_row.iloc[0]['fechanac']).year
         mi_cat_actual = calcular_categoria_master(mi_anio)
 
-# --- PREPROCESAR HISTORIAL DE TIEMPOS PARA PERFORMANCE ---
 df_t_global = pd.DataFrame()
 if df_tiempos is not None and not df_tiempos.empty:
     df_t_global = df_tiempos.copy()
@@ -282,7 +273,6 @@ if df_tiempos is not None and not df_tiempos.empty:
 st.title("📅 Agenda de Torneos")
 st.markdown(f"Usuario: **{mi_nombre}**")
 
-# --- PROCESAR FLASH MESSAGES PENDIENTES ---
 if "flash_msg" in st.session_state:
     msg = st.session_state.flash_msg
     if msg["tipo"] == "success": st.success(msg["texto"])
@@ -290,7 +280,6 @@ if "flash_msg" in st.session_state:
     elif msg["tipo"] == "error": st.error(msg["texto"])
     del st.session_state.flash_msg
 
-# --- ADMIN: CREAR EVENTO ---
 if rol in ["M", "P"]:
     with st.expander("🛠️ Crear Nuevo Evento", expanded=False):
         with st.form("form_crear"):
@@ -328,12 +317,10 @@ st.divider()
 def renderizar_evento(row, hoy):
     comp_id = row['id_competencia']
     
-    # Info Pileta
     d_pil = df_piletas[df_piletas['codpileta'] == row['cod_pileta']]
     nom_pil = f"{d_pil.iloc[0]['club']} ({d_pil.iloc[0]['medida']})" if not d_pil.empty else row['cod_pileta']
     ubic_pil = d_pil.iloc[0]['ubicacion'] if not d_pil.empty else "-"
 
-    # Fechas y Badge
     f_lim = pd.to_datetime(row['fecha_limite']).date()
     dias_ev = (row['fecha_dt'] - hoy).days
     dias_cie = (f_lim - hoy).days
@@ -343,7 +330,6 @@ def renderizar_evento(row, hoy):
     elif dias_cie < 0: badge = "🔒 CERRADA"; bg = "#E30613"; abierta = False
     else: badge = f"🟢 ABIERTA ({dias_cie} días)"; bg = "#2E7D32"
 
-    # Tarjeta Visual
     with st.container():
         st.markdown(f"""
         <div style="background-color: #262730; border: 1px solid #555; border-radius: 8px; padding: 15px; margin-bottom: 10px;">
@@ -364,7 +350,6 @@ font-weight:bold; height:fit-content;">{badge}</span>
             <div style="font-size:13px; color:#ccc;">{row['descripcion'] or ''}</div>
         </div>""", unsafe_allow_html=True)
 
-        # Preparar cruce de inscripciones globalmente para este evento
         f_ins = df_inscripciones[df_inscripciones['id_competencia'] == comp_id]
         d_full = pd.DataFrame()
         if not f_ins.empty:
@@ -378,7 +363,6 @@ font-weight:bold; height:fit-content;">{badge}</span>
             if d_full.empty:
                 st.caption("Aún no hay nadadores inscriptos.")
             else:
-                # --- FILTROS DE BÚSQUEDA ---
                 c_f1, c_f2, c_f3 = st.columns(3)
                 
                 lista_pruebas_inscriptas = []
@@ -397,7 +381,6 @@ font-weight:bold; height:fit-content;">{badge}</span>
                 
                 st.divider()
 
-                # Aplicar filtros
                 df_filtrado = d_full.copy()
                 if filtro_prueba != "Todas": 
                     df_filtrado = df_filtrado[df_filtrado['pruebas'].str.contains(filtro_prueba, case=False, na=False)]
@@ -427,10 +410,8 @@ font-weight:bold; height:fit-content;">{badge}</span>
                         gen_chip = f"<span style='font-size: 12px; font-weight: bold; background-color: #555; padding: 3px 8px; border-radius: 4px; color: #fff; margin-left: 5px;'>Gen. {r_pub['codgenero']}</span>"
                         
                         pruebas_lista = [p.strip() for p in str(r_pub['pruebas']).split(",") if p.strip()]
-                        
                         if filtro_prueba != "Todas":
                             pruebas_lista = [p for p in pruebas_lista if p.lower() == filtro_prueba.lower()]
-
                         pruebas_lista = sorted(pruebas_lista, key=lambda x: LISTA_PRUEBAS.index(x) if x in LISTA_PRUEBAS else 999)
 
                         chips_html = ""
@@ -508,11 +489,11 @@ font-weight:bold; height:fit-content;">{badge}</span>
         # === C. PANEL ENTRENADOR ===
         if rol in ["M", "P"]:
             with st.expander(f"🛡️ Panel Entrenador ({row['nombre_evento']})"):
-                t1, t2, t3 = st.tabs(["❌ Gestión Bajas", "⚙️ Editar Evento", "🚀 Simulador"])
+                t1, t2, t3 = st.tabs(["👥 Gestión Inscriptos", "⚙️ Editar Evento", "🚀 Simulador"])
                 
                 with t1:
                     if d_full.empty:
-                        st.caption("Nada para gestionar.")
+                        st.caption("No hay inscriptos todavía.")
                     else:
                         st.markdown("##### 🏊‍♂️ Nómina de Nadadores")
                         st.dataframe(
@@ -523,7 +504,38 @@ font-weight:bold; height:fit-content;">{badge}</span>
                                 "Pruebas Inscriptas": st.column_config.TextColumn("Pruebas Inscriptas", width="large")
                             }
                         )
-                        
+                    
+                    st.divider()
+                    st.markdown("##### ➕ Alta / Modificación Manual")
+                    with st.container(border=True):
+                        with st.form(f"admin_add_{comp_id}"):
+                            # Preparamos el diccionario de todos los nadadores disponibles
+                            opc_nadadores = dict(zip(df_nadadores['codnadador'], df_nadadores['apellido'] + ", " + df_nadadores['nombre']))
+                            # Ordenamos alfabéticamente para facilitar la búsqueda
+                            opc_nadadores = {k: v for k, v in sorted(opc_nadadores.items(), key=lambda item: item[1])}
+                            
+                            nad_sel = st.selectbox(
+                                "Seleccionar nadador:", 
+                                options=list(opc_nadadores.keys()), 
+                                format_func=lambda x: opc_nadadores[x]
+                            )
+                            
+                            pruebas_sel = st.multiselect(
+                                "Seleccionar pruebas:", 
+                                p_hab, 
+                                max_selections=max_permitidas
+                            )
+                            
+                            if st.form_submit_button("Guardar Inscripción", type="primary"):
+                                if not pruebas_sel:
+                                    st.error("Selecciona al menos una prueba.")
+                                else:
+                                    ok, m = gestionar_inscripcion(comp_id, nad_sel, pruebas_sel)
+                                    if ok:
+                                        set_flash_message("Inscripción registrada por el entrenador.", "success")
+                                        st.rerun()
+
+                    if not d_full.empty:
                         st.divider()
                         st.markdown("##### ⚠️ Eliminar Inscripción")
                         with st.container(border=True):
@@ -581,7 +593,6 @@ font-weight:bold; height:fit-content;">{badge}</span>
                     else:
                         st.warning("No podés acceder al simulador si no hay nadadores inscriptos.")
 
-
 # ==========================================
 # 8. SECCIONES DE EVENTOS (FUTUROS vs PASADOS)
 # ==========================================
@@ -593,11 +604,9 @@ else:
     if not df_view.empty:
         df_view['fecha_dt'] = pd.to_datetime(df_view['fecha_evento']).dt.date
 
-    # --- SEPARAR PRÓXIMOS EVENTOS DE EVENTOS FINALIZADOS ---
     df_proximos = df_view[df_view['fecha_dt'] >= hoy].sort_values(by='fecha_dt', ascending=True)
     df_finalizados = df_view[df_view['fecha_dt'] < hoy].sort_values(by='fecha_dt', ascending=False)
 
-    # 1. LISTA DE EVENTOS A REALIZARSE
     st.subheader("🏁 Próximos Torneos")
     if df_proximos.empty:
         st.info("No hay eventos agendados a realizarse próximamente.")
@@ -608,7 +617,6 @@ else:
     st.write("")
     st.divider()
 
-    # 2. SECCIÓN COLAPSABLE DE EVENTOS FINALIZADOS
     if not df_finalizados.empty:
         with st.expander(f"🏛️ Ver Historial de Eventos Finalizados ({len(df_finalizados)})", expanded=False):
             for _, row in df_finalizados.iterrows():
