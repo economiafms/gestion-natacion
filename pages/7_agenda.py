@@ -310,11 +310,8 @@ def cb_elim_evento(c_id):
     if ok: set_flash_message("Evento eliminado.", "warning")
 
 def cb_nadador_change(c_id):
-    """Fuerza la recarga de las pruebas por defecto sin colapsar la pantalla"""
+    """Mantiene la pestaña de entrenador abierta al seleccionar a otro nadador"""
     st.session_state.active_coach_tab = c_id
-    k_pru = f"adm_pru_{c_id}"
-    if k_pru in st.session_state:
-        del st.session_state[k_pru]
 
 def cb_set_sort(c_id, col):
     """Maneja el ordenamiento de la grilla de nadadores"""
@@ -614,7 +611,9 @@ font-weight:bold; height:fit-content;">{badge}</span>
                                 prev_admin = [x.strip() for x in str(nad_existente.iloc[0]['pruebas']).split(",") if x.strip()]
                         
                         def_sel_admin = [x for x in prev_admin if x in p_hab][:max_permitidas]
-                        k_pru_admin = f"adm_pru_{comp_id}"
+                        
+                        # Al sumarle nad_sel al nombre de la clave, Streamlit renderiza de 0 el multiselect
+                        k_pru_admin = f"adm_pru_{comp_id}_{nad_sel}"
                         
                         st.multiselect(
                             "Seleccionar pruebas (se autocompleta si ya está inscripto):", 
