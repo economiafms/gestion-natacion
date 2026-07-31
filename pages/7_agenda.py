@@ -2,7 +2,6 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime, date
-import time
 import random
 import uuid
 
@@ -47,6 +46,8 @@ def actualizar_con_retry(worksheet, data, max_retries=5):
             return True, None 
         except Exception as e:
             if "429" in str(e) or "quota" in str(e):
+                # Usamos un delay muy corto solo si hay error 429 de Google
+                import time
                 time.sleep((2 ** i) + random.uniform(0, 1))
                 continue 
             else:
@@ -196,10 +197,10 @@ def guardar_competencia(id_comp, nombre, fecha_ev, hora, cod_pil, fecha_lim, cos
     if id_comp and not df_comp.empty and id_comp in df_comp['id_competencia'].values:
         idx = df_comp.index[df_comp['id_competencia'] == id_comp].tolist()[0]
         for k, v in nuevo.items(): df_comp.at[idx, k] = v
-        msg = "✅ Evento actualizado."
+        msg = "✅ Evento actualizado correctamente."
     else:
         df_comp = pd.concat([df_comp, pd.DataFrame([nuevo])], ignore_index=True)
-        msg = "✅ Evento creado."
+        msg = "✅ Evento creado exitosamente."
 
     exito, _ = actualizar_con_retry("Competencias", df_comp)
     if exito: st.cache_data.clear(); return True, msg
@@ -229,14 +230,14 @@ def gestionar_inscripcion(id_comp, id_nadador, lista_pruebas):
     if not df_ins[mask].empty:
         df_ins.loc[mask, 'pruebas'] = pruebas_str
         df_ins.loc[mask, 'fecha_inscripcion'] = datetime.now().strftime("%Y-%m-%d")
-        msg = "✏️ Modificado."
+        msg = "✏️ Inscripción modificada."
     else:
         nuevo = {"id_inscripcion": str(uuid.uuid4()), "id_competencia": id_comp, "codnadador": int(id_nadador), "pruebas": pruebas_str, "fecha_inscripcion": datetime.now().strftime("%Y-%m-%d")}
         df_ins = pd.concat([df_ins, pd.DataFrame([nuevo])], ignore_index=True)
-        msg = "✅ Inscripto."
+        msg = "✅ Inscripción confirmada."
     exito, _ = actualizar_con_retry("Inscripciones", df_ins)
     if exito: st.cache_data.clear(); return True, msg
-    return False, "Error."
+    return False, "Error al procesar inscripción."
 
 def eliminar_inscripcion(id_comp, id_nadador):
     df_ins = leer_dataset_fresco("Inscripciones")
@@ -247,6 +248,10 @@ def eliminar_inscripcion(id_comp, id_nadador):
     exito, _ = actualizar_con_retry("Inscripciones", df_ins)
     if exito: st.cache_data.clear(); return True, "Baja exitosa."
     return False, "Error."
+
+def set_flash_message(mensaje, tipo="success"):
+    """Guarda un mensaje en sesión para mostrarlo después del rerun"""
+    st.session_state.flash_msg = {"texto": mensaje, "tipo": tipo}
 
 # ==========================================
 # 6. UI PRINCIPAL
@@ -277,6 +282,14 @@ if df_tiempos is not None and not df_tiempos.empty:
 st.title("📅 Agenda de Torneos")
 st.markdown(f"Usuario: **{mi_nombre}**")
 
+# --- PROCESAR FLASH MESSAGES PENDIENTES ---
+if "flash_msg" in st.session_state:
+    msg = st.session_state.flash_msg
+    if msg["tipo"] == "success": st.success(msg["texto"])
+    elif msg["tipo"] == "warning": st.warning(msg["texto"])
+    elif msg["tipo"] == "error": st.error(msg["texto"])
+    del st.session_state.flash_msg
+
 # --- ADMIN: CREAR EVENTO ---
 if rol in ["M", "P"]:
     with st.expander("🛠️ Crear Nuevo Evento", expanded=False):
@@ -301,8 +314,11 @@ if rol in ["M", "P"]:
             if st.form_submit_button("Guardar Evento"):
                 if n_in and p_in:
                     ok, m = guardar_competencia(None, n_in, f_in, h_in, p_in, fl_in, cost_in, d_in, hab_in, max_in)
-                    if ok: st.success(m); time.sleep(1); st.rerun()
-                else: st.warning("Faltan datos.")
+                    if ok:
+                        set_flash_message(m, "success")
+                        st.rerun()
+                else: 
+                    st.warning("Faltan datos.")
 
 st.divider()
 
@@ -474,13 +490,18 @@ font-weight:bold; height:fit-content;">{badge}</span>
                         if esta: delt = st.form_submit_button("🗑️ Baja", type="secondary")
                     
                     if sub:
-                        if not sel: st.error("Selecciona pruebas.")
+                        if not sel: 
+                            st.error("Selecciona pruebas.")
                         else:
                             ok, m = gestionar_inscripcion(comp_id, mi_id, sel)
-                            if ok: st.success(m); time.sleep(1); st.rerun()
+                            if ok:
+                                set_flash_message(m, "success")
+                                st.rerun()
                     if delt:
                         ok, m = eliminar_inscripcion(comp_id, mi_id)
-                        if ok: st.warning(m); time.sleep(1); st.rerun()
+                        if ok:
+                            set_flash_message(m, "warning")
+                            st.rerun()
         elif esta:
             st.success(f"✅ Inscripto en: {ins_user.iloc[0]['pruebas']}")
 
@@ -514,6 +535,7 @@ font-weight:bold; height:fit-content;">{badge}</span>
                             )
                             if st.button("Confirmar Baja", key=f"b_del_{comp_id}", type="primary", use_container_width=True):
                                 eliminar_inscripcion(comp_id, u_del)
+                                set_flash_message("Baja procesada correctamente.", "warning")
                                 st.rerun()
 
                 with t2:
@@ -536,10 +558,13 @@ font-weight:bold; height:fit-content;">{badge}</span>
                         
                         if st.form_submit_button("Actualizar"):
                             guardar_competencia(comp_id, nn, nf, row['hora_inicio'], row['cod_pileta'], nl, nc, nd, nh, nm)
+                            set_flash_message("Evento actualizado correctamente.", "success")
                             st.rerun()
                         
                         if st.form_submit_button("⚠️ ELIMINAR EVENTO", type="primary"):
-                            eliminar_competencia(comp_id); st.rerun()
+                            eliminar_competencia(comp_id)
+                            set_flash_message("Evento eliminado.", "warning")
+                            st.rerun()
 
                 with t3:
                     st.markdown("##### 🚀 Enviar Inscriptos al Simulador")
