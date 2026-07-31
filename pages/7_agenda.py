@@ -508,32 +508,45 @@ font-weight:bold; height:fit-content;">{badge}</span>
                     st.divider()
                     st.markdown("##### ➕ Alta / Modificación Manual")
                     with st.container(border=True):
-                        with st.form(f"admin_add_{comp_id}"):
-                            # Preparamos el diccionario de todos los nadadores disponibles
-                            opc_nadadores = dict(zip(df_nadadores['codnadador'], df_nadadores['apellido'] + ", " + df_nadadores['nombre']))
-                            # Ordenamos alfabéticamente para facilitar la búsqueda
-                            opc_nadadores = {k: v for k, v in sorted(opc_nadadores.items(), key=lambda item: item[1])}
-                            
-                            nad_sel = st.selectbox(
-                                "Seleccionar nadador:", 
-                                options=list(opc_nadadores.keys()), 
-                                format_func=lambda x: opc_nadadores[x]
-                            )
-                            
-                            pruebas_sel = st.multiselect(
-                                "Seleccionar pruebas:", 
-                                p_hab, 
-                                max_selections=max_permitidas
-                            )
-                            
-                            if st.form_submit_button("Guardar Inscripción", type="primary"):
-                                if not pruebas_sel:
-                                    st.error("Selecciona al menos una prueba.")
-                                else:
-                                    ok, m = gestionar_inscripcion(comp_id, nad_sel, pruebas_sel)
-                                    if ok:
-                                        set_flash_message("Inscripción registrada por el entrenador.", "success")
-                                        st.rerun()
+                        # Preparamos el diccionario de todos los nadadores disponibles
+                        opc_nadadores = dict(zip(df_nadadores['codnadador'], df_nadadores['apellido'] + ", " + df_nadadores['nombre']))
+                        # Ordenamos alfabéticamente para facilitar la búsqueda
+                        opc_nadadores = {k: v for k, v in sorted(opc_nadadores.items(), key=lambda item: item[1])}
+                        
+                        nad_sel = st.selectbox(
+                            "Seleccionar nadador:", 
+                            options=list(opc_nadadores.keys()), 
+                            format_func=lambda x: opc_nadadores[x],
+                            key=f"admin_nad_{comp_id}"
+                        )
+                        
+                        # Recuperar pruebas si el nadador seleccionado ya está inscripto
+                        prev_admin = []
+                        if not d_full.empty:
+                            nad_existente = d_full[d_full['codnadador'] == nad_sel]
+                            if not nad_existente.empty:
+                                prev_admin = [x.strip() for x in str(nad_existente.iloc[0]['pruebas']).split(",") if x.strip()]
+                        
+                        def_sel_admin = [x for x in prev_admin if x in p_hab][:max_permitidas]
+
+                        # Usamos una clave dinámica atada al ID del nadador para forzar 
+                        # la recarga de las opciones por defecto al cambiar el SelectBox
+                        pruebas_sel = st.multiselect(
+                            "Seleccionar pruebas (se autocompleta si ya está inscripto):", 
+                            p_hab, 
+                            default=def_sel_admin,
+                            max_selections=max_permitidas,
+                            key=f"admin_pru_{comp_id}_{nad_sel}"
+                        )
+                        
+                        if st.button("💾 Guardar Inscripción", key=f"btn_admin_save_{comp_id}", type="primary"):
+                            if not pruebas_sel:
+                                st.warning("Selecciona al menos una prueba.")
+                            else:
+                                ok, m = gestionar_inscripcion(comp_id, nad_sel, pruebas_sel)
+                                if ok:
+                                    set_flash_message("Inscripción registrada por el entrenador.", "success")
+                                    st.rerun()
 
                     if not d_full.empty:
                         st.divider()
