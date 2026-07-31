@@ -20,6 +20,9 @@ rol = st.session_state.role
 mi_id = st.session_state.user_id
 mi_nombre = st.session_state.user_name
 
+if "active_usr_tab" not in st.session_state: st.session_state.active_usr_tab = None
+if "active_coach_tab" not in st.session_state: st.session_state.active_coach_tab = None
+
 # ==========================================
 # 3. CONEXIÓN Y DATOS
 # ==========================================
@@ -243,7 +246,7 @@ def eliminar_inscripcion(id_comp, id_nadador):
     if exito: st.cache_data.clear(); return True, "Baja exitosa."
     return False, "Error."
 
-# --- LOGICA DE CALLBACKS (Sin reruns manuales) ---
+# --- LOGICA DE CALLBACKS PARA ESTABILIDAD DE PANTALLA ---
 def cb_crear_evento():
     n = st.session_state.f_cr_nom
     p = st.session_state.f_cr_sede
@@ -261,6 +264,7 @@ def cb_crear_evento():
         set_flash_message("Faltan datos obligatorios.", "warning")
 
 def cb_guardar_usr(c_id):
+    st.session_state.active_usr_tab = c_id
     sel = st.session_state[f"usr_pru_{c_id}"]
     if not sel:
         set_flash_message("Selecciona al menos una prueba.", "error")
@@ -269,16 +273,19 @@ def cb_guardar_usr(c_id):
         if ok: set_flash_message(m, "success")
 
 def cb_baja_usr(c_id):
+    st.session_state.active_usr_tab = c_id
     ok, m = eliminar_inscripcion(c_id, mi_id)
     if ok: set_flash_message("Inscripción cancelada.", "warning")
 
 def cb_baja_grid(c_id, n_id, nom):
+    st.session_state.active_coach_tab = c_id
     ok, m = eliminar_inscripcion(c_id, n_id)
     if ok: set_flash_message(f"Inscripción de {nom} eliminada.", "warning")
 
 def cb_alta_adm(c_id, k_nad, k_pru):
+    st.session_state.active_coach_tab = c_id
     nad = st.session_state[k_nad]
-    pru = st.session_state[k_pru]
+    pru = st.session_state.get(k_pru, [])
     if not pru:
         set_flash_message("Selecciona al menos una prueba.", "error")
     else:
@@ -286,6 +293,7 @@ def cb_alta_adm(c_id, k_nad, k_pru):
         if ok: set_flash_message("Inscripción registrada por el entrenador.", "success")
 
 def cb_editar_evento(c_id, h_in, p_in):
+    st.session_state.active_coach_tab = c_id
     nn = st.session_state[f"ed_nom_{c_id}"]
     nc = st.session_state[f"ed_cost_{c_id}"]
     nf = st.session_state[f"ed_fec_{c_id}"]
@@ -297,8 +305,27 @@ def cb_editar_evento(c_id, h_in, p_in):
     if ok: set_flash_message("Evento actualizado correctamente.", "success")
 
 def cb_elim_evento(c_id):
+    st.session_state.active_coach_tab = None
     ok, m = eliminar_competencia(c_id)
     if ok: set_flash_message("Evento eliminado.", "warning")
+
+def cb_nadador_change(c_id):
+    """Fuerza la recarga de las pruebas por defecto sin colapsar la pantalla"""
+    st.session_state.active_coach_tab = c_id
+    k_pru = f"adm_pru_{c_id}"
+    if k_pru in st.session_state:
+        del st.session_state[k_pru]
+
+def cb_set_sort(c_id, col):
+    """Maneja el ordenamiento de la grilla de nadadores"""
+    st.session_state.active_coach_tab = c_id
+    c_key = f"sort_c_{c_id}"
+    a_key = f"sort_a_{c_id}"
+    if st.session_state.get(c_key) == col:
+        st.session_state[a_key] = not st.session_state.get(a_key, True)
+    else:
+        st.session_state[c_key] = col
+        st.session_state[a_key] = True
 
 # ==========================================
 # 6. UI PRINCIPAL
@@ -503,7 +530,8 @@ font-weight:bold; height:fit-content;">{badge}</span>
 
         if abierta or rol in ["M", "P"]:
             label = "✅ Gestionar Inscripción" if esta else "📝 Inscribirse"
-            with st.expander(label):
+            usr_expanded = (st.session_state.active_usr_tab == comp_id)
+            with st.expander(label, expanded=usr_expanded):
                 prev = [x.strip() for x in str(ins_user.iloc[0]['pruebas']).split(",")] if esta else []
                 with st.form(f"f_usr_{comp_id}"):
                     st.info(f"⚠️ Permitido hasta **{max_permitidas}** pruebas por nadador.")
@@ -519,7 +547,8 @@ font-weight:bold; height:fit-content;">{badge}</span>
 
         # === C. PANEL ENTRENADOR ===
         if rol in ["M", "P"]:
-            with st.expander(f"🛡️ Panel Entrenador ({row['nombre_evento']})"):
+            coach_expanded = (st.session_state.active_coach_tab == comp_id)
+            with st.expander(f"🛡️ Panel Entrenador ({row['nombre_evento']})", expanded=coach_expanded):
                 t1, t2, t3 = st.tabs(["👥 Gestión Inscriptos", "⚙️ Editar Evento", "🚀 Simulador"])
                 
                 with t1:
@@ -528,14 +557,27 @@ font-weight:bold; height:fit-content;">{badge}</span>
                     else:
                         st.markdown("##### 🏊‍♂️ Nómina de Nadadores")
                         
-                        # Grilla Custom con botón de borrado en línea (Ajuste de anchos y salto de línea en titulos)
-                        col_ratios = [3.2, 0.8, 1.2, 4.0, 0.6]
+                        # --- ORDENAMIENTO DINAMICO DE GRILLA ---
+                        c_key = f"sort_c_{comp_id}"
+                        a_key = f"sort_a_{comp_id}"
+                        if c_key not in st.session_state: st.session_state[c_key] = "Nombre"
+                        if a_key not in st.session_state: st.session_state[a_key] = True
+                        
+                        d_full = d_full.sort_values(by=st.session_state[c_key], ascending=st.session_state[a_key])
+                        
+                        col_ratios = [3.2, 1.2, 1.2, 4.0, 0.6]
                         enc1, enc2, enc3, enc4, enc5 = st.columns(col_ratios)
                         
-                        estilo_enc = "style='white-space: nowrap; font-size: 13px; color: #aaa; font-weight: bold;'"
-                        enc1.markdown(f"<div {estilo_enc}>Nombre</div>", unsafe_allow_html=True)
-                        enc2.markdown(f"<div {estilo_enc}>Gen</div>", unsafe_allow_html=True)
-                        enc3.markdown(f"<div {estilo_enc}>Cat</div>", unsafe_allow_html=True)
+                        # Iconos direccionales para el ordenamiento
+                        ar_nom = " ⬇" if st.session_state[c_key] == "Nombre" and st.session_state[a_key] else (" ⬆" if st.session_state[c_key] == "Nombre" else " ↕")
+                        ar_gen = " ⬇" if st.session_state[c_key] == "codgenero" and st.session_state[a_key] else (" ⬆" if st.session_state[c_key] == "codgenero" else " ↕")
+                        ar_cat = " ⬇" if st.session_state[c_key] == "Cat" and st.session_state[a_key] else (" ⬆" if st.session_state[c_key] == "Cat" else " ↕")
+                        
+                        enc1.button(f"Nombre{ar_nom}", key=f"s_n_{comp_id}", on_click=cb_set_sort, args=(comp_id, "Nombre"), type="tertiary")
+                        enc2.button(f"Gen{ar_gen}", key=f"s_g_{comp_id}", on_click=cb_set_sort, args=(comp_id, "codgenero"), type="tertiary")
+                        enc3.button(f"Cat{ar_cat}", key=f"s_c_{comp_id}", on_click=cb_set_sort, args=(comp_id, "Cat"), type="tertiary")
+                        
+                        estilo_enc = "style='white-space: nowrap; font-size: 14px; color: #aaa; font-weight: bold; margin-top: 6px;'"
                         enc4.markdown(f"<div {estilo_enc}>Pruebas Inscriptas</div>", unsafe_allow_html=True)
                         enc5.markdown(f"<div {estilo_enc}>Baja</div>", unsafe_allow_html=True)
                         
@@ -548,7 +590,6 @@ font-weight:bold; height:fit-content;">{badge}</span>
                             c3.markdown(f"<div {estilo_texto}>{row_ins['Cat']}</div>", unsafe_allow_html=True)
                             c4.markdown(f"<div style='margin-top: 8px; font-size: 14px;'>{row_ins['pruebas']}</div>", unsafe_allow_html=True)
                             
-                            # Botón tipo "tertiary" elimina el recuadro de fondo nativo del botón
                             c5.button("❌", key=f"del_ins_{comp_id}_{row_ins['codnadador']}", help="Eliminar a este nadador", type="tertiary", on_click=cb_baja_grid, args=(comp_id, row_ins['codnadador'], row_ins['Nombre']))
                     
                     st.divider()
@@ -561,7 +602,9 @@ font-weight:bold; height:fit-content;">{badge}</span>
                             "Seleccionar nadador:", 
                             options=list(opc_nadadores.keys()), 
                             format_func=lambda x: opc_nadadores[x],
-                            key=f"adm_nad_{comp_id}"
+                            key=f"adm_nad_{comp_id}",
+                            on_change=cb_nadador_change,
+                            args=(comp_id,)
                         )
                         
                         prev_admin = []
@@ -571,7 +614,7 @@ font-weight:bold; height:fit-content;">{badge}</span>
                                 prev_admin = [x.strip() for x in str(nad_existente.iloc[0]['pruebas']).split(",") if x.strip()]
                         
                         def_sel_admin = [x for x in prev_admin if x in p_hab][:max_permitidas]
-                        k_pru_admin = f"adm_pru_{comp_id}_{nad_sel}"
+                        k_pru_admin = f"adm_pru_{comp_id}"
                         
                         st.multiselect(
                             "Seleccionar pruebas (se autocompleta si ya está inscripto):", 
@@ -611,7 +654,6 @@ font-weight:bold; height:fit-content;">{badge}</span>
                     if not d_full.empty:
                         nombres_inscriptos = (d_full['apellido'].astype(str).str.upper() + ", " + d_full['nombre'].astype(str)).tolist()
                         
-                        # Aquí el st.switch_page va en un callback porque los botones puros no frenan la ejecución hasta el final.
                         def cb_ir_sim():
                             st.session_state.simulador_pre_pool = nombres_inscriptos
                             if "pool_opt_g" in st.session_state: del st.session_state["pool_opt_g"]
