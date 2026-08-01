@@ -189,7 +189,16 @@ if btn_manual:
                 if not hist.empty:
                     ant = hist.sort_values('tiempo_final').iloc[0]
                     ip = dict_piletas.get(ant['codpileta'], {"club": "Sede ?", "medida": "-"})
-                    obs_lista.append(f"⏱️ **ANTECEDENTE:** Marcaron **{ant['tiempo_final']}** en {ip['club']} ({ip['medida']}) el {ant['fecha']}.")
+                    
+                    # Detectar el estilo nadado en el antecedente
+                    estilo_val = ant.get('estilo', ant.get('prueba', ant.get('codestilo', '')))
+                    estilo_str = str(estilo_val).strip().upper()
+                    if 'COMB' in estilo_str or 'MEDLEY' in estilo_str: estilo_texto = "Combinado (Medley)"
+                    elif 'LIBR' in estilo_str or 'CROL' in estilo_str or 'E4' in estilo_str: estilo_texto = "Libre (Crol)"
+                    elif estilo_str and estilo_str != 'NAN': estilo_texto = estilo_val
+                    else: estilo_texto = "esa formación"
+                    
+                    obs_lista.append(f"⏱️ **ANTECEDENTE:** Marcaron **{ant['tiempo_final']}** nadando **{estilo_texto}** en {ip['club']} ({ip['medida']}) el {ant['fecha']}.")
                 
                 mejor_t, mejor_o = total, n_sel
                 for p in itertools.permutations(n_sel):
@@ -296,7 +305,16 @@ if st.button("🪄 Generar Estrategia Óptima", type="primary", use_container_wi
                             if not hist_g.empty:
                                 ant_g = hist_g.sort_values('tiempo_final').iloc[0]
                                 ip_g = dict_piletas.get(ant_g['codpileta'], {"club": "Sede ?", "medida": "-"})
-                                obs_lista_g.append(f"⏱️ **YA NADARON JUNTOS:** Tienen un registro oficial de **{ant_g['tiempo_final']}** en {ip_g['club']} ({ip_g['medida']}) el {ant_g['fecha']}.")
+                                
+                                # Detectar el estilo nadado en el antecedente
+                                estilo_val_g = ant_g.get('estilo', ant_g.get('prueba', ant_g.get('codestilo', '')))
+                                estilo_str_g = str(estilo_val_g).strip().upper()
+                                if 'COMB' in estilo_str_g or 'MEDLEY' in estilo_str_g: estilo_texto_g = "Combinado (Medley)"
+                                elif 'LIBR' in estilo_str_g or 'CROL' in estilo_str_g or 'E4' in estilo_str_g: estilo_texto_g = "Libre (Crol)"
+                                elif estilo_str_g and estilo_str_g != 'NAN': estilo_texto_g = estilo_val_g
+                                else: estilo_texto_g = "juntos"
+                                
+                                obs_lista_g.append(f"⏱️ **YA NADARON JUNTOS:** Tienen un registro oficial de **{ant_g['tiempo_final']}** nadando **{estilo_texto_g}** en {ip_g['club']} ({ip_g['medida']}) el {ant_g['fecha']}.")
                             
                             # Renderizar observaciones si hay alguna
                             if obs_lista_g:
