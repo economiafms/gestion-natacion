@@ -112,194 +112,52 @@ def pwa_install_button():
         """)
         st.info("Nota: Tenerla instalada te permite acceder más rápido a tus tiempos, rutinas, categoría y seguimiento personal. Es una herramienta pensada para acompañar tu evolución deportiva día a día. Tu progreso también se construye con constancia.")
 
-# --- 5. PANTALLA DE LOGIN (NUEVO DISEÑO TAILWIND) ---
+# --- 5. PANTALLA DE LOGIN ---
 def login_screen():
-    # Inyectamos CSS específico de Tailwind solo para esta pantalla
+    st.markdown("""<style>[data-testid="stSidebar"] {display: none;}</style>""", unsafe_allow_html=True)
     st.markdown("""
-    <style>
-    @import url('https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@700;900&family=Inter:wght@400;700&family=JetBrains+Mono:wght@500;700&display=swap');
-
-    /* Ocultar elementos nativos de Streamlit */
-    [data-testid="stSidebar"] {display: none;}
-    header[data-testid="stHeader"] { display: none !important; }
-
-    /* Expandir la pantalla completa (anula el layout=centered solo aquí) */
-    .block-container {
-        padding: 0 !important;
-        max-width: 100% !important;
-    }
-    
-    /* Configurar el layout de las dos columnas generadas abajo */
-    div[data-testid="stHorizontalBlock"] {
-        align-items: stretch !important;
-        min-height: 100vh !important;
-        gap: 0 !important;
-        background-color: #101319;
-    }
-    div[data-testid="column"] { padding: 0 !important; }
-
-    /* LADO IZQUIERDO: Imagen de fondo y Gradiente */
-    div[data-testid="column"]:nth-child(1) {
-        background-image: linear-gradient(to top, #101319, rgba(16,19,25,0.4), transparent), url('https://lh3.googleusercontent.com/aida-public/AB6AXuAMImSYqudmvJAmPD0Phr4ZLP83MuhD9gER7FYwOcbdHShvlBwjDrZHfuCzvTK5SLGBU4QyXBq1u26JxNMbOmC6LPM_h89zpTZPRqSXFUyynCpinKtV0Epm-C911nEwPJtuXFva7BueE33Rqxf14YlEef9Jeg-4wEfBr_91ynAqTL-35-FYWXcJprpJQ7Oz7p1Eu3ouf2cTescVEqDFxWscFDlvIVFHG33RQwKys75VypSce4pvWZVKS5IeX1gawVmOuQ');
-        background-size: cover;
-        background-position: center;
-        border-right: 1px solid #5e3f3b;
-        display: flex;
-        flex-direction: column;
-        justify-content: flex-end;
-    }
-
-    /* Ocultar lado izquierdo en celulares */
-    @media (max-width: 1024px) {
-        div[data-testid="column"]:nth-child(1) { display: none !important; }
-    }
-
-    /* LADO DERECHO: Centrado del formulario */
-    div[data-testid="column"]:nth-child(2) {
-        background-color: #101319 !important;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        padding: 2rem !important;
-    }
-    
-    /* Ajustes dentro de la columna derecha para centrar el formulario */
-    div[data-testid="column"]:nth-child(2) > div[data-testid="stVerticalBlock"] {
-        margin: auto;
-        max-width: 450px;
-        width: 100%;
-    }
-
-    /* Contenedor del Formulario */
-    div[data-testid="stForm"] {
-        background-color: #1d2026 !important;
-        border-radius: 12px !important;
-        padding: 40px 32px 32px 32px !important;
-        border: 1px solid #5e3f3b !important;
-        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5) !important;
-        position: relative !important;
-    }
-
-    /* Barra lateral roja */
-    div[data-testid="stForm"]::before {
-        content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%;
-        background-color: #e30613;
-        border-top-left-radius: 12px; border-bottom-left-radius: 12px;
-    }
-
-    /* Label de Inputs */
-    label[data-testid="stWidgetLabel"] p {
-        font-family: 'JetBrains Mono', monospace !important;
-        text-transform: uppercase !important;
-        color: #e9bcb6 !important;
-        font-size: 13px !important;
-        font-weight: 700 !important;
-    }
-
-    /* Input Streamlit Nativos */
-    div[data-testid="stTextInput"] input {
-        background-color: #1E1E1E !important;
-        border: 1px solid #444444 !important;
-        color: white !important;
-        padding: 12px !important;
-        border-radius: 4px !important;
-        font-family: 'Inter', sans-serif !important;
-    }
-    div[data-testid="stTextInput"] input:focus {
-        border-color: #e30613 !important;
-        box-shadow: 0 0 0 1px #e30613 !important;
-    }
-
-    /* Botón Acceder */
-    div[data-testid="stFormSubmitButton"] button {
-        background-color: #e30613 !important;
-        color: white !important;
-        width: 100% !important;
-        border: none !important;
-        padding: 12px !important;
-        border-radius: 4px !important;
-        font-weight: 700 !important;
-        font-size: 16px !important;
-        font-family: 'Inter', sans-serif !important;
-        margin-top: 10px !important;
-    }
-    div[data-testid="stFormSubmitButton"] button:hover {
-        background-color: #c0000c !important;
-        color: white !important;
-    }
-
-    /* General Body de Streamlit para el login */
-    .stApp { background-color: #101319; }
-
-    @media (min-width: 1024px) { .mobile-brand { display: none !important; } }
-    </style>
+        <style>
+            .login-container {
+                text-align: center;
+                padding: 30px;
+                border-radius: 20px;
+                background: linear-gradient(180deg, #121212 0%, #000000 100%);
+                border: 2px solid #333;
+                margin-bottom: 20px;
+                box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            }
+            .nob-title {
+                font-size: 32px;
+                font-weight: 900;
+                color: #E30613;
+                text-transform: uppercase;
+                margin: 10px 0 5px 0;
+                line-height: 1;
+                text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            }
+            .nob-quote {
+                font-size: 18px;
+                font-style: italic;
+                color: #ffffff;
+                margin-bottom: 20px;
+                font-family: serif;
+                letter-spacing: 1px;
+                opacity: 0.9;
+            }
+        </style>
+        <div class="login-container">
+            <div style="font-size: 40px; margin-bottom: 10px;">🔴⚫ 🏊 ⚫🔴</div>
+            <div class="nob-title">NEWELL'S OLD BOYS</div>
+            <div class="nob-quote">"Del deporte sos la gloria"</div>
+        </div>
     """, unsafe_allow_html=True)
-
-    # Creamos las dos columnas para el split screen
-    c1, c2 = st.columns([1, 1])
-
-    # --- Lado Izquierdo ---
-    with c1:
-        st.markdown("""
-        <div style="padding: 48px; position: absolute; bottom: 0; left: 0; width: 100%; z-index: 10;">
-            <div style="border-left: 4px solid #e30613; padding-left: 20px; margin-bottom: 24px;">
-                <h1 style="font-family: 'Hanken Grotesk', sans-serif; font-size: 42px; font-weight: 900; color: #e30613; text-transform: uppercase; margin:0; line-height: 1.1;">Gestión Natación</h1>
-                <p style="font-family: 'Inter', sans-serif; font-size: 18px; color: #e9bcb6; margin-top: 8px; font-weight: 400;">Elite Performance Dashboard</p>
-            </div>
-            <div style="display: flex; gap: 12px;">
-                <div style="background-color: rgba(39, 42, 49, 0.8); backdrop-filter: blur(4px); padding: 8px 16px; border-radius: 6px; border: 1px solid #5e3f3b; display: flex; align-items: center; gap: 8px;">
-                    <span style="color: #e30613; font-size: 20px;">⏱️</span>
-                    <span style="color: #e1e2eb; font-family: 'JetBrains Mono', monospace; font-size: 16px; font-weight: 700;">00:21.45</span>
-                </div>
-                <div style="background-color: rgba(39, 42, 49, 0.8); backdrop-filter: blur(4px); padding: 8px 16px; border-radius: 6px; border: 1px solid #5e3f3b; display: flex; align-items: center; gap: 8px;">
-                    <span style="color: #e9c400; font-size: 20px;">🏆</span>
-                    <span style="color: #e1e2eb; font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 700;">RECORD</span>
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    # --- Lado Derecho ---
-    with c2:
-        # Cabecera para celulares
-        st.markdown("""
-        <div class="mobile-brand" style="display: flex; align-items: center; gap: 12px; margin-bottom: 32px; justify-content: center;">
-            <span style="font-size: 32px; color: #e30613;">🏊‍♂️</span>
-            <span style="font-family: 'Hanken Grotesk', sans-serif; font-size: 28px; font-weight: 900; color: #e30613; text-transform: uppercase;">Gestión Natación</span>
-        </div>
-        """, unsafe_allow_html=True)
-
-        with st.form("login_form"):
-            st.markdown("""
-            <div style="margin-bottom: 24px;">
-                <h2 style="font-family: 'Hanken Grotesk', sans-serif; font-size: 26px; font-weight: 700; color: #e1e2eb; margin:0 0 8px 0;">Acceso al Sistema</h2>
-                <p style="font-family: 'Inter', sans-serif; color: #e9bcb6; font-size: 14px; margin:0;">Ingresa tus credenciales para acceder al panel de rendimiento.</p>
-            </div>
-            """, unsafe_allow_html=True)
-
-            # Acoplado a tu estado original "input_socio"
-            st.text_input("NÚMERO DE SOCIO", key="input_socio", placeholder="Ej: 123456-01")
-            
-            st.checkbox("Recordarme en este dispositivo")
-            
-            # Botón que ejecuta el formulario
-            submit_btn = st.form_submit_button("Acceder ➔")
-
-            st.markdown("""
-            <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #5e3f3b;">
-                <p style="font-family: 'Inter', sans-serif; font-size: 12px; color: #e9bcb6; text-align: center; margin:0; line-height: 1.5;">
-                    Conexión segura bajo protocolos de Rojinegro Performance. <br/>
-                    ¿Necesitas ayuda? <a href="#" style="color: #e30613; text-decoration: none; font-weight: 700;">Contactar a Soporte</a>
-                </p>
-            </div>
-            """, unsafe_allow_html=True)
-
-        # Si se hace click, llamamos directamente a tu lógica original.
-        if submit_btn:
-            validar_socio()
-
-        # Tu botón de PWA original debajo del login
-        pwa_install_button()
+    st.markdown("<div style='text-align:center; color:#aaa; font-size:14px; margin-bottom:5px;'>ACCESO SOCIOS</div>", unsafe_allow_html=True)
+    st.text_input("Ingrese Nro de Socio", key="input_socio", placeholder="Ej: 123456-01", label_visibility="collapsed")
+    if st.button("INGRESAR", type="primary", use_container_width=True):
+        validar_socio()
+    
+    # AGREGADO: Llamada a la función de instrucciones
+    pwa_install_button()
 
 # --- 6. DEFINICIÓN DE PÁGINAS ---
 pg_inicio = st.Page("pages/1_inicio.py", title="Inicio", icon="🏠")
@@ -338,3 +196,6 @@ else:
             cerrar_sesion()
 
     pg.run()
+
+
+
