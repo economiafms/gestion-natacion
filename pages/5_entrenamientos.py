@@ -363,7 +363,7 @@ with tab_ver:
 
                 # Renderizar tarjetas lado a lado
                 for idx, row in stats_grouped.iterrows():
-                    label_ritmo = f"Ritmo c/{int(row['dist_ritmo'])}m"
+                    label_ritmo = f"Ritmo c/{int(row['dist_ritmo'])}m:"
                     texto_registros = f"{row['veces']} registro" if row['veces'] == 1 else f"{row['veces']} registros"
                     
                     st.markdown(f"""
@@ -376,12 +376,12 @@ with tab_ver:
                             </div>
                             <div style="display: flex; gap: 20px; align-items: center; text-align: right;">
                                 <div>
-                                    <div style="font-size: 11px; color: #888; margin-bottom: 2px;">TIEMPO MEDIO</div>
+                                    <div style="font-size: 11px; color: #aaa; margin-bottom: 2px; letter-spacing: 0.5px;">TIEMPO MEDIO</div>
                                     <div class="final-time" style="background: transparent; padding: 0;">{fmt_mm_ss(row['promedio_seg'])}</div>
                                 </div>
                                 <div style="border-left: 1px solid #444; padding-left: 20px;">
                                     <div style="font-size: 11px; color: #888; margin-bottom: 2px; text-transform: uppercase;">{label_ritmo}</div>
-                                    <div class="final-time" style="background: transparent; padding: 0;">{fmt_mm_ss(row['ritmo_seg'])}</div>
+                                    <div style="font-family: 'Courier New', monospace; font-size: 18px; font-weight: bold; color: #eee;">{fmt_mm_ss(row['ritmo_seg'])}</div>
                                 </div>
                             </div>
                         </div>
