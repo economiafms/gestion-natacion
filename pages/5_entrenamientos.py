@@ -315,7 +315,6 @@ with tab_ver:
     # 1. Selector de Nadador (Solo para M o P)
     if rol in ["M", "P"]:
         # FILTRO INTELIGENTE:
-        # Solo mostramos nadadores que tengan registros en 'entrenamientos'
         if not df_ent.empty:
             ids_con_historia = df_ent['codnadador'].unique().astype(str)
             df_nad_con_historia = df_nad[df_nad['codnadador'].astype(str).isin(ids_con_historia)]
@@ -333,14 +332,12 @@ with tab_ver:
         if not df_h.empty:
             df_h = df_h.merge(df_est, on='codestilo', how='left').merge(df_dist, on='coddistancia', how='left')
             
-            # --- NUEVA SECCIÓN: PROMEDIOS Y RITMOS (100% LECTURA SEGURA) ---
+            # --- SECCIÓN: PROMEDIOS Y RITMOS (100% LECTURA SEGURA) ---
             st.markdown("<div class='section-title'>⏱️ Promedios y Ritmos Históricos</div>", unsafe_allow_html=True)
             
-            # Crear copia aislada para cálculos matemáticos
             df_stats = df_h.copy()
             df_stats['seg_final'] = df_stats['tiempo_final'].apply(a_segundos)
 
-            # Función para extraer el número de la distancia (ej: "100 mts" -> 100)
             def get_dist(text):
                 try: 
                     return int(''.join(filter(str.isdigit, str(text))))
@@ -349,22 +346,25 @@ with tab_ver:
 
             df_stats['dist_num'] = df_stats['descripcion_y'].apply(get_dist)
             
-            # Solo calcular ritmos para distancias >= 50m y que tengan tiempo válido
+            # Solo consideramos distancias >= 50m con tiempo válido
             df_stats = df_stats[(df_stats['dist_num'] >= 50) & (df_stats['seg_final'].notna())]
 
             if not df_stats.empty:
-                # Agrupar datos
                 stats_grouped = df_stats.groupby(['descripcion_x', 'descripcion_y', 'dist_num']).agg(
                     veces=('id_entrenamiento', 'count'),
                     promedio_seg=('seg_final', 'mean')
                 ).reset_index()
 
-                # El ritmo cada 50m es = Tiempo promedio / (Distancia Total / 50)
-                stats_grouped['ritmo_50m_seg'] = stats_grouped['promedio_seg'] / (stats_grouped['dist_num'] / 50)
+                # LÓGICA DE RITMO SEGÚN DISTANCIA:
+                # Distancia = 50m -> Ritmo c/ 25m
+                # Distancia > 50m -> Ritmo c/ 50m
+                stats_grouped['dist_ritmo'] = np.where(stats_grouped['dist_num'] == 50, 25, 50)
+                stats_grouped['ritmo_seg'] = stats_grouped['promedio_seg'] / (stats_grouped['dist_num'] / stats_grouped['dist_ritmo'])
+                
                 stats_grouped = stats_grouped.sort_values(['descripcion_x', 'dist_num'])
 
-                # Renderizar las tarjetas sin expander y ocupando el ancho completo
                 for idx, row in stats_grouped.iterrows():
+                    label_ritmo = f"Ritmo c/{int(row['dist_ritmo'])}m:"
                     st.markdown(f"""
                     <div class="test-card">
                         <div class="test-header" style="border-bottom: none; margin-bottom: 0; padding-bottom: 0;">
@@ -374,7 +374,7 @@ with tab_ver:
                             </div>
                             <div style="text-align: right;">
                                 <div class="final-time" style="background: transparent; padding: 0;">{fmt_mm_ss(row['promedio_seg'])}</div>
-                                <div style="font-size: 13px; color: #888; margin-top: 4px;">Ritmo c/50m: <span style="color: #E30613; font-weight: bold;">{fmt_mm_ss(row['ritmo_50m_seg'])}</span></div>
+                                <div style="font-size: 13px; color: #888; margin-top: 4px;">{label_ritmo} <span style="color: #E30613; font-weight: bold;">{fmt_mm_ss(row['ritmo_seg'])}</span></div>
                             </div>
                         </div>
                     </div>
@@ -386,12 +386,10 @@ with tab_ver:
             # --- FILTROS DINÁMICOS ---
             st.markdown("<div class='section-title'>🔍 Filtros</div>", unsafe_allow_html=True)
             
-            # 2. Filtro Estilo
             est_opts = ["Todos"] + sorted(df_h['descripcion_x'].unique().tolist())
             c_f1, c_f2 = st.columns(2)
             f_est = c_f1.selectbox("Estilo", est_opts)
             
-            # 3. Filtro Distancia
             if f_est == "Todos":
                 valid_dists = sorted(df_h['descripcion_y'].unique().tolist())
             else:
@@ -408,8 +406,6 @@ with tab_ver:
                 st.markdown("<div class='section-title'>📊 Distribución por Estilos</div>", unsafe_allow_html=True)
                 
                 conteo = df_filt.groupby(['descripcion_x', 'descripcion_y']).size().reset_index(name='Cantidad')
-                
-                # Etiqueta vacía si es 1
                 conteo['Etiqueta'] = conteo['Cantidad'].apply(lambda x: str(x) if x > 1 else "")
                 
                 fig_count = px.bar(
@@ -418,12 +414,11 @@ with tab_ver:
                     y='Cantidad', 
                     color='descripcion_y',
                     text='Etiqueta',
-                    color_discrete_sequence=px.colors.sequential.OrRd[::-1], # Colores Anaranjados
+                    color_discrete_sequence=px.colors.sequential.OrRd[::-1],
                     labels={'descripcion_x': 'Estilo', 'descripcion_y': 'Distancia'},
                     custom_data=['descripcion_y']
                 )
                 
-                # Tooltip Detallado y Texto Grande
                 fig_count.update_traces(
                     textposition='inside', 
                     textfont=dict(size=20, color='white'), 
@@ -501,7 +496,6 @@ with tab_ver:
                     fig_bar = px.bar(df_bar, x='Tramo', y='Segundos', text='Etiqueta',
                                      color_discrete_sequence=['#E30613'])
                     
-                    # AUMENTO DE TAMAÑO DE TEXTO AQUÍ (size=18)
                     fig_bar.update_traces(textposition='auto', textfont=dict(size=18), hovertemplate='⏱️ %{text}<extra></extra>')
                     
                     fig_bar.update_layout(
