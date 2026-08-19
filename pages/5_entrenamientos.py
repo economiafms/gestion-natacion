@@ -39,7 +39,7 @@ def fmt_mm_ss(seconds):
     if seconds is None or np.isnan(seconds): return ""
     m = int(seconds // 60)
     s = int(seconds % 60)
-    c = int((seconds - int(seconds)) * 100)
+    c = int(round((seconds - int(seconds)) * 100))
     return f"{m:02d}:{s:02d}.{c:02d}"
 
 st.title("⏱️ Centro de Entrenamiento")
@@ -333,6 +333,53 @@ with tab_ver:
         if not df_h.empty:
             df_h = df_h.merge(df_est, on='codestilo', how='left').merge(df_dist, on='coddistancia', how='left')
             
+            # --- NUEVA SECCIÓN: PROMEDIOS Y RITMOS (100% LECTURA SEGURA) ---
+            st.markdown("<div class='section-title'>⏱️ Promedios y Ritmos Históricos</div>", unsafe_allow_html=True)
+            
+            # Crear copia aislada para cálculos matemáticos
+            df_stats = df_h.copy()
+            df_stats['seg_final'] = df_stats['tiempo_final'].apply(a_segundos)
+
+            # Función para extraer el número de la distancia (ej: "100 mts" -> 100)
+            def get_dist(text):
+                try: 
+                    return int(''.join(filter(str.isdigit, str(text))))
+                except: 
+                    return 0
+
+            df_stats['dist_num'] = df_stats['descripcion_y'].apply(get_dist)
+            
+            # Solo calcular ritmos para distancias >= 50m y que tengan tiempo válido
+            df_stats = df_stats[(df_stats['dist_num'] >= 50) & (df_stats['seg_final'].notna())]
+
+            if not df_stats.empty:
+                # Agrupar datos
+                stats_grouped = df_stats.groupby(['descripcion_x', 'descripcion_y', 'dist_num']).agg(
+                    veces=('id_entrenamiento', 'count'),
+                    promedio_seg=('seg_final', 'mean')
+                ).reset_index()
+
+                # El ritmo cada 50m es = Tiempo promedio / (Distancia Total / 50)
+                stats_grouped['ritmo_50m_seg'] = stats_grouped['promedio_seg'] / (stats_grouped['dist_num'] / 50)
+                stats_grouped = stats_grouped.sort_values(['descripcion_x', 'dist_num'])
+
+                with st.expander("Ver tabla de promedios por estilo y distancia", expanded=True):
+                    c1, c2, c3 = st.columns(3)
+                    for idx, row in stats_grouped.iterrows():
+                        col = [c1, c2, c3][idx % 3]
+                        with col:
+                            st.markdown(f"""
+                            <div style="background-color: #1e1e1e; padding: 12px; border-radius: 8px; border-left: 4px solid #E30613; margin-bottom: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+                                <div style="font-size: 11px; color: #aaa; text-transform: uppercase; font-weight: bold; margin-bottom: 4px;">{row['descripcion_x']} - {row['descripcion_y']}</div>
+                                <div style="font-size: 18px; color: white; font-family: 'Courier New', monospace; font-weight: bold;">{fmt_mm_ss(row['promedio_seg'])}</div>
+                                <div style="font-size: 11px; color: #888;">Ritmo c/50m: <span style="color: #E30613; font-weight: bold;">{fmt_mm_ss(row['ritmo_50m_seg'])}</span></div>
+                                <div style="font-size: 10px; color: #666; margin-top: 4px;">En base a {row['veces']} registros</div>
+                            </div>
+                            """, unsafe_allow_html=True)
+            else:
+                st.info("Aún no hay suficientes registros de distancia (≥ 50m) para calcular promedios y ritmos.")
+
+
             # --- FILTROS DINÁMICOS ---
             st.markdown("<div class='section-title'>🔍 Filtros</div>", unsafe_allow_html=True)
             
