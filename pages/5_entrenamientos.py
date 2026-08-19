@@ -42,35 +42,6 @@ def fmt_mm_ss(seconds):
     c = int(round((seconds - int(seconds)) * 100))
     return f"{m:02d}:{s:02d}.{c:02d}"
 
-def calcular_categoria(fecha_nac):
-    """Calcula la categoría Master al 31 de diciembre del año actual"""
-    if pd.isna(fecha_nac) or not fecha_nac: 
-        return "S/C"
-    try:
-        dt = pd.to_datetime(fecha_nac, errors='coerce')
-        if pd.isna(dt): 
-            return "S/C"
-        
-        anio_actual = date.today().year
-        edad_diciembre = anio_actual - dt.year
-        
-        if edad_diciembre < 25: return "Premaster"
-        elif 25 <= edad_diciembre <= 29: return "Master A (25-29)"
-        elif 30 <= edad_diciembre <= 34: return "Master B (30-34)"
-        elif 35 <= edad_diciembre <= 39: return "Master C (35-39)"
-        elif 40 <= edad_diciembre <= 44: return "Master D (40-44)"
-        elif 45 <= edad_diciembre <= 49: return "Master E (45-49)"
-        elif 50 <= edad_diciembre <= 54: return "Master F (50-54)"
-        elif 55 <= edad_diciembre <= 59: return "Master G (55-59)"
-        elif 60 <= edad_diciembre <= 64: return "Master H (60-64)"
-        elif 65 <= edad_diciembre <= 69: return "Master I (65-69)"
-        elif 70 <= edad_diciembre <= 74: return "Master J (70-74)"
-        elif 75 <= edad_diciembre <= 79: return "Master K (75-79)"
-        elif 80 <= edad_diciembre <= 84: return "Master L (80-84)"
-        else: return "Master +85"
-    except:
-        return "S/C"
-
 st.title("⏱️ Centro de Entrenamiento")
 
 # --- CSS PERSONALIZADO ---
@@ -142,7 +113,8 @@ def cargar_entrenamientos():
             "nadadores": conn.read(worksheet="Nadadores"),
             "entrenamientos": conn.read(worksheet="Entrenamientos"),
             "estilos": conn.read(worksheet="Estilos"),
-            "distancias": conn.read(worksheet="Distancias")
+            "distancias": conn.read(worksheet="Distancias"),
+            "categorias": conn.read(worksheet="Categorias")
         }
     except: return None
 
@@ -154,16 +126,47 @@ df_nad = db['nadadores'].copy()
 df_ent = db['entrenamientos'].copy()
 df_est = db['estilos'].copy()
 df_dist = db['distancias'].copy()
+df_cat = db['categorias'].copy() if 'categorias' in db else pd.DataFrame()
 
 # Normalizar columnas (minúsculas y sin espacios)
 df_nad.columns = df_nad.columns.str.strip().str.lower()
 df_ent.columns = df_ent.columns.str.strip().str.lower()
 df_est.columns = df_est.columns.str.strip().str.lower()
 df_dist.columns = df_dist.columns.str.strip().str.lower()
+df_cat.columns = df_cat.columns.str.strip().str.lower()
 
-# Asignar categoría dinámicamente según la fecha de nacimiento
+# --- ASIGNACIÓN DINÁMICA DE CATEGORÍAS ---
+def calcular_categoria_db(fecha_nac):
+    """Calcula la edad al 31/12 del año actual y cruza con la tabla Categorias"""
+    if pd.isna(fecha_nac) or not fecha_nac or df_cat.empty: 
+        return "S/C"
+    try:
+        dt = pd.to_datetime(fecha_nac, errors='coerce')
+        if pd.isna(dt): 
+            return "S/C"
+        
+        # Edad al 31 de diciembre del año corriente
+        anio_actual = date.today().year
+        edad_diciembre = anio_actual - dt.year
+        
+        # Detección inteligente de columnas en la tabla Categorias
+        col_min = next((c for c in df_cat.columns if 'desde' in c or 'min' in c), None)
+        col_max = next((c for c in df_cat.columns if 'hasta' in c or 'max' in c), None)
+        col_desc = next((c for c in df_cat.columns if 'desc' in c or 'nom' in c or 'cat' in c), None)
+        
+        if col_min and col_max and col_desc:
+            match = df_cat[(pd.to_numeric(df_cat[col_min], errors='coerce') <= edad_diciembre) & 
+                           (pd.to_numeric(df_cat[col_max], errors='coerce') >= edad_diciembre)]
+            if not match.empty:
+                return str(match.iloc[0][col_desc]).strip()
+        
+        return "S/C"
+    except:
+        return "S/C"
+
+# Aplicamos la función si la columna de nacimiento existe
 if 'fechanacimiento' in df_nad.columns:
-    df_nad['categoria'] = df_nad['fechanacimiento'].apply(calcular_categoria)
+    df_nad['categoria'] = df_nad['fechanacimiento'].apply(calcular_categoria_db)
 else:
     df_nad['categoria'] = 'S/C'
 
