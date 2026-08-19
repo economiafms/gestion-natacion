@@ -220,10 +220,11 @@ with tab_cargar:
                     for i in range(1, 5):
                         st.write(f"Parcial {i}")
                         px1, px2, px3, px4 = st.columns([1.2, 1, 1, 1])
-                        px1.text_input(f"d{i}", value=f"{m_par} mts", disabled=True, label_visibility="collapsed", key=f"d_vis_{i}")
-                        pm = px2.number_input("M", 0, 59, 0, key=f"pm_{i}", label_visibility="collapsed")
-                        ps = px3.number_input("S", 0, 59, 0, key=f"ps_{i}", label_visibility="collapsed")
-                        pc = px4.number_input("C", 0, 99, 0, key=f"pc_{i}", label_visibility="collapsed")
+                        # AÑADIMOS _m_tot A LAS CLAVES PARA EVITAR QUE STREAMLIT CACHEE LOS VALORES AL CAMBIAR DE DISTANCIA
+                        px1.text_input(f"d{i}", value=f"{m_par} mts", disabled=True, label_visibility="collapsed", key=f"d_vis_{i}_{m_tot}")
+                        pm = px2.number_input("M", 0, 59, 0, key=f"pm_{i}_{m_tot}", label_visibility="collapsed")
+                        ps = px3.number_input("S", 0, 59, 0, key=f"ps_{i}_{m_tot}", label_visibility="collapsed")
+                        pc = px4.number_input("C", 0, 99, 0, key=f"pc_{i}_{m_tot}", label_visibility="collapsed")
                         lp.append(f"{pm:02d}:{ps:02d}.{pc:02d}" if (pm+ps+pc)>0 else "")
                 
                 submitted = st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True)
