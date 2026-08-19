@@ -113,8 +113,7 @@ def cargar_entrenamientos():
             "nadadores": conn.read(worksheet="Nadadores"),
             "entrenamientos": conn.read(worksheet="Entrenamientos"),
             "estilos": conn.read(worksheet="Estilos"),
-            "distancias": conn.read(worksheet="Distancias"),
-            "categorias": conn.read(worksheet="Categorias")
+            "distancias": conn.read(worksheet="Distancias")
         }
     except: return None
 
@@ -126,49 +125,12 @@ df_nad = db['nadadores'].copy()
 df_ent = db['entrenamientos'].copy()
 df_est = db['estilos'].copy()
 df_dist = db['distancias'].copy()
-df_cat = db['categorias'].copy() if 'categorias' in db else pd.DataFrame()
 
 # Normalizar columnas (minúsculas y sin espacios)
 df_nad.columns = df_nad.columns.str.strip().str.lower()
 df_ent.columns = df_ent.columns.str.strip().str.lower()
 df_est.columns = df_est.columns.str.strip().str.lower()
 df_dist.columns = df_dist.columns.str.strip().str.lower()
-df_cat.columns = df_cat.columns.str.strip().str.lower()
-
-# --- ASIGNACIÓN DINÁMICA DE CATEGORÍAS ---
-def calcular_categoria_db(fecha_nac):
-    """Calcula la edad al 31/12 del año actual y cruza con la tabla Categorias"""
-    if pd.isna(fecha_nac) or not fecha_nac or df_cat.empty: 
-        return "S/C"
-    try:
-        dt = pd.to_datetime(fecha_nac, errors='coerce')
-        if pd.isna(dt): 
-            return "S/C"
-        
-        # Edad al 31 de diciembre del año corriente
-        anio_actual = date.today().year
-        edad_diciembre = anio_actual - dt.year
-        
-        # Detección inteligente de columnas en la tabla Categorias
-        col_min = next((c for c in df_cat.columns if 'desde' in c or 'min' in c), None)
-        col_max = next((c for c in df_cat.columns if 'hasta' in c or 'max' in c), None)
-        col_desc = next((c for c in df_cat.columns if 'desc' in c or 'nom' in c or 'cat' in c), None)
-        
-        if col_min and col_max and col_desc:
-            match = df_cat[(pd.to_numeric(df_cat[col_min], errors='coerce') <= edad_diciembre) & 
-                           (pd.to_numeric(df_cat[col_max], errors='coerce') >= edad_diciembre)]
-            if not match.empty:
-                return str(match.iloc[0][col_desc]).strip()
-        
-        return "S/C"
-    except:
-        return "S/C"
-
-# Aplicamos la función si la columna de nacimiento existe
-if 'fechanacimiento' in df_nad.columns:
-    df_nad['categoria'] = df_nad['fechanacimiento'].apply(calcular_categoria_db)
-else:
-    df_nad['categoria'] = 'S/C'
 
 # Normalizar claves de cruce (IDs)
 for df in [df_ent, df_est, df_dist]:
@@ -599,7 +561,7 @@ if rol == "M":
                     
                     if not df_eq_filt.empty:
                         # Agrupar por nadador calculando su promedio para esta prueba
-                        stats_eq = df_eq_filt.groupby(['codnadador', 'apellido', 'nombre', 'categoria']).agg(
+                        stats_eq = df_eq_filt.groupby(['codnadador', 'apellido', 'nombre']).agg(
                             promedio_seg=('seg_final', 'mean')
                         ).reset_index()
                         
@@ -618,7 +580,6 @@ if rol == "M":
                         
                         for _, row_eq in stats_eq.iterrows():
                             nombre_nadador = f"{row_eq['apellido'].upper()}, {row_eq['nombre']}"
-                            categoria_nad = row_eq.get('categoria', 'S/C')
                             
                             label_ritmo_eq = f"Ritmo c/{int(dist_ritmo_eq)}m:" if dist_num_eq >= 50 else "Ritmo:"
                             
@@ -626,7 +587,7 @@ if rol == "M":
                             <div class="test-card">
                                 <div class="test-header" style="border-bottom: none; margin-bottom: 0; padding-bottom: 0; align-items: center;">
                                     <div>
-                                        <div class="test-style" style="font-size: 17px;">{nombre_nadador} <span style="color:#aaa; font-size:13px; font-weight:normal;">| {categoria_nad}</span></div>
+                                        <div class="test-style" style="font-size: 17px;">{nombre_nadador}</div>
                                         <div class="test-dist" style="margin-top: 4px; font-size: 13px;">{f_est_eq} <span style="color:#666; margin: 0 4px;">|</span> {f_dist_eq}</div>
                                     </div>
                                     <div style="display: flex; gap: 20px; align-items: center; text-align: right;">
