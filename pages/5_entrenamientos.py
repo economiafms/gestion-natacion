@@ -132,6 +132,10 @@ df_ent.columns = df_ent.columns.str.strip().str.lower()
 df_est.columns = df_est.columns.str.strip().str.lower()
 df_dist.columns = df_dist.columns.str.strip().str.lower()
 
+# Asegurar columna categoría (fallback si no existe)
+if 'categoria' not in df_nad.columns:
+    df_nad['categoria'] = 'S/C'
+
 # Normalizar claves de cruce (IDs)
 for df in [df_ent, df_est, df_dist]:
     if 'codestilo' in df.columns:
@@ -145,7 +149,11 @@ mi_nom_comp = f"{nad_info.iloc[0]['apellido'].upper()}, {nad_info.iloc[0]['nombr
 lista_noms = sorted((df_nad['apellido'].astype(str).str.upper() + ", " + df_nad['nombre'].astype(str)).unique().tolist())
 list_dist_total = [d for d in df_dist['descripcion'].unique() if "25" not in d and "4x" not in d.lower()]
 
-tab_ver, tab_cargar = st.tabs(["📂 Historial", "📝 Cargar Test"])
+# --- DEFINICIÓN DE PESTAÑAS SEGÚN ROL ---
+if rol == "M":
+    tab_ver, tab_cargar, tab_equipo = st.tabs(["📂 Historial", "📝 Cargar Test", "👥 Promedios Equipo"])
+else:
+    tab_ver, tab_cargar = st.tabs(["📂 Historial", "📝 Cargar Test"])
 
 # ==============================================================================
 #  CARGA DE TEST
@@ -220,6 +228,7 @@ with tab_cargar:
                     for i in range(1, 5):
                         st.write(f"Parcial {i}")
                         px1, px2, px3, px4 = st.columns([1.2, 1, 1, 1])
+                        # Clave dinámica para evitar el bug de actualización de estado
                         px1.text_input(f"d{i}", value=f"{m_par} mts", disabled=True, label_visibility="collapsed", key=f"d_vis_{i}_{m_tot}")
                         pm = px2.number_input("M", 0, 59, 0, key=f"pm_{i}_{m_tot}", label_visibility="collapsed")
                         ps = px3.number_input("S", 0, 59, 0, key=f"ps_{i}_{m_tot}", label_visibility="collapsed")
@@ -307,7 +316,7 @@ with tab_cargar:
                             except Exception as e: st.error(f"Error: {e}")
 
 # ==============================================================================
-#  HISTORIAL
+#  HISTORIAL (NADADOR INDIVIDUAL)
 # ==============================================================================
 with tab_ver:
     target_id = mi_id if rol == "N" else None
@@ -516,3 +525,90 @@ with tab_ver:
                     st.plotly_chart(fig_bar, use_container_width=True)
         else:
             st.info("No hay registros.")
+
+# ==============================================================================
+#  PROMEDIOS DEL EQUIPO (SOLO USUARIOS 'M')
+# ==============================================================================
+if rol == "M":
+    with tab_equipo:
+        st.markdown("<div class='section-title'>👥 Promedios del Equipo por Prueba</div>", unsafe_allow_html=True)
+        
+        if not df_ent.empty:
+            # Unir toda la información para cruzar entrenamientos con datos de los nadadores
+            df_global = df_ent.merge(df_est, on='codestilo', how='left') \
+                              .merge(df_dist, on='coddistancia', how='left') \
+                              .merge(df_nad, on='codnadador', how='left')
+            
+            # --- FILTROS DE LA PRUEBA ---
+            c_f1_eq, c_f2_eq = st.columns(2)
+            estilos_disp = sorted(df_global['descripcion_x'].dropna().unique().tolist())
+            f_est_eq = c_f1_eq.selectbox("Seleccionar Estilo", estilos_disp, key="eq_est")
+            
+            if f_est_eq:
+                dist_disp = sorted(df_global[df_global['descripcion_x'] == f_est_eq]['descripcion_y'].dropna().unique().tolist())
+                f_dist_eq = c_f2_eq.selectbox("Seleccionar Distancia", dist_disp, key="eq_dist")
+                
+                if f_dist_eq:
+                    # Filtrar por la prueba seleccionada
+                    df_eq_filt = df_global[(df_global['descripcion_x'] == f_est_eq) & (df_global['descripcion_y'] == f_dist_eq)].copy()
+                    
+                    df_eq_filt['seg_final'] = df_eq_filt['tiempo_final'].apply(a_segundos)
+                    
+                    def get_dist_eq(text):
+                        try: 
+                            return int(''.join(filter(str.isdigit, str(text))))
+                        except: 
+                            return 0
+                            
+                    dist_num_eq = get_dist_eq(f_dist_eq)
+                    df_eq_filt = df_eq_filt[df_eq_filt['seg_final'].notna()]
+                    
+                    if not df_eq_filt.empty:
+                        # Agrupar por nadador calculando su promedio para esta prueba
+                        stats_eq = df_eq_filt.groupby(['codnadador', 'apellido', 'nombre', 'categoria']).agg(
+                            promedio_seg=('seg_final', 'mean')
+                        ).reset_index()
+                        
+                        # Calcular ritmo según distancia
+                        if dist_num_eq >= 50:
+                            dist_ritmo_eq = 25 if dist_num_eq == 50 else 50
+                            stats_eq['ritmo_seg'] = stats_eq['promedio_seg'] / (dist_num_eq / dist_ritmo_eq)
+                        else:
+                            dist_ritmo_eq = dist_num_eq
+                            stats_eq['ritmo_seg'] = stats_eq['promedio_seg']
+                            
+                        # Ordenar del más rápido al más lento
+                        stats_eq = stats_eq.sort_values('promedio_seg')
+                        
+                        st.write(f"**Resultados para {f_est_eq} | {f_dist_eq}**")
+                        
+                        for _, row_eq in stats_eq.iterrows():
+                            nombre_nadador = f"{row_eq['apellido'].upper()}, {row_eq['nombre']}"
+                            categoria_nad = row_eq.get('categoria', 'S/C')
+                            
+                            label_ritmo_eq = f"Ritmo c/{int(dist_ritmo_eq)}m:" if dist_num_eq >= 50 else "Ritmo:"
+                            
+                            st.markdown(f"""
+                            <div class="test-card">
+                                <div class="test-header" style="border-bottom: none; margin-bottom: 0; padding-bottom: 0; align-items: center;">
+                                    <div>
+                                        <div class="test-style" style="font-size: 17px;">{nombre_nadador} <span style="color:#aaa; font-size:13px; font-weight:normal;">| {categoria_nad}</span></div>
+                                        <div class="test-dist" style="margin-top: 4px; font-size: 13px;">{f_est_eq} <span style="color:#666; margin: 0 4px;">|</span> {f_dist_eq}</div>
+                                    </div>
+                                    <div style="display: flex; gap: 20px; align-items: center; text-align: right;">
+                                        <div>
+                                            <div style="font-size: 11px; color: #aaa; margin-bottom: 2px; letter-spacing: 0.5px;">TIEMPO MEDIO</div>
+                                            <div class="final-time" style="background: transparent; padding: 0; color: #eee;">{fmt_mm_ss(row_eq['promedio_seg'])}</div>
+                                        </div>
+                                        <div style="border-left: 1px solid #444; padding-left: 20px;">
+                                            <div style="font-size: 11px; color: #888; margin-bottom: 2px; text-transform: uppercase;">{label_ritmo_eq}</div>
+                                            <div style="font-family: 'Courier New', monospace; font-size: 18px; font-weight: bold; color: #E30613;">{fmt_mm_ss(row_eq['ritmo_seg'])}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                    else:
+                        st.info("No hay tiempos registrados para esta prueba específica.")
+        else:
+            st.info("No hay registros de entrenamientos en la base de datos.")
