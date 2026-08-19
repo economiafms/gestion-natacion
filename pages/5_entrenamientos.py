@@ -220,7 +220,6 @@ with tab_cargar:
                     for i in range(1, 5):
                         st.write(f"Parcial {i}")
                         px1, px2, px3, px4 = st.columns([1.2, 1, 1, 1])
-                        # Clave dinámica para evitar el bug de actualización de estado
                         px1.text_input(f"d{i}", value=f"{m_par} mts", disabled=True, label_visibility="collapsed", key=f"d_vis_{i}_{m_tot}")
                         pm = px2.number_input("M", 0, 59, 0, key=f"pm_{i}_{m_tot}", label_visibility="collapsed")
                         ps = px3.number_input("S", 0, 59, 0, key=f"ps_{i}_{m_tot}", label_visibility="collapsed")
@@ -377,11 +376,11 @@ with tab_ver:
                             <div style="display: flex; gap: 20px; align-items: center; text-align: right;">
                                 <div>
                                     <div style="font-size: 11px; color: #aaa; margin-bottom: 2px; letter-spacing: 0.5px;">TIEMPO MEDIO</div>
-                                    <div class="final-time" style="background: transparent; padding: 0;">{fmt_mm_ss(row['promedio_seg'])}</div>
+                                    <div class="final-time" style="background: transparent; padding: 0; color: #eee;">{fmt_mm_ss(row['promedio_seg'])}</div>
                                 </div>
                                 <div style="border-left: 1px solid #444; padding-left: 20px;">
                                     <div style="font-size: 11px; color: #888; margin-bottom: 2px; text-transform: uppercase;">{label_ritmo}</div>
-                                    <div style="font-family: 'Courier New', monospace; font-size: 18px; font-weight: bold; color: #eee;">{fmt_mm_ss(row['ritmo_seg'])}</div>
+                                    <div style="font-family: 'Courier New', monospace; font-size: 18px; font-weight: bold; color: #E30613;">{fmt_mm_ss(row['ritmo_seg'])}</div>
                                 </div>
                             </div>
                         </div>
