@@ -220,7 +220,7 @@ with tab_cargar:
                     for i in range(1, 5):
                         st.write(f"Parcial {i}")
                         px1, px2, px3, px4 = st.columns([1.2, 1, 1, 1])
-                        # AÑADIMOS _m_tot A LAS CLAVES PARA EVITAR QUE STREAMLIT CACHEE LOS VALORES AL CAMBIAR DE DISTANCIA
+                        # Clave dinámica para evitar el bug de actualización de estado
                         px1.text_input(f"d{i}", value=f"{m_par} mts", disabled=True, label_visibility="collapsed", key=f"d_vis_{i}_{m_tot}")
                         pm = px2.number_input("M", 0, 59, 0, key=f"pm_{i}_{m_tot}", label_visibility="collapsed")
                         ps = px3.number_input("S", 0, 59, 0, key=f"ps_{i}_{m_tot}", label_visibility="collapsed")
@@ -356,26 +356,33 @@ with tab_ver:
                     promedio_seg=('seg_final', 'mean')
                 ).reset_index()
 
-                # LÓGICA DE RITMO SEGÚN DISTANCIA:
-                # Distancia = 50m -> Ritmo c/ 25m
-                # Distancia > 50m -> Ritmo c/ 50m
+                # LÓGICA DE RITMO SEGÚN DISTANCIA
                 stats_grouped['dist_ritmo'] = np.where(stats_grouped['dist_num'] == 50, 25, 50)
                 stats_grouped['ritmo_seg'] = stats_grouped['promedio_seg'] / (stats_grouped['dist_num'] / stats_grouped['dist_ritmo'])
-                
                 stats_grouped = stats_grouped.sort_values(['descripcion_x', 'dist_num'])
 
+                # Renderizar tarjetas lado a lado
                 for idx, row in stats_grouped.iterrows():
-                    label_ritmo = f"Ritmo c/{int(row['dist_ritmo'])}m:"
+                    label_ritmo = f"Ritmo c/{int(row['dist_ritmo'])}m"
+                    texto_registros = f"{row['veces']} registro" if row['veces'] == 1 else f"{row['veces']} registros"
+                    
                     st.markdown(f"""
                     <div class="test-card">
-                        <div class="test-header" style="border-bottom: none; margin-bottom: 0; padding-bottom: 0;">
+                        <div class="test-header" style="border-bottom: none; margin-bottom: 0; padding-bottom: 0; align-items: center;">
                             <div>
                                 <div class="test-style">{row['descripcion_x']}</div>
-                                <div class="test-dist">{row['descripcion_y']} <span class="test-date">| Promedio de {row['veces']} registros</span></div>
+                                <div class="test-dist">{row['descripcion_y']}</div>
+                                <div class="test-date" style="margin-left: 0; margin-top: 2px;">{texto_registros}</div>
                             </div>
-                            <div style="text-align: right;">
-                                <div class="final-time" style="background: transparent; padding: 0;">{fmt_mm_ss(row['promedio_seg'])}</div>
-                                <div style="font-size: 13px; color: #888; margin-top: 4px;">{label_ritmo} <span style="color: #E30613; font-weight: bold;">{fmt_mm_ss(row['ritmo_seg'])}</span></div>
+                            <div style="display: flex; gap: 20px; align-items: center; text-align: right;">
+                                <div>
+                                    <div style="font-size: 11px; color: #888; margin-bottom: 2px;">TIEMPO MEDIO</div>
+                                    <div class="final-time" style="background: transparent; padding: 0;">{fmt_mm_ss(row['promedio_seg'])}</div>
+                                </div>
+                                <div style="border-left: 1px solid #444; padding-left: 20px;">
+                                    <div style="font-size: 11px; color: #888; margin-bottom: 2px; text-transform: uppercase;">{label_ritmo}</div>
+                                    <div class="final-time" style="background: transparent; padding: 0;">{fmt_mm_ss(row['ritmo_seg'])}</div>
+                                </div>
                             </div>
                         </div>
                     </div>
