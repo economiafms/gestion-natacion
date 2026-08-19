@@ -363,19 +363,22 @@ with tab_ver:
                 stats_grouped['ritmo_50m_seg'] = stats_grouped['promedio_seg'] / (stats_grouped['dist_num'] / 50)
                 stats_grouped = stats_grouped.sort_values(['descripcion_x', 'dist_num'])
 
-                with st.expander("Ver tabla de promedios por estilo y distancia", expanded=True):
-                    c1, c2, c3 = st.columns(3)
-                    for idx, row in stats_grouped.iterrows():
-                        col = [c1, c2, c3][idx % 3]
-                        with col:
-                            st.markdown(f"""
-                            <div style="background-color: #1e1e1e; padding: 12px; border-radius: 8px; border-left: 4px solid #E30613; margin-bottom: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
-                                <div style="font-size: 11px; color: #aaa; text-transform: uppercase; font-weight: bold; margin-bottom: 4px;">{row['descripcion_x']} - {row['descripcion_y']}</div>
-                                <div style="font-size: 18px; color: white; font-family: 'Courier New', monospace; font-weight: bold;">{fmt_mm_ss(row['promedio_seg'])}</div>
-                                <div style="font-size: 11px; color: #888;">Ritmo c/50m: <span style="color: #E30613; font-weight: bold;">{fmt_mm_ss(row['ritmo_50m_seg'])}</span></div>
-                                <div style="font-size: 10px; color: #666; margin-top: 4px;">En base a {row['veces']} registros</div>
+                # Renderizar las tarjetas sin expander y ocupando el ancho completo
+                for idx, row in stats_grouped.iterrows():
+                    st.markdown(f"""
+                    <div class="test-card">
+                        <div class="test-header" style="border-bottom: none; margin-bottom: 0; padding-bottom: 0;">
+                            <div>
+                                <div class="test-style">{row['descripcion_x']}</div>
+                                <div class="test-dist">{row['descripcion_y']} <span class="test-date">| Promedio de {row['veces']} registros</span></div>
                             </div>
-                            """, unsafe_allow_html=True)
+                            <div style="text-align: right;">
+                                <div class="final-time" style="background: transparent; padding: 0;">{fmt_mm_ss(row['promedio_seg'])}</div>
+                                <div style="font-size: 13px; color: #888; margin-top: 4px;">Ritmo c/50m: <span style="color: #E30613; font-weight: bold;">{fmt_mm_ss(row['ritmo_50m_seg'])}</span></div>
+                            </div>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
             else:
                 st.info("Aún no hay suficientes registros de distancia (≥ 50m) para calcular promedios y ritmos.")
 
