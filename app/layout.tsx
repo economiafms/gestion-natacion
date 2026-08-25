@@ -10,7 +10,7 @@ const inter = Inter({
 
 const oswald = Oswald({
   variable: "--font-heading",
-  weight: ["500", "600", "700", "800"],
+  weight: ["500", "600", "700"],
   subsets: ["latin"],
 });
 
