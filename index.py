@@ -2,6 +2,7 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 import time
+from theme import inject_theme, hide_sidebar
 
 # --- 1. CONFIGURACIÓN DEL ÍCONO (ENLACE GITHUB RAW) ---
 # Usamos el enlace RAW directo de GitHub. Esto es lo más compatible que existe.
@@ -95,68 +96,98 @@ def cerrar_sesion():
         del st.session_state[key]
     st.rerun()
 
-# --- NUEVA FUNCIÓN: INSTRUCCIONES DE INSTALACIÓN ---
+# --- INSTRUCCIONES DE INSTALACIÓN (PWA) ---
 def pwa_install_button():
-    st.write("---")
-    with st.expander("📲 INSTALAR APP EN TU CELULAR"):
+    with st.expander("Instalar la app en tu celular"):
         st.markdown("""
-        Puedes agregar esta aplicación a tu pantalla de inicio para un acceso más rápido:
-        
-        **🤖 Android (Chrome):**
-        1. Toca los tres puntos **(⋮)** arriba a la derecha.
-        2. Selecciona **'Instalar aplicación'** o 'Agregar a la pantalla de inicio'.
-        
-        **🍎 iPhone (Safari):**
-        1. Toca el botón **Compartir** (cuadrado con flecha arriba) en la barra inferior.
-        2. Desliza hacia abajo y toca en **'Agregar al inicio'**.
+        Podés agregar esta aplicación a tu pantalla de inicio para un acceso más rápido:
+
+        **Android (Chrome)**
+        1. Tocá los tres puntos **(⋮)** arriba a la derecha.
+        2. Seleccioná **"Instalar aplicación"** o "Agregar a la pantalla de inicio".
+
+        **iPhone (Safari)**
+        1. Tocá el botón **Compartir** (cuadrado con flecha hacia arriba) en la barra inferior.
+        2. Deslizá hacia abajo y tocá **"Agregar al inicio"**.
         """)
-        st.info("Nota: Tenerla instalada te permite acceder más rápido a tus tiempos, rutinas, categoría y seguimiento personal. Es una herramienta pensada para acompañar tu evolución deportiva día a día. Tu progreso también se construye con constancia.")
+        st.caption("Tenerla instalada te permite acceder más rápido a tus tiempos, rutinas, categoría y seguimiento personal.")
 
 # --- 5. PANTALLA DE LOGIN ---
 def login_screen():
-    st.markdown("""<style>[data-testid="stSidebar"] {display: none;}</style>""", unsafe_allow_html=True)
+    hide_sidebar()
+    inject_theme()
+
     st.markdown("""
         <style>
-            .login-container {
+            .nob-hero {
                 text-align: center;
-                padding: 30px;
-                border-radius: 20px;
-                background: linear-gradient(180deg, #121212 0%, #000000 100%);
-                border: 2px solid #333;
-                margin-bottom: 20px;
-                box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+                padding: 36px 28px 30px;
+                border-radius: 22px;
+                background:
+                    radial-gradient(120% 140% at 50% -20%, rgba(227,6,19,0.22) 0%, rgba(227,6,19,0) 55%),
+                    linear-gradient(180deg, #15161c 0%, #0a0a0d 100%);
+                border: 1px solid var(--nob-border);
+                margin-bottom: 18px;
+                box-shadow: 0 18px 40px rgba(0,0,0,0.45);
+            }
+            .nob-tag {
+                display: inline-block;
+                font-size: 11px;
+                font-weight: 700;
+                letter-spacing: 1.4px;
+                color: var(--nob-gold);
+                background: rgba(255, 201, 60, 0.1);
+                border: 1px solid rgba(255, 201, 60, 0.35);
+                border-radius: 999px;
+                padding: 5px 14px;
+                margin-bottom: 16px;
+                text-transform: uppercase;
             }
             .nob-title {
-                font-size: 32px;
-                font-weight: 900;
-                color: #E30613;
+                font-family: 'Oswald', sans-serif;
+                font-size: 30px;
+                font-weight: 800;
+                color: var(--nob-text);
                 text-transform: uppercase;
-                margin: 10px 0 5px 0;
-                line-height: 1;
-                text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
-            }
-            .nob-quote {
-                font-size: 18px;
-                font-style: italic;
-                color: #ffffff;
-                margin-bottom: 20px;
-                font-family: serif;
                 letter-spacing: 1px;
-                opacity: 0.9;
+                margin: 4px 0 10px 0;
+                line-height: 1.15;
+            }
+            .nob-title span { color: var(--nob-red); }
+            .nob-quote {
+                font-size: 15px;
+                font-style: italic;
+                color: var(--nob-muted);
+                letter-spacing: 0.3px;
+            }
+            .nob-access-label {
+                text-align: center;
+                color: var(--nob-muted);
+                font-family: 'Oswald', sans-serif;
+                font-weight: 600;
+                letter-spacing: 1.6px;
+                font-size: 12px;
+                text-transform: uppercase;
+                margin: 4px 0 10px 0;
             }
         </style>
-        <div class="login-container">
-            <div style="font-size: 40px; margin-bottom: 10px;">🔴⚫ 🏊 ⚫🔴</div>
-            <div class="nob-title">NEWELL'S OLD BOYS</div>
-            <div class="nob-quote">"Del deporte sos la gloria"</div>
+        <div class="nob-hero">
+            <div class="nob-tag">Complejo Acuático</div>
+            <div class="nob-title">NEWELL'S<br/><span>OLD BOYS</span></div>
+            <div class="nob-quote">&ldquo;Del deporte sos la gloria&rdquo;</div>
         </div>
     """, unsafe_allow_html=True)
-    st.markdown("<div style='text-align:center; color:#aaa; font-size:14px; margin-bottom:5px;'>ACCESO SOCIOS</div>", unsafe_allow_html=True)
+
+    _, mid, _ = st.columns([1, 1, 1])
+    with mid:
+        st.image("escudo.png", use_container_width=True)
+
+    st.markdown("<div class='nob-access-label'>Acceso Socios</div>", unsafe_allow_html=True)
     st.text_input("Ingrese Nro de Socio", key="input_socio", placeholder="Ej: 123456-01", label_visibility="collapsed")
     if st.button("INGRESAR", type="primary", use_container_width=True):
         validar_socio()
-    
-    # AGREGADO: Llamada a la función de instrucciones
+
+    st.write("")
     pwa_install_button()
 
 # --- 6. DEFINICIÓN DE PÁGINAS ---

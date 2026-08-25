@@ -6,9 +6,11 @@ from datetime import datetime, timedelta, timezone, date
 import time
 import uuid
 import random
+from theme import inject_theme, section_title, stat_card
 
 # --- CONFIGURACIÓN ---
 st.set_page_config(page_title="Inicio", layout="centered")
+inject_theme()
 
 # --- INICIALIZACIÓN SEGURA DE VARIABLES ---
 if "role" not in st.session_state or not st.session_state.role:
@@ -249,33 +251,51 @@ def buscar_mejor_tiempo(prueba, df_t_nadador):
 # --- VISUALIZACIÓN ---
 
 # BANNER TÍTULO
-st.markdown("""
+st.markdown(f"""
     <style>
-        .banner-box {
-            background-color: #262730;
-            padding: 20px;
-            border-radius: 12px;
-            border: 1px solid #444;
-            text-align: center;
-            margin-bottom: 25px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-        }
-        .banner-sub {
-            color: white !important;
-            font-size: 20px;
+        .banner-box {{
+            background:
+                radial-gradient(120% 160% at 15% -30%, rgba(227,6,19,0.22) 0%, rgba(227,6,19,0) 55%),
+                linear-gradient(180deg, var(--nob-surface) 0%, var(--nob-bg) 100%);
+            padding: 18px 22px;
+            border-radius: 14px;
+            border: 1px solid var(--nob-border);
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 22px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.35);
+        }}
+        .banner-icon {{
+            width: 44px; height: 44px; border-radius: 50%;
+            background: rgba(227,6,19,0.12); border: 1px solid rgba(227,6,19,0.4);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 20px; flex-shrink: 0;
+        }}
+        .banner-sub {{
+            color: var(--nob-muted) !important;
+            font-size: 12px;
+            letter-spacing: 1.2px;
+            text-transform: uppercase;
             margin: 0;
-            font-weight: normal;
-        }
-        .banner-main {
-            color: #E30613 !important;
-            font-size: 32px;
-            margin: 0;
+            font-weight: 600;
+        }}
+        .banner-main {{
+            color: var(--nob-text) !important;
+            font-size: 22px;
+            margin: 2px 0 0 0;
             font-weight: 800;
-        }
+            font-family: 'Oswald', sans-serif;
+            letter-spacing: 0.5px;
+        }}
+        .banner-main span {{ color: var(--nob-red); }}
     </style>
     <div class='banner-box'>
-        <h3 class='banner-sub'>BIENVENIDOS AL COMPLEJO ACUÁTICO</h3>
-        <h1 class='banner-main'>NEWELL'S OLD BOYS</h1>
+        <div class="banner-icon">&#127946;</div>
+        <div>
+            <p class='banner-sub'>Complejo Acuático</p>
+            <h1 class='banner-main'>NEWELL'S <span>OLD BOYS</span></h1>
+        </div>
     </div>
 """, unsafe_allow_html=True)
 
@@ -381,25 +401,39 @@ if db and st.session_state.user_id:
     mi_total = mis_oros + mis_platas + mis_bronces
 
     # 1. TARJETA PERFIL
-    st.write("### 👤 Mi Perfil")
+    section_title("Mi Perfil")
+    iniciales = f"{me['nombre'][:1]}{me['apellido'][:1]}".upper()
     st.markdown(f"""
     <style>
-        .padron-card {{ background-color: #262730; border: 1px solid #444; border-radius: 12px; padding: 15px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 6px rgba(0,0,0,0.3); margin-bottom: 20px; }}
-        .p-total {{ font-size: 26px; color: #FFD700; font-weight: bold; }}
+        .padron-card {{
+            background: var(--nob-surface); border: 1px solid var(--nob-border);
+            border-radius: 14px; padding: 16px; display: flex; align-items: center;
+            gap: 14px; box-shadow: 0 6px 14px rgba(0,0,0,0.3); margin-bottom: 20px;
+        }}
+        .p-avatar {{
+            width: 46px; height: 46px; border-radius: 50%; flex-shrink: 0;
+            background: linear-gradient(160deg, var(--nob-red) 0%, var(--nob-red-dark) 100%);
+            display: flex; align-items: center; justify-content: center;
+            font-family: 'Oswald', sans-serif; font-weight: 700; font-size: 16px; color: #fff;
+        }}
+        .p-name {{ font-weight: 700; font-size: 16px; color: var(--nob-text); font-family: 'Oswald', sans-serif; }}
+        .p-meta {{ font-size: 12px; color: var(--nob-muted); margin-top: 2px; }}
+        .p-medals {{ display: flex; gap: 10px; font-size: 13px; color: var(--nob-text); font-weight: 600; }}
+        .p-total {{ font-size: 22px; color: var(--nob-gold); font-weight: 800; font-family: 'Oswald', sans-serif; line-height: 1; }}
+        .p-cat {{ font-size: 12px; color: var(--nob-gold); font-weight: 700; margin-top: 2px; text-transform: uppercase; letter-spacing: 0.4px; }}
     </style>
     <div class="padron-card">
-        <div style="flex: 2; border-right: 1px solid #555;">
-            <div style="font-weight: bold; font-size: 18px; color: white;">{me['nombre']} {me['apellido']}</div>
-            <div style="font-size: 13px; color: #ccc;">{edad} años • {me['codgenero']}</div>
-        </div>
-        <div style="flex: 2; text-align: center;">
-            <div style="display: flex; justify-content: center; gap: 8px; font-size: 16px;">
-                <span>🥇{mis_oros}</span> <span>🥈{mis_platas}</span> <span>🥉{mis_bronces}</span>
+        <div class="p-avatar">{iniciales}</div>
+        <div style="flex: 2; border-right: 1px solid var(--nob-border); padding-right: 10px;">
+            <div class="p-name">{me['nombre']} {me['apellido']}</div>
+            <div class="p-meta">{edad} años &middot; {me['codgenero']}</div>
+            <div class="p-medals" style="margin-top:6px;">
+                <span>&#129351; {mis_oros}</span><span>&#129352; {mis_platas}</span><span>&#129353; {mis_bronces}</span>
             </div>
         </div>
-        <div style="flex: 1; text-align: right; border-left: 1px solid #555; padding-left: 10px;">
-            <div class="p-total">★ {mi_total}</div>
-            <div style="font-size: 16px; color: #4CAF50; font-weight: bold;">{cat}</div>
+        <div style="flex: 1; text-align: right;">
+            <div class="p-total">&#9733; {mi_total}</div>
+            <div class="p-cat">{cat}</div>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -443,12 +477,12 @@ if db and st.session_state.user_id:
                         if pendientes_check.empty:
                             st.balloons()
                             st.markdown(f"""
-                            <div style="border: 2px solid #FFD700; border-radius: 12px; background-color: #1a1a1a; padding: 20px; text-align: center; box-shadow: 0 4px 15px rgba(255, 215, 0, 0.2); margin-bottom: 20px;">
-                                <div style="font-size: 40px; margin-bottom: 10px;">🏆</div>
-                                <h3 style="margin: 0; color: #FFD700; font-weight: 800; letter-spacing: 1px;">¡MES COMPLETADO!</h3>
-                                <p style="color: #ccc; margin-top: 5px; font-size: 14px;">Sesión {int(r_row['nro_sesion'])} finalizada. ¡Completé todas las rutinas!</p>
-                                <div style="margin-top: 15px; padding: 8px; background-color: rgba(255, 215, 0, 0.1); border-radius: 8px; color: #FFD700; font-size: 12px; font-weight: bold;">
-                                    ¡Impresionante constancia! A descansar. 🔋
+                            <div style="border: 1px solid var(--nob-gold); border-radius: 14px; background: var(--nob-surface); padding: 22px; text-align: center; box-shadow: 0 8px 20px rgba(255, 201, 60, 0.15); margin-bottom: 20px;">
+                                <div style="font-size: 34px; margin-bottom: 8px;">&#127942;</div>
+                                <h3 style="margin: 0; color: var(--nob-gold); font-weight: 800; letter-spacing: 1px; font-family:'Oswald',sans-serif;">¡MES COMPLETADO!</h3>
+                                <p style="color: var(--nob-muted); margin-top: 6px; font-size: 14px;">Sesión {int(r_row['nro_sesion'])} finalizada. ¡Completé todas las rutinas!</p>
+                                <div style="margin-top: 15px; padding: 8px; background-color: rgba(255, 201, 60, 0.1); border-radius: 8px; color: var(--nob-gold); font-size: 12px; font-weight: bold;">
+                                    ¡Impresionante constancia! A descansar.
                                 </div>
                             </div>
                             """, unsafe_allow_html=True)
@@ -524,7 +558,7 @@ if db and st.session_state.user_id:
                             df_t_nadador = df_t_nadador.merge(df_dist.rename(columns={'descripcion': 'dist_desc'}), on='coddistancia', how='left')
                         df_t_nadador['segundos'] = df_t_nadador['tiempo'].apply(lambda x: tiempo_a_seg(x) if pd.notnull(x) else 999999.0)
 
-                st.markdown("<h5 style='text-align: center; color: #E30613; margin-bottom: 15px;'>🏆 MIS TORNEOS E INSCRIPCIONES</h5>", unsafe_allow_html=True)
+                section_title("Mis Torneos e Inscripciones")
                 
                 for row, esta, ins_user in vista_eventos:
                     comp_id = row['id_competencia']
@@ -555,14 +589,14 @@ if db and st.session_state.user_id:
                         
                         # --- INFO BÁSICA DEL TORNEO (ESTILO AGENDA) ---
                         st.markdown(f"""
-                        <div style="background-color: #1e1e24; border: 1px solid #444; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
-                            <div style="color:#4CAF50; font-weight:bold; font-size:13px; margin-bottom:8px;">📅 {fecha_ev_str} | ⏰ {hora_inicio}</div>
-                            <div style="display:flex; gap:15px; color:#ddd; font-size:12px; margin-bottom:6px;">
-                                <div>📍 {nom_pil}</div>
-                                <div>🏙️ {ubic_pil}</div>
-                                <div>💰 ${costo}</div>
+                        <div style="background-color: var(--nob-surface-2); border: 1px solid var(--nob-border); border-radius: 10px; padding: 14px; margin-bottom: 12px;">
+                            <div style="color:var(--nob-gold); font-weight:700; font-size:13px; margin-bottom:8px;">{fecha_ev_str} &middot; {hora_inicio}</div>
+                            <div style="display:flex; flex-wrap:wrap; gap:14px; color:var(--nob-text); font-size:12px; margin-bottom:6px;">
+                                <div>{nom_pil}</div>
+                                <div>{ubic_pil}</div>
+                                <div>$ {costo}</div>
                             </div>
-                            <div style="font-size:12px; color:#aaa; font-style: italic;">{desc}</div>
+                            <div style="font-size:12px; color:var(--nob-muted); font-style: italic;">{desc}</div>
                         </div>
                         """, unsafe_allow_html=True)
                         
@@ -571,12 +605,12 @@ if db and st.session_state.user_id:
                             chips_html = ""
                             for p in prev:
                                 mejor_tiempo = buscar_mejor_tiempo(p, df_t_nadador)
-                                tiempo_badge = f" <span style='color:#FFD700; font-family:monospace; font-weight:bold;'>({mejor_tiempo})</span>" if mejor_tiempo else ""
-                                chips_html += f"<span style='background-color:#444; color:#fff; padding:4px 10px; border-radius:15px; font-size:12px; margin-right:6px; margin-bottom:6px; display:inline-block; border:1px solid #555;'>{p}{tiempo_badge}</span>"
+                                tiempo_badge = f" <span style='color:var(--nob-gold); font-family:monospace; font-weight:bold;'>({mejor_tiempo})</span>" if mejor_tiempo else ""
+                                chips_html += f"<span style='background-color:var(--nob-surface); color:var(--nob-text); padding:4px 10px; border-radius:15px; font-size:12px; margin-right:6px; margin-bottom:6px; display:inline-block; border:1px solid var(--nob-border);'>{p}{tiempo_badge}</span>"
                             
                             st.markdown(f"""
-                            <div style="background-color: #2b2c36; border-left: 5px solid #4CAF50; border-radius: 8px; padding: 15px; margin-bottom: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
-                                <div style="font-size: 13px; color: #aaa; margin-bottom: 10px;">Mis pruebas seleccionadas:</div>
+                            <div style="background-color: var(--nob-surface-2); border-left: 4px solid var(--nob-red); border-radius: 8px; padding: 15px; margin-bottom: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
+                                <div style="font-size: 13px; color: var(--nob-muted); margin-bottom: 10px;">Mis pruebas seleccionadas:</div>
                                 <div>{chips_html}</div>
                             </div>
                             """, unsafe_allow_html=True)
@@ -585,12 +619,12 @@ if db and st.session_state.user_id:
                             with st.form(f"f_baja_{comp_id}"):
                                 c1, c2 = st.columns([3, 1])
                                 with c1: st.caption("Si ya no vas a participar, puedes darte de baja:")
-                                with c2: sub_baja = st.form_submit_button("🗑️ Darme de Baja")
+                                with c2: sub_baja = st.form_submit_button("Darme de baja")
                                 
                                 if sub_baja:
                                     ok, m = eliminar_inscripcion_inicio(comp_id, user_id)
                                     if ok: 
-                                        st.session_state.flash_msg = "🗑️ Te has dado de baja. ¡Te esperamos en el próximo torneo!"
+                                        st.session_state.flash_msg = "Te has dado de baja. ¡Te esperamos en el próximo torneo!"
                                         st.session_state.flash_type = "warning"
                                         st.rerun()
 
@@ -606,7 +640,7 @@ if db and st.session_state.user_id:
                                     else:
                                         ok, m = gestionar_inscripcion_inicio(comp_id, user_id, sel)
                                         if ok: 
-                                            st.session_state.flash_msg = f"🎯 **¡Inscripción guardada!** A entrenar con todo. ¡Te esperamos el {fecha_ev_str}, VAMOS NEWELL'S! 🔴⚫"
+                                            st.session_state.flash_msg = f"**¡Inscripción guardada!** A entrenar con todo. ¡Te esperamos el {fecha_ev_str}, vamos Newell's!"
                                             st.session_state.flash_type = "success"
                                             st.rerun()
                 st.write("")
@@ -614,7 +648,7 @@ if db and st.session_state.user_id:
     # 2. MIS REGISTROS (FRECUENCIA DE ESTILOS)
     mis_regs = db['tiempos'][db['tiempos']['codnadador'] == user_id].copy()
     if not mis_regs.empty:
-        st.markdown("<h5 style='text-align: center; color: #aaa; margin-bottom: 15px;'>MIS ESTILOS FRECUENTES</h5>", unsafe_allow_html=True)
+        section_title("Mis Estilos Frecuentes", muted=True)
         mis_regs = mis_regs.merge(db['estilos'], on='codestilo', how='left')
         col_desc = 'descripcion' if 'descripcion' in mis_regs.columns and 'descripcion_x' in mis_regs.columns else 'descripcion_x'
         if col_desc not in mis_regs.columns: col_desc = 'descripcion' 
@@ -625,10 +659,10 @@ if db and st.session_state.user_id:
         for (estilo, cantidad), col in zip(conteo.items(), cols):
             with col:
                 st.markdown(f"""
-                <div style="background-color: #262730; border: 1px solid #444; border-radius: 8px; padding: 10px; text-align: center; height: 100%;">
-                    <div style="font-size: 11px; color: #aaa; text-transform: uppercase; margin-bottom: 5px;">{estilo}</div>
-                    <div style="font-size: 24px; font-weight: bold; color: white; line-height: 1;">{cantidad}</div>
-                    <div style="font-size: 10px; color: #666;">carreras</div>
+                <div style="background-color: var(--nob-surface); border: 1px solid var(--nob-border); border-radius: 10px; padding: 12px 8px; text-align: center; height: 100%;">
+                    <div style="font-size: 11px; color: var(--nob-muted); text-transform: uppercase; margin-bottom: 5px; font-weight: 600;">{estilo}</div>
+                    <div style="font-size: 24px; font-weight: 800; color: var(--nob-text); line-height: 1; font-family:'Oswald',sans-serif;">{cantidad}</div>
+                    <div style="font-size: 10px; color: var(--nob-muted);">carreras</div>
                 </div>""", unsafe_allow_html=True)
     
     st.divider()
@@ -688,37 +722,31 @@ if db and st.session_state.user_id:
     st.write("")
 
     # // 2️⃣ Estadísticas del club
-    st.markdown("<h5 style='text-align: center; color: #888; margin-top: 20px;'>ESTADÍSTICAS DEL CLUB</h5>", unsafe_allow_html=True)
-    
+    section_title("Estadísticas del Club", muted=True)
+
     total_nadadores = len(db['nadadores'])
     total_pruebas_reg = len(df_t) + len(df_r)
 
-    st.markdown(f"""
-    <div style="display: flex; gap: 10px; margin-bottom: 20px;">
-        <div style="flex: 1; background-color: #262730; border-top: 3px solid #E30613; padding: 15px; border-radius: 8px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
-            <div style="font-size: 11px; color: #aaa; text-transform: uppercase;">Nadadores</div>
-            <div style="font-size: 28px; font-weight: 800; color: white;">{total_nadadores}</div>
-        </div>
-        <div style="flex: 1; background-color: #262730; border-top: 3px solid #E30613; padding: 15px; border-radius: 8px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
-            <div style="font-size: 11px; color: #aaa; text-transform: uppercase;">Pruebas Registradas</div>
-            <div style="font-size: 28px; font-weight: 800; color: white;">{total_pruebas_reg}</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    
+    c_stat1, c_stat2 = st.columns(2)
+    with c_stat1:
+        st.markdown(stat_card("Nadadores", total_nadadores), unsafe_allow_html=True)
+    with c_stat2:
+        st.markdown(stat_card("Pruebas Registradas", total_pruebas_reg), unsafe_allow_html=True)
+    st.write("")
+
     t_oro = len(df_t[df_t['posicion']==1]) + len(df_r[df_r['posicion']==1])
     t_plata = len(df_t[df_t['posicion']==2]) + len(df_r[df_r['posicion']==2])
     t_bronce = len(df_t[df_t['posicion']==3]) + len(df_r[df_r['posicion']==3])
     total_med = t_oro + t_plata + t_bronce
 
     st.markdown(f"""
-    <div style="background-color: #1E1E1E; border: 1px solid #333; border-radius: 10px; padding: 12px; margin-bottom: 25px;">
-        <div style="text-align:center; font-size:11px; color:#aaa; margin-bottom:8px; font-weight:bold;">MEDALLERO HISTÓRICO</div>
+    <div style="background-color: var(--nob-surface); border: 1px solid var(--nob-border); border-radius: 12px; padding: 14px; margin-bottom: 25px;">
+        <div style="text-align:center; font-size:11px; color:var(--nob-muted); margin-bottom:10px; font-weight:700; letter-spacing:0.6px; text-transform:uppercase;">Medallero Histórico</div>
         <div style="display: flex; justify-content: space-between; gap: 2px;">
-            <div style="flex:1; text-align:center;"><div style="font-size:22px; color:#FFD700;">🥇 {t_oro}</div></div>
-            <div style="flex:1; text-align:center; border-left:1px solid #333;"><div style="font-size:22px; color:#C0C0C0;">🥈 {t_plata}</div></div>
-            <div style="flex:1; text-align:center; border-left:1px solid #333;"><div style="font-size:22px; color:#CD7F32;">🥉 {t_bronce}</div></div>
-            <div style="flex:1; text-align:center; border-left:1px solid #333;"><div style="font-size:22px; color:#fff;">★ {total_med}</div></div>
+            <div style="flex:1; text-align:center;"><div style="font-size:20px; font-weight:800; font-family:'Oswald',sans-serif; color:var(--nob-gold);">&#129351; {t_oro}</div></div>
+            <div style="flex:1; text-align:center; border-left:1px solid var(--nob-border);"><div style="font-size:20px; font-weight:800; font-family:'Oswald',sans-serif; color:#C7CBD3;">&#129352; {t_plata}</div></div>
+            <div style="flex:1; text-align:center; border-left:1px solid var(--nob-border);"><div style="font-size:20px; font-weight:800; font-family:'Oswald',sans-serif; color:#CD7F32;">&#129353; {t_bronce}</div></div>
+            <div style="flex:1; text-align:center; border-left:1px solid var(--nob-border);"><div style="font-size:20px; font-weight:800; font-family:'Oswald',sans-serif; color:var(--nob-text);">&#9733; {total_med}</div></div>
         </div>
     </div>
     """, unsafe_allow_html=True)
