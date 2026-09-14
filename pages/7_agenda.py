@@ -42,7 +42,7 @@ LISTA_PRUEBAS = [
 # ==========================================
 
 def actualizar_con_retry(worksheet, data, max_retries=5):
-    """Manejo robusto de la API con reintentos."""
+    """Manejo robusto de la API con reintentos para guardar."""
     for i in range(max_retries):
         try:
             conn.update(worksheet=worksheet, data=data)
@@ -55,6 +55,20 @@ def actualizar_con_retry(worksheet, data, max_retries=5):
             else:
                 return False, e
     return False, "Tiempo de espera agotado."
+
+def leer_dataset_fresco(worksheet, max_retries=5):
+    """Manejo robusto de la API con reintentos para leer."""
+    for i in range(max_retries):
+        try: 
+            return conn.read(worksheet=worksheet, ttl=0).copy()
+        except Exception as e: 
+            if "429" in str(e) or "quota" in str(e):
+                import time
+                time.sleep((2 ** i) + random.uniform(0, 1))
+                continue
+            else:
+                return None
+    return None
 
 def calcular_categoria_master(anio_nac):
     """Calcula la categoría Master completa."""
@@ -126,10 +140,6 @@ def cargar_datos_agenda():
         return df_comp, df_ins, df_nad, df_pil, df_tiempos, df_estilos, df_dist
     except: return None, None, None, None, None, None, None
 
-def leer_dataset_fresco(worksheet):
-    try: return conn.read(worksheet=worksheet, ttl=0).copy()
-    except: return None
-
 def buscar_mejor_tiempo(prueba, df_t_nadador):
     if df_t_nadador.empty: return ""
     p_lower = prueba.lower()
@@ -173,7 +183,14 @@ def set_flash_message(mensaje, tipo="success"):
 # ==========================================
 def guardar_competencia(id_comp, nombre, fecha_ev, hora, cod_pil, fecha_lim, costo, desc, lista_pruebas_hab, max_pru=10):
     df_comp = leer_dataset_fresco("Competencias")
-    if df_comp is None: df_comp = pd.DataFrame(columns=["id_competencia", "nombre_evento", "fecha_evento", "hora_inicio", "cod_pileta", "fecha_limite", "costo", "descripcion", "pruebas_habilitadas", "max_pruebas"])
+    
+    # ⚠️ BLOQUEO DE SEGURIDAD (Si falla la lectura, cancelamos para no sobrescribir)
+    if df_comp is None: 
+        return False, "⚠️ Error de red al leer la base de datos. Operación cancelada para proteger el historial."
+    
+    if df_comp.empty: 
+        df_comp = pd.DataFrame(columns=["id_competencia", "nombre_evento", "fecha_evento", "hora_inicio", "cod_pileta", "fecha_limite", "costo", "descripcion", "pruebas_habilitadas", "max_pruebas"])
+    
     if 'pruebas_habilitadas' not in df_comp.columns: df_comp['pruebas_habilitadas'] = ""
     if 'max_pruebas' not in df_comp.columns: df_comp['max_pruebas'] = 10
 
@@ -206,9 +223,13 @@ def guardar_competencia(id_comp, nombre, fecha_ev, hora, cod_pil, fecha_lim, cos
 def eliminar_competencia(id_comp):
     df_comp = leer_dataset_fresco("Competencias")
     df_ins = leer_dataset_fresco("Inscripciones")
-    if df_comp is None: return False, "Error."
+    
+    # ⚠️ BLOQUEO DE SEGURIDAD
+    if df_comp is None or df_ins is None: 
+        return False, "⚠️ Error al leer historial. Operación cancelada."
+    
     df_comp = df_comp[df_comp['id_competencia'] != id_comp]
-    if df_ins is not None and not df_ins.empty:
+    if not df_ins.empty:
         df_ins = df_ins[df_ins['id_competencia'] != id_comp]
         actualizar_con_retry("Inscripciones", df_ins)
     
@@ -218,8 +239,15 @@ def eliminar_competencia(id_comp):
 
 def gestionar_inscripcion(id_comp, id_nadador, lista_pruebas):
     df_ins = leer_dataset_fresco("Inscripciones")
-    if df_ins is None: df_ins = pd.DataFrame(columns=["id_inscripcion", "id_competencia", "codnadador", "pruebas", "fecha_inscripcion"])
-    if not df_ins.empty: df_ins['codnadador'] = pd.to_numeric(df_ins['codnadador'], errors='coerce').fillna(0).astype(int)
+    
+    # ⚠️ BLOQUEO DE SEGURIDAD
+    if df_ins is None: 
+        return False, "⚠️ Error de lectura de red. Operación cancelada para evitar sobreescribir el historial."
+    
+    if df_ins.empty: 
+        df_ins = pd.DataFrame(columns=["id_inscripcion", "id_competencia", "codnadador", "pruebas", "fecha_inscripcion"])
+    
+    df_ins['codnadador'] = pd.to_numeric(df_ins['codnadador'], errors='coerce').fillna(0).astype(int)
 
     pruebas_str = ", ".join(lista_pruebas)
     mask = (df_ins['id_competencia'] == id_comp) & (df_ins['codnadador'] == id_nadador)
@@ -232,14 +260,20 @@ def gestionar_inscripcion(id_comp, id_nadador, lista_pruebas):
         nuevo = {"id_inscripcion": str(uuid.uuid4()), "id_competencia": id_comp, "codnadador": int(id_nadador), "pruebas": pruebas_str, "fecha_inscripcion": datetime.now().strftime("%Y-%m-%d")}
         df_ins = pd.concat([df_ins, pd.DataFrame([nuevo])], ignore_index=True)
         msg = "✅ Inscripción confirmada."
+        
     exito, _ = actualizar_con_retry("Inscripciones", df_ins)
     if exito: st.cache_data.clear(); return True, msg
     return False, "Error al procesar inscripción."
 
 def eliminar_inscripcion(id_comp, id_nadador):
     df_ins = leer_dataset_fresco("Inscripciones")
-    if df_ins is None: return False, "Error."
-    if not df_ins.empty: df_ins['codnadador'] = pd.to_numeric(df_ins['codnadador'], errors='coerce').fillna(0).astype(int)
+    
+    # ⚠️ BLOQUEO DE SEGURIDAD
+    if df_ins is None: 
+        return False, "⚠️ Error de red. Operación cancelada."
+    
+    if not df_ins.empty: 
+        df_ins['codnadador'] = pd.to_numeric(df_ins['codnadador'], errors='coerce').fillna(0).astype(int)
     
     df_ins = df_ins[~((df_ins['id_competencia'] == id_comp) & (df_ins['codnadador'] == id_nadador))]
     exito, _ = actualizar_con_retry("Inscripciones", df_ins)
@@ -260,6 +294,7 @@ def cb_crear_evento():
     if n and p:
         ok, msg = guardar_competencia(None, n, f, h, p, c, cost, d, hab, m)
         if ok: set_flash_message(msg, "success")
+        else: set_flash_message(msg, "error")
     else:
         set_flash_message("Faltan datos obligatorios.", "warning")
 
@@ -271,6 +306,7 @@ def cb_guardar_usr(c_id):
     else:
         ok, m = gestionar_inscripcion(c_id, mi_id, sel)
         if ok: set_flash_message(m, "success")
+        else: set_flash_message(m, "error")
 
 def cb_baja_usr(c_id):
     st.session_state.active_usr_tab = c_id
@@ -291,6 +327,7 @@ def cb_alta_adm(c_id, k_nad, k_pru):
     else:
         ok, m = gestionar_inscripcion(c_id, nad, pru)
         if ok: set_flash_message("Inscripción registrada por el entrenador.", "success")
+        else: set_flash_message(m, "error")
 
 def cb_editar_evento(c_id, h_in, p_in):
     st.session_state.active_coach_tab = c_id
@@ -303,6 +340,7 @@ def cb_editar_evento(c_id, h_in, p_in):
     nd = st.session_state[f"ed_desc_{c_id}"]
     ok, m = guardar_competencia(c_id, nn, nf, h_in, p_in, nl, nc, nd, nh, nm)
     if ok: set_flash_message("Evento actualizado correctamente.", "success")
+    else: set_flash_message(m, "error")
 
 def cb_elim_evento(c_id):
     st.session_state.active_coach_tab = None
@@ -369,7 +407,7 @@ if rol in ["M", "P"]:
             c3, c4 = st.columns(2)
             c3.date_input("Fecha", min_value=datetime.today(), format="DD/MM/YYYY", key="f_cr_fec")
             c4.time_input("Hora", value=datetime.strptime("08:30", "%H:%M").time(), key="f_cr_hor")
-           
+            
             c5, c6 = st.columns(2)
             c5.date_input("Cierre Inscripción", min_value=datetime.today(), format="DD/MM/YYYY", key="f_cr_cie")
             c6.number_input("Costo $", min_value=0, step=1000, key="f_cr_cost")
