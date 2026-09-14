@@ -591,9 +591,7 @@ font-weight:bold; height:fit-content;">{badge}</span>
                     if d_full.empty:
                         st.caption("No hay inscriptos todavía.")
                     else:
-                        st.markdown("##### 🏊‍♂️ Nómina de Nadadores")
-                        
-                        # --- EXPORTAR A EXCEL / CSV ---
+                        # --- PREPARAR EXPORTACIÓN ---
                         export_list = []
                         for _, row_ins in d_full.sort_values(by=['Nombre']).iterrows():
                             df_t_n = df_t_global[df_t_global['codnadador'] == row_ins['codnadador']] if not df_t_global.empty else pd.DataFrame()
@@ -609,18 +607,21 @@ font-weight:bold; height:fit-content;">{badge}</span>
                                 "Pruebas Inscriptas (Tiempos)": " | ".join(p_text_list)
                             })
                         
-                        if export_list:
-                            df_exp = pd.DataFrame(export_list)
-                            c_exp1, c_exp2 = st.columns([0.6, 0.4])
-                            with c_exp2:
+                        # --- RENDERIZAR TÍTULO Y BOTÓN SUTIL ---
+                        c_tit, c_btn = st.columns([0.7, 0.3])
+                        with c_tit:
+                            st.markdown("##### 🏊‍♂️ Nómina de Nadadores")
+                        with c_btn:
+                            if export_list:
+                                df_exp = pd.DataFrame(export_list)
                                 buffer = io.BytesIO()
                                 try:
                                     with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
                                         df_exp.to_excel(writer, index=False, sheet_name='Inscriptos')
-                                    st.download_button(label="📥 Exportar a Excel", data=buffer.getvalue(), file_name=f"Inscriptos_{row['nombre_evento'].replace(' ', '_')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+                                    st.download_button(label="📥 Bajar Planilla", data=buffer.getvalue(), file_name=f"Inscriptos_{row['nombre_evento'].replace(' ', '_')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", type="secondary")
                                 except:
                                     csv_data = df_exp.to_csv(index=False).encode('utf-8-sig')
-                                    st.download_button(label="📥 Exportar Lista (CSV)", data=csv_data, file_name=f"Inscriptos_{row['nombre_evento'].replace(' ', '_')}.csv", mime="text/csv", use_container_width=True)
+                                    st.download_button(label="📥 Bajar CSV", data=csv_data, file_name=f"Inscriptos_{row['nombre_evento'].replace(' ', '_')}.csv", mime="text/csv", type="secondary")
                         
                         st.divider()
 
