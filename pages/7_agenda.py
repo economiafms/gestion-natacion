@@ -4,6 +4,7 @@ import pandas as pd
 from datetime import datetime, date
 import random
 import uuid
+import io
 
 # ==========================================
 # 1. CONFIGURACIÓN
@@ -184,7 +185,7 @@ def set_flash_message(mensaje, tipo="success"):
 def guardar_competencia(id_comp, nombre, fecha_ev, hora, cod_pil, fecha_lim, costo, desc, lista_pruebas_hab, max_pru=10):
     df_comp = leer_dataset_fresco("Competencias")
     
-    # ⚠️ BLOQUEO DE SEGURIDAD (Si falla la lectura, cancelamos para no sobrescribir)
+    # ⚠️ BLOQUEO DE SEGURIDAD
     if df_comp is None: 
         return False, "⚠️ Error de red al leer la base de datos. Operación cancelada para proteger el historial."
     
@@ -592,6 +593,37 @@ font-weight:bold; height:fit-content;">{badge}</span>
                     else:
                         st.markdown("##### 🏊‍♂️ Nómina de Nadadores")
                         
+                        # --- EXPORTAR A EXCEL / CSV ---
+                        export_list = []
+                        for _, row_ins in d_full.sort_values(by=['Nombre']).iterrows():
+                            df_t_n = df_t_global[df_t_global['codnadador'] == row_ins['codnadador']] if not df_t_global.empty else pd.DataFrame()
+                            p_list = [p.strip() for p in str(row_ins['pruebas']).split(",") if p.strip()]
+                            p_text_list = []
+                            for p in p_list:
+                                mt = buscar_mejor_tiempo(p, df_t_n)
+                                p_text_list.append(f"{p} ({mt})" if mt else f"{p} (S/T)")
+                            export_list.append({
+                                "Nadador": row_ins['Nombre'],
+                                "Género": row_ins['codgenero'],
+                                "Categoría": row_ins['Cat'],
+                                "Pruebas Inscriptas (Tiempos)": " | ".join(p_text_list)
+                            })
+                        
+                        if export_list:
+                            df_exp = pd.DataFrame(export_list)
+                            c_exp1, c_exp2 = st.columns([0.6, 0.4])
+                            with c_exp2:
+                                buffer = io.BytesIO()
+                                try:
+                                    with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                                        df_exp.to_excel(writer, index=False, sheet_name='Inscriptos')
+                                    st.download_button(label="📥 Exportar a Excel", data=buffer.getvalue(), file_name=f"Inscriptos_{row['nombre_evento'].replace(' ', '_')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+                                except:
+                                    csv_data = df_exp.to_csv(index=False).encode('utf-8-sig')
+                                    st.download_button(label="📥 Exportar Lista (CSV)", data=csv_data, file_name=f"Inscriptos_{row['nombre_evento'].replace(' ', '_')}.csv", mime="text/csv", use_container_width=True)
+                        
+                        st.divider()
+
                         # --- ORDENAMIENTO DINAMICO DE GRILLA ---
                         c_key = f"sort_c_{comp_id}"
                         a_key = f"sort_a_{comp_id}"
