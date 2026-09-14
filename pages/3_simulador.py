@@ -58,6 +58,8 @@ def seg_a_tiempo(seg):
     return f"{int(seg // 60):02d}:{int(seg % 60):02d}.{int((seg % 1) * 100):02d}"
 
 def get_cat_info(suma, reg):
+    if reg == "ÚNICA":
+        return "Categoría Única", 0
     regs = data['cat_relevos'][data['cat_relevos']['tipo_reglamento'] == reg]
     for _, r in regs.iterrows():
         if r['suma_min'] <= suma <= r['suma_max']: 
@@ -140,7 +142,13 @@ def eliminar_equipo_borrador(index):
 st.subheader("🧪 Posta Manual")
 with st.container(border=True):
     c1, c2, c3 = st.columns(3)
-    s_reg_m = c1.selectbox("Reglamento", data['cat_relevos']['tipo_reglamento'].unique(), key="s_reg_m")
+    
+    # Agregamos "ÚNICA" como opción manual también si corresponde
+    opciones_reg = data['cat_relevos']['tipo_reglamento'].unique().tolist()
+    if "ÚNICA" not in opciones_reg:
+        opciones_reg.append("ÚNICA")
+        
+    s_reg_m = c1.selectbox("Reglamento", opciones_reg, key="s_reg_m")
     s_tipo_m = c2.selectbox("Prueba", ["Libre (Crol)", "Combinado (Medley)"], key="s_tipo_m")
     s_gen_sel = c3.selectbox("Género", ["Masculino (M)", "Femenino (F)", "Mixto (2M-2F)"], key="s_gen_m")
     s_gen = "X" if "Mixto" in s_gen_sel else ("M" if "(M)" in s_gen_sel else "F")
@@ -249,7 +257,7 @@ with st.container(border=True):
     )
 
     c1, c2, c3 = st.columns(3)
-    o_reg = c1.selectbox("Reglamento", data['cat_relevos']['tipo_reglamento'].unique(), key="o_reg_g")
+    o_reg = c1.selectbox("Reglamento", opciones_reg, key="o_reg_g")
     o_tipo = c2.radio("Estilo de Prueba", ["Libre (Crol)", "Combinado (Medley)"], horizontal=True)
     o_gen_sel = c3.radio("Género Prueba", ["Masculino (M)", "Femenino (F)", "Mixto (2M-2F)"], horizontal=True)
     o_gen = "X" if "Mixto" in o_gen_sel else ("M" if "(M)" in o_gen_sel else "F")
@@ -278,68 +286,104 @@ if st.button("🪄 Generar Estrategia Óptima", type="primary", use_container_wi
             if not resultados: st.info("No se encontraron combinaciones válidas.")
             else:
                 df_res = pd.DataFrame(resultados).sort_values(by=['s_min', 't'])
-                for cat_nombre, group in df_res.groupby('cat', sort=False):
-                    st.markdown(f"### 🚩 {cat_nombre.upper()}")
-                    for idx, row in group.head(2).iterrows():
-                        label = "EQUIPO A" if idx == group.index[0] else "EQUIPO B"
-                        with st.expander(f"{label} - {seg_a_tiempo(row['t'])}", expanded=True if idx == group.index[0] else False):
-                            render_tarjeta_resumen(seg_a_tiempo(row['t']), row['cat'], row['se'], dark=True)
+                
+                # --- NUEVA LÓGICA PARA CATEGORÍA ÚNICA ---
+                if o_reg == "ÚNICA":
+                    st.markdown("### 🥇 TOP 3 ABSOLUTO")
+                    df_res = df_res.sort_values(by='t', ascending=True).head(3)
+                    
+                    for idx, row in df_res.reset_index().iterrows():
+                        if idx == 0: label = "🏅 EQUIPO 1 (Más Rápido)"
+                        elif idx == 1: label = "🥈 EQUIPO 2"
+                        else: label = "🥉 EQUIPO 3"
+                        
+                        with st.expander(f"{label} - {seg_a_tiempo(row['t'])}", expanded=True if idx == 0 else False):
+                            render_tarjeta_resumen(seg_a_tiempo(row['t']), "ÚNICA", row['se'], dark=True)
                             cs = st.columns(4)
                             for j in range(4):
                                 cs[j].caption(f"**{legs_o[j][1]}**")
-                                cs[j].write(row['eq'][j].split(',')[0]) # Solo apellido
+                                cs[j].write(row['eq'][j].split(',')[0]) 
                                 cs[j].code(seg_a_tiempo(m_map[row['eq'][j]].get(legs_o[j][0], 999.0)))
                             
-                            # --- OBSERVACIONES Y ANTECEDENTES PARA SIMULADOR GRUPO ---
-                            obs_lista_g = []
-                            
-                            # 1. Competitividad
-                            comp_g = analizar_competitividad(row['t'], row['se'], o_gen)
-                            if comp_g:
-                                obs_lista_g.append(comp_g)
-                                
-                            # 2. Historial de los 4 nadadores
-                            ids_eq = sorted([int(df_nad[df_nad['Nombre Completo'] == n]['codnadador'].iloc[0]) for n in row['eq']])
-                            hist_g = data['relevos'][data['relevos'].apply(lambda r: sorted([int(r['nadador_1']), int(r['nadador_2']), int(r['nadador_3']), int(r['nadador_4'])]) == ids_eq if pd.notnull(r['nadador_1']) else False, axis=1)]
-                            
-                            if not hist_g.empty:
-                                ant_g = hist_g.sort_values('tiempo_final').iloc[0]
-                                ip_g = dict_piletas.get(ant_g['codpileta'], {"club": "Sede ?", "medida": "-"})
-                                
-                                # Detectar el estilo nadado en el antecedente
-                                estilo_val_g = ant_g.get('estilo', ant_g.get('prueba', ant_g.get('codestilo', '')))
-                                estilo_str_g = str(estilo_val_g).strip().upper()
-                                if 'COMB' in estilo_str_g or 'MEDLEY' in estilo_str_g: estilo_texto_g = "Combinado (Medley)"
-                                elif 'LIBR' in estilo_str_g or 'CROL' in estilo_str_g or 'E4' in estilo_str_g: estilo_texto_g = "Libre (Crol)"
-                                elif estilo_str_g and estilo_str_g != 'NAN': estilo_texto_g = estilo_val_g
-                                else: estilo_texto_g = "juntos"
-                                
-                                obs_lista_g.append(f"⏱️ **YA NADARON JUNTOS:** Tienen un registro oficial de **{ant_g['tiempo_final']}** nadando **{estilo_texto_g}** en {ip_g['club']} ({ip_g['medida']}) el {ant_g['fecha']}.")
-                            
-                            # Renderizar observaciones si hay alguna
-                            if obs_lista_g:
-                                st.markdown("---")
-                                st.markdown("### 📋 Observaciones")
-                                for obs in obs_lista_g:
-                                    if "COMPETITIVO" in obs or "PODIO" in obs:
-                                        st.success(obs)
-                                    else:
-                                        st.info(obs)
-                            
                             equipo_guardar = {
-                                'etiqueta': f"{label} - {cat_nombre.upper()}",
+                                'etiqueta': f"{label} - ÚNICA",
                                 'eq': row['eq'],
                                 't': row['t'],
-                                'cat': row['cat'],
+                                'cat': "ÚNICA",
                                 'se': row['se'],
                                 'estilos': [l[1] for l in legs_o]
                             }
                             st.button(
                                 f"💾 Guardar {label} en Borrador", 
-                                key=f"save_draft_{idx}_{cat_nombre}", 
+                                key=f"save_draft_unica_{idx}", 
                                 on_click=guardar_equipo_borrador, 
                                 args=(equipo_guardar,)
                             )
+
+                # --- LÓGICA NORMAL POR CATEGORÍAS (FED / SIMPLE) ---
+                else:
+                    for cat_nombre, group in df_res.groupby('cat', sort=False):
+                        st.markdown(f"### 🚩 {cat_nombre.upper()}")
+                        for idx, row in group.head(2).iterrows():
+                            label = "EQUIPO A" if idx == group.index[0] else "EQUIPO B"
+                            with st.expander(f"{label} - {seg_a_tiempo(row['t'])}", expanded=True if idx == group.index[0] else False):
+                                render_tarjeta_resumen(seg_a_tiempo(row['t']), row['cat'], row['se'], dark=True)
+                                cs = st.columns(4)
+                                for j in range(4):
+                                    cs[j].caption(f"**{legs_o[j][1]}**")
+                                    cs[j].write(row['eq'][j].split(',')[0]) # Solo apellido
+                                    cs[j].code(seg_a_tiempo(m_map[row['eq'][j]].get(legs_o[j][0], 999.0)))
+                                
+                                # --- OBSERVACIONES Y ANTECEDENTES PARA SIMULADOR GRUPO ---
+                                obs_lista_g = []
+                                
+                                # 1. Competitividad
+                                comp_g = analizar_competitividad(row['t'], row['se'], o_gen)
+                                if comp_g:
+                                    obs_lista_g.append(comp_g)
+                                    
+                                # 2. Historial de los 4 nadadores
+                                ids_eq = sorted([int(df_nad[df_nad['Nombre Completo'] == n]['codnadador'].iloc[0]) for n in row['eq']])
+                                hist_g = data['relevos'][data['relevos'].apply(lambda r: sorted([int(r['nadador_1']), int(r['nadador_2']), int(r['nadador_3']), int(r['nadador_4'])]) == ids_eq if pd.notnull(r['nadador_1']) else False, axis=1)]
+                                
+                                if not hist_g.empty:
+                                    ant_g = hist_g.sort_values('tiempo_final').iloc[0]
+                                    ip_g = dict_piletas.get(ant_g['codpileta'], {"club": "Sede ?", "medida": "-"})
+                                    
+                                    # Detectar el estilo nadado en el antecedente
+                                    estilo_val_g = ant_g.get('estilo', ant_g.get('prueba', ant_g.get('codestilo', '')))
+                                    estilo_str_g = str(estilo_val_g).strip().upper()
+                                    if 'COMB' in estilo_str_g or 'MEDLEY' in estilo_str_g: estilo_texto_g = "Combinado (Medley)"
+                                    elif 'LIBR' in estilo_str_g or 'CROL' in estilo_str_g or 'E4' in estilo_str_g: estilo_texto_g = "Libre (Crol)"
+                                    elif estilo_str_g and estilo_str_g != 'NAN': estilo_texto_g = estilo_val_g
+                                    else: estilo_texto_g = "juntos"
+                                    
+                                    obs_lista_g.append(f"⏱️ **YA NADARON JUNTOS:** Tienen un registro oficial de **{ant_g['tiempo_final']}** nadando **{estilo_texto_g}** en {ip_g['club']} ({ip_g['medida']}) el {ant_g['fecha']}.")
+                                
+                                # Renderizar observaciones si hay alguna
+                                if obs_lista_g:
+                                    st.markdown("---")
+                                    st.markdown("### 📋 Observaciones")
+                                    for obs in obs_lista_g:
+                                        if "COMPETITIVO" in obs or "PODIO" in obs:
+                                            st.success(obs)
+                                        else:
+                                            st.info(obs)
+                                
+                                equipo_guardar = {
+                                    'etiqueta': f"{label} - {cat_nombre.upper()}",
+                                    'eq': row['eq'],
+                                    't': row['t'],
+                                    'cat': row['cat'],
+                                    'se': row['se'],
+                                    'estilos': [l[1] for l in legs_o]
+                                }
+                                st.button(
+                                    f"💾 Guardar {label} en Borrador", 
+                                    key=f"save_draft_{idx}_{cat_nombre}", 
+                                    on_click=guardar_equipo_borrador, 
+                                    args=(equipo_guardar,)
+                                )
 
 # --- 7. GRILLA DE EQUIPOS GUARDADOS (BORRADOR) ---
 if st.session_state.equipos_borrador:
