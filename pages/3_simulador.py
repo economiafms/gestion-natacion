@@ -154,12 +154,30 @@ with st.container(border=True):
     s_gen = "X" if "Mixto" in s_gen_sel else ("M" if "(M)" in s_gen_sel else "F")
 
     legs = [("Espalda", "E2"), ("Pecho", "E3"), ("Mariposa", "E1"), ("Crol", "E4")] if "Medley" in s_tipo_m else [("Crol", "E4")] * 4
+    
     n_sel = []
+    tiempos_invitados = {}
+    edades_invitados = {}
     
     for i, (nom_e, cod_e) in enumerate(legs):
         aptos = df_nad[df_nad['codnadador'].isin(df_tiempos_50[df_tiempos_50['codestilo'] == cod_e]['codnadador'])]
         if s_gen != "X": aptos = aptos[aptos['codgenero'] == s_gen]
-        n_sel.append(st.selectbox(f"{i+1}. {nom_e}", sorted(aptos['Nombre Completo'].tolist()), index=None, key=f"man_sel_{i}"))
+        
+        opciones_nadadores = ["⭐ INVITADO MANUAL"] + sorted(aptos['Nombre Completo'].tolist())
+        sel = st.selectbox(f"{i+1}. {nom_e}", opciones_nadadores, index=None, key=f"man_sel_{i}")
+        
+        if sel == "⭐ INVITADO MANUAL":
+            with st.container():
+                c_inv1, c_inv2, c_inv3 = st.columns([2, 1, 1])
+                nom_inv = c_inv1.text_input("Nombre / Referencia", value=f"Invitado {i+1} ({nom_e})", key=f"inv_nom_{i}")
+                t_inv = c_inv2.text_input("Tiempo", value="00:30.00", key=f"inv_t_{i}", help="Formato MM:SS.cc")
+                e_inv = c_inv3.number_input("Edad", min_value=15, max_value=99, value=30, key=f"inv_e_{i}")
+                
+                n_sel.append(nom_inv)
+                tiempos_invitados[nom_inv] = tiempo_a_seg(t_inv)
+                edades_invitados[nom_inv] = e_inv
+        else:
+            n_sel.append(sel)
 
     btn_manual = st.button("🚀 Calcular Posta", use_container_width=True)
 
@@ -169,14 +187,27 @@ if btn_manual:
     if None in n_sel:
         st.warning("⚠️ Faltan nadadores. Selecciona los 4 integrantes.")
     elif len(set(n_sel)) < 4:
-        st.error("⛔ **Error:** Nadador repetido. El equipo debe tener 4 integrantes distintos.")
+        st.error("⛔ **Error:** Nadador repetido. El equipo debe tener 4 integrantes distintos (Asegurate de darles nombres distintos a los invitados).")
     else:
         with st.spinner("Calculando..."):
-            m_loc = {n: {r['codestilo']: r['segundos_calc'] for _, r in df_tiempos_50[df_tiempos_50['codnadador'] == df_nad[df_nad['Nombre Completo'] == n]['codnadador'].iloc[0]].iterrows()} for n in n_sel}
+            m_loc = {}
+            for n in n_sel:
+                if n in tiempos_invitados:
+                    # Asignamos el tiempo cargado a todos los estilos para que la permutación lógica no falle
+                    m_loc[n] = {"E1": tiempos_invitados[n], "E2": tiempos_invitados[n], "E3": tiempos_invitados[n], "E4": tiempos_invitados[n]}
+                else:
+                    m_loc[n] = {r['codestilo']: r['segundos_calc'] for _, r in df_tiempos_50[df_tiempos_50['codnadador'] == df_nad[df_nad['Nombre Completo'] == n]['codnadador'].iloc[0]].iterrows()}
             
             tiempos_p = [m_loc[n_sel[i]].get(legs[i][1], 999.0) for i in range(4)]
             total = sum(tiempos_p)
-            se = sum([df_nad[df_nad['Nombre Completo'] == n]['Edad_Master'].iloc[0] for n in n_sel])
+            
+            se = 0
+            for n in n_sel:
+                if n in edades_invitados:
+                    se += edades_invitados[n]
+                else:
+                    se += df_nad[df_nad['Nombre Completo'] == n]['Edad_Master'].iloc[0]
+                    
             cat_n, _ = get_cat_info(se, s_reg_m)
 
             with res_manual_container:
@@ -192,13 +223,20 @@ if btn_manual:
                 comp = analizar_competitividad(total, se, s_gen)
                 if comp: obs_lista.append(comp)
                 
-                ids_a = sorted([int(df_nad[df_nad['Nombre Completo'] == n]['codnadador'].iloc[0]) for n in n_sel])
+                # Búsqueda de antecedentes históricos (excluyendo a los invitados)
+                ids_a = []
+                for n in n_sel:
+                    if n in tiempos_invitados:
+                        ids_a.append(-1) # ID ficticio para que no cruce
+                    else:
+                        ids_a.append(int(df_nad[df_nad['Nombre Completo'] == n]['codnadador'].iloc[0]))
+                ids_a = sorted(ids_a)
+                
                 hist = data['relevos'][data['relevos'].apply(lambda r: sorted([int(r['nadador_1']), int(r['nadador_2']), int(r['nadador_3']), int(r['nadador_4'])]) == ids_a if pd.notnull(r['nadador_1']) else False, axis=1)]
                 if not hist.empty:
                     ant = hist.sort_values('tiempo_final').iloc[0]
                     ip = dict_piletas.get(ant['codpileta'], {"club": "Sede ?", "medida": "-"})
                     
-                    # Detectar el estilo nadado en el antecedente
                     estilo_val = ant.get('estilo', ant.get('prueba', ant.get('codestilo', '')))
                     estilo_str = str(estilo_val).strip().upper()
                     if 'COMB' in estilo_str or 'MEDLEY' in estilo_str: estilo_texto = "Combinado (Medley)"
