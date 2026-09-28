@@ -46,44 +46,36 @@ def tiempo_a_seg(t_str):
 tab_indiv, tab_relevos = st.tabs(["🏊‍♂️ INDIVIDUALES", "🤝 RELEVOS"])
 
 # ==============================================================================
-# TAB 1: INDIVIDUALES (CÓDIGO ORIGINAL INTACTO)
+# TAB 1: INDIVIDUALES
 # ==============================================================================
 with tab_indiv:
-    # --- UNIFICACIÓN LIMPIA (IGNORANDO 'CLUB' DE TIEMPOS) ---
     df = data['tiempos'].copy()
 
-    # 1. Eliminar 'club' de Tiempos si existe (para evitar conflictos y 'nan')
     if 'club' in df.columns:
         df = df.drop(columns=['club'])
 
-    # 2. Merges (Cruces de tablas)
     df = df.merge(data['nadadores'], on='codnadador', how='left')
     df = df.merge(data['estilos'], on='codestilo', how='left')
     df = df.merge(data['distancias'], on='coddistancia', how='left')
-    # Al hacer merge con piletas, nos trae 'club' (SEDE REAL) y 'medida'
     df = df.merge(data['piletas'], on='codpileta', how='left')
 
-    # 3. Renombrado y Limpieza
     cols_map = {
         'nombre': 'Nombre', 
         'apellido': 'Apellido',
         'descripcion_x': 'Estilo', 
         'descripcion_y': 'Distancia',
         'descripcion': 'Estilo',
-        'club': 'sede' # Renombramos explícitamente la columna que vino de Piletas
+        'club': 'sede' 
     }
     df = df.rename(columns=cols_map)
 
-    # 4. Cálculo de campos finales
     df['Nadador'] = df['Apellido'].astype(str).str.upper() + ", " + df['Nombre'].astype(str)
     df['Segundos'] = df['tiempo'].apply(tiempo_a_seg)
     df['Año'] = pd.to_datetime(df['fecha']).dt.year
 
-    # Asegurar valores por defecto para que no falle la tarjeta
     if 'sede' not in df.columns: df['sede'] = 'Sede desconocida'
     if 'medida' not in df.columns: df['medida'] = '-'
 
-    # --- 5. FILTROS ---
     st.markdown("### 🔍 Filtrar Ranking")
 
     c1, c2, c3 = st.columns(3)
@@ -104,7 +96,6 @@ with tab_indiv:
     with c2: f_distancia = st.selectbox("Distancia", lista_distancias, index=idx_distancia)
     with c3: f_genero = st.selectbox("Género", lista_generos)
 
-    # Aplicar filtros básicos
     if 'Estilo' in df.columns and 'Distancia' in df.columns:
         df_filtrado = df[
             (df['Estilo'] == f_estilo) & 
@@ -116,17 +107,10 @@ with tab_indiv:
     if f_genero != "Todos":
         df_filtrado = df_filtrado[df_filtrado['codgenero'] == f_genero]
 
-    # --- LÓGICA DE RANKING (MEJORES MARCAS ÚNICAS) ---
-    # 1. Ordenamos por tiempo (el más rápido primero)
     df_filtrado = df_filtrado.sort_values('Segundos', ascending=True)
-
-    # 2. Eliminamos duplicados por nadador, quedándonos solo con el primero (su mejor tiempo)
     df_filtrado = df_filtrado.drop_duplicates(subset=['codnadador'], keep='first')
-
-    # 3. Tomamos los primeros 50
     df_ranking = df_filtrado.head(50).reset_index(drop=True)
 
-    # --- 6. VISUALIZACIÓN ---
     st.divider()
 
     if df_ranking.empty:
@@ -151,24 +135,13 @@ with tab_indiv:
 
             st.markdown(f"""
             <style>
-                .rank-card {{
-                    border-radius: 10px;
-                    padding: 10px 15px;
-                    margin-bottom: 8px;
-                    display: flex;
-                    align-items: center;
-                    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-                }}
+                .rank-card {{ border-radius: 10px; padding: 10px 15px; margin-bottom: 8px; display: flex; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }}
                 .rank-pos {{ font-size: 24px; font-weight: bold; width: 50px; text-align: center; margin-right: 10px; }}
                 .rank-info {{ flex-grow: 1; }}
                 .rank-name {{ font-weight: bold; font-size: 16px; margin-bottom: 2px; }}
                 .rank-meta {{ font-size: 12px; opacity: 0.8; }}
                 .rank-time {{ font-family: monospace; font-weight: bold; font-size: 20px; text-align: right; }}
-                .tag-pool {{ 
-                    font-size: 10px; padding: 2px 6px; border-radius: 4px; 
-                    margin-left: 8px; font-weight: normal; 
-                    vertical-align: middle;
-                }}
+                .tag-pool {{ font-size: 10px; padding: 2px 6px; border-radius: 4px; margin-left: 8px; font-weight: normal; vertical-align: middle; }}
             </style>
             
             <div class="rank-card" style="background: {bg_color}; color: {text_color};">
@@ -193,13 +166,11 @@ with tab_relevos:
     if df_rel.empty:
         st.info("No hay registros de relevos históricos.")
     else:
-        # 1. Preparar Diccionarios para Mapeo Rápido
         df_n = data['nadadores']
         df_p = data['piletas']
         df_e = data['estilos']
         df_d = data['distancias']
         
-        # Diccionarios de búsqueda
         dict_nad = {}
         for _, r in df_n.iterrows():
             try: dict_nad[float(r['codnadador'])] = f"{str(r['apellido']).upper()}, {r['nombre']}"
@@ -210,7 +181,6 @@ with tab_relevos:
         dict_pil = dict(zip(df_p['codpileta'].astype(str), df_p['club'])) if not df_p.empty else {}
         dict_med = dict(zip(df_p['codpileta'].astype(str), df_p['medida'])) if not df_p.empty else {}
 
-        # 2. Enriquecer Tabla de Relevos
         df_rel['Estilo'] = df_rel['codestilo'].astype(str).map(dict_est).fillna(df_rel['codestilo'])
         df_rel['Distancia'] = df_rel['coddistancia'].astype(str).map(dict_dist).fillna(df_rel['coddistancia'])
         df_rel['Sede'] = df_rel['codpileta'].astype(str).map(dict_pil).fillna('Sede desconocida')
@@ -218,11 +188,9 @@ with tab_relevos:
         df_rel['Año'] = pd.to_datetime(df_rel['fecha']).dt.year
         df_rel['Segundos'] = df_rel['tiempo_final'].apply(tiempo_a_seg)
         
-        # Mapear nombres de los 4 nadadores
         for i in range(1, 5):
             df_rel[f'Nom_{i}'] = pd.to_numeric(df_rel[f'nadador_{i}'], errors='coerce').map(dict_nad).fillna("S/D")
 
-        # --- 3. FILTROS ---
         st.markdown("### 🔍 Filtrar Relevos")
         cr1, cr2, cr3, cr4 = st.columns(4)
         
@@ -233,17 +201,15 @@ with tab_relevos:
 
         with cr1: f_reg_rel = st.selectbox("Reglamento", lista_reg_rel)
         with cr2: f_gen_rel = st.selectbox("Género", lista_gen_rel)
-        with cr3: f_est_rel = st.selectbox("Estilo", ["Todos"] + lista_est_rel)
-        with cr4: f_dist_rel = st.selectbox("Distancia", ["Todas"] + lista_dist_rel)
+        with cr3: f_est_rel = st.selectbox("Estilo Posta", ["Todos"] + lista_est_rel)
+        with cr4: f_dist_rel = st.selectbox("Distancia Posta", ["Todas"] + lista_dist_rel)
 
-        # Aplicar Filtros
         df_r_filt = df_rel.copy()
         if f_reg_rel != "Todos": df_r_filt = df_r_filt[df_r_filt['tipo_reglamento'] == f_reg_rel]
         if f_gen_rel != "Todos": df_r_filt = df_r_filt[df_r_filt['codgenero'] == f_gen_rel]
         if f_est_rel != "Todos": df_r_filt = df_r_filt[df_r_filt['Estilo'] == f_est_rel]
         if f_dist_rel != "Todas": df_r_filt = df_r_filt[df_r_filt['Distancia'] == f_dist_rel]
 
-        # 4. Ordenamiento
         df_r_filt = df_r_filt.sort_values('Segundos', ascending=True).reset_index(drop=True)
 
         st.divider()
@@ -266,39 +232,30 @@ with tab_relevos:
                 medida_val = str(row.get('Medida', '-'))
                 pileta_badge = "25m" if "25" in medida_val else ("50m" if "50" in medida_val else medida_val)
                 
-                # HTML Interno para los 4 nadadores
-                grid_nadadores = f"""
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2px; font-size: 11px; margin-top: 5px; color: {text_color}; opacity: 0.9;">
-                    <div>1. {row['Nom_1']}</div>
-                    <div>3. {row['Nom_3']}</div>
-                    <div>2. {row['Nom_2']}</div>
-                    <div>4. {row['Nom_4']}</div>
-                </div>
-                """
+                # Función para obtener nombre + tiempo
+                def get_nom_t(idx):
+                    nom = row.get(f'Nom_{idx}', 'S/D')
+                    t = row.get(f'tiempo_{idx}')
+                    if pd.notna(t) and str(t).strip() and str(t) != '00:00.00':
+                        return f"<b>{idx}.</b> {nom} <b>({t})</b>"
+                    return f"<b>{idx}.</b> {nom}"
 
-                st.markdown(f"""
-                <div class="rank-card" style="background: {bg_color}; color: {text_color};">
-                    <div class="rank-pos">{icono}</div>
-                    <div class="rank-info">
-                        <div class="rank-name">{row['Estilo']} {row['Distancia']}</div>
-                        <div class="rank-meta">
-                            {row['Sede']} • {row['Año']} 
-                            <span class="tag-pool" style="border: 1px solid {text_color};">{pileta_badge}</span>
-                        </div>
-                        {grid_nadadores}
-                    </div>
-                    <div class="rank-time">{row['tiempo_final']}</div>
-                </div>
-                """, unsafe_allow_html=True)
+                nad1 = get_nom_t(1)
+                nad2 = get_nom_t(2)
+                nad3 = get_nom_t(3)
+                nad4 = get_nom_t(4)
+
+                # HTML plano sin sangrías para evitar el bug de Markdown
+                grid_nadadores = f"<div style='display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 11px; margin-top: 5px; color: {text_color}; opacity: 0.95;'><div>{nad1}</div><div>{nad3}</div><div>{nad2}</div><div>{nad4}</div></div>"
+
+                tarjeta_html = f"""<div class="rank-card" style="background: {bg_color}; color: {text_color};">
+<div class="rank-pos">{icono}</div>
+<div class="rank-info">
+<div class="rank-name">{row['Estilo']} {row['Distancia']}</div>
+<div class="rank-meta">{row['Sede']} • {row['Año']} <span class="tag-pool" style="border: 1px solid {text_color};">{pileta_badge}</span></div>
+{grid_nadadores}
+</div>
+<div class="rank-time">{row['tiempo_final']}</div>
+</div>"""
                 
-                # Expandible para Tramos/Parciales
-                tramos = [row.get(f'tiempo_{x}') for x in range(1, 5)]
-                tramos_validos = [t for t in tramos if pd.notna(t) and str(t).strip() and str(t) != '00:00.00']
-                
-                if tramos_validos:
-                    with st.expander(f"Ver Tiempos de Relevo (#{pos})"):
-                        cols_t = st.columns(4)
-                        for idx_t, t_val in enumerate(tramos_validos):
-                            if idx_t < 4:
-                                cols_t[idx_t].caption(f"**Rel. {idx_t+1}**")
-                                cols_t[idx_t].code(t_val)
+                st.markdown(tarjeta_html, unsafe_allow_html=True)
