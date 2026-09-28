@@ -286,15 +286,50 @@ with tab_relevos:
         if f_est_rel != "Todos": df_r_filt = df_r_filt[df_r_filt['Estilo'] == f_est_rel]
         if f_dist_rel != "Todas": df_r_filt = df_r_filt[df_r_filt['Distancia'] == f_dist_rel]
 
-        # 4. Ordenamiento
-        df_r_filt = df_r_filt.sort_values('Segundos', ascending=True).reset_index(drop=True)
-
         st.divider()
-        
-        if df_r_filt.empty:
-            st.info("No hay formaciones para estos filtros.")
-        else:
-            for i, row in df_r_filt.iterrows():
+
+        # --- 4. AGRUPAMIENTO INTELIGENTE DE EQUIPOS (HISTORIAL) ---
+        if not df_r_filt.empty:
+            def hash_equipo(r):
+                # Usamos los nombres ordenados alfabéticamente para que no importe el orden en que se tiraron al agua
+                noms = tuple(sorted([str(r.get('Nom_1','')), str(r.get('Nom_2','')), str(r.get('Nom_3','')), str(r.get('Nom_4',''))]))
+                return hash((noms, r.get('Estilo'), r.get('Distancia'), r.get('tipo_reglamento'), r.get('Categoria_Posta')))
+            
+            df_r_filt['hash_eq'] = df_r_filt.apply(hash_equipo, axis=1)
+            df_r_filt = df_r_filt.sort_values('Segundos', ascending=True)
+            
+            equipos_unicos = []
+            
+            for h_eq, grupo in df_r_filt.groupby('hash_eq', sort=False):
+                # La primera fila es el mejor tiempo absoluto de este equipo
+                mejor_marca = grupo.iloc[0].copy()
+                historial = grupo.iloc[1:]
+                
+                html_historial = ""
+                if not historial.empty:
+                    filas_historial = ""
+                    for _, hr in historial.iterrows():
+                        try: fecha_h = pd.to_datetime(hr.get('fecha')).strftime('%d/%m/%Y')
+                        except: fecha_h = str(hr.get('fecha', '-'))
+                        sede_h = hr.get('Sede', 'Sede desconocida')
+                        tiempo_h = hr.get('tiempo_final', 'S/T')
+                        
+                        filas_historial += f"<div style='display:flex; justify-content:space-between; margin-top:4px;'><span>📅 {fecha_h} • {sede_h}</span><b style='font-family:monospace; font-size:14px;'>{tiempo_h}</b></div>"
+                    
+                    html_historial = f"""<details style="margin-top: 12px; font-size: 11px; opacity: 0.85; cursor: pointer;">
+<summary style="font-weight: bold; margin-bottom: 4px;">Ver historial del equipo ({len(grupo)} registros en total)</summary>
+<div style="margin-top: 6px; padding-top: 6px; border-top: 1px dashed currentColor;">
+{filas_historial}
+</div>
+</details>"""
+                
+                mejor_marca['html_historial'] = html_historial
+                equipos_unicos.append(mejor_marca)
+            
+            # Generar el dataset final consolidado y reordenarlo por el mejor tiempo absoluto
+            df_r_final = pd.DataFrame(equipos_unicos).sort_values('Segundos', ascending=True).reset_index(drop=True)
+            
+            for i, row in df_r_final.iterrows():
                 pos = i + 1
                 
                 if pos == 1:
@@ -309,7 +344,6 @@ with tab_relevos:
                 medida_val = str(row.get('Medida', '-'))
                 pileta_badge = "25m" if "25" in medida_val else ("50m" if "50" in medida_val else medida_val)
                 
-                # Función para obtener nombre + tiempo
                 def get_nom_t(idx):
                     nom = row.get(f'Nom_{idx}', 'S/D')
                     t = row.get(f'tiempo_{idx}')
@@ -322,7 +356,6 @@ with tab_relevos:
                 nad3 = get_nom_t(3)
                 nad4 = get_nom_t(4)
 
-                # HTML plano sin sangrías para evitar el bug de Markdown
                 grid_nadadores = f"<div style='display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 11px; margin-top: 5px; color: {text_color}; opacity: 0.95;'><div>{nad1}</div><div>{nad3}</div><div>{nad2}</div><div>{nad4}</div></div>"
 
                 tarjeta_html = f"""<div class="rank-card" style="background: {bg_color}; color: {text_color};">
@@ -331,8 +364,11 @@ with tab_relevos:
 <div class="rank-name">{row['Estilo']} {row['Distancia']} <span style="font-weight: normal; opacity: 0.85; font-size: 0.9em;">{row['Categoria_Posta']}</span></div>
 <div class="rank-meta">{row['Sede']} • {row['Año']} <span class="tag-pool" style="border: 1px solid {text_color};">{pileta_badge}</span></div>
 {grid_nadadores}
+{row['html_historial']}
 </div>
 <div class="rank-time">{row['tiempo_final']}</div>
 </div>"""
                 
                 st.markdown(tarjeta_html, unsafe_allow_html=True)
+        else:
+            st.info("No hay formaciones para estos filtros.")
