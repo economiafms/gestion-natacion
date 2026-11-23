@@ -733,6 +733,14 @@ def aplicar_tema():
 
             .block-container { padding-bottom: 140px !important; }
         }
+        /* Pantallas anchas: dock centrado de verdad (alineado con el contenido), con el mismo margen
+           a ambos lados para no tocar el sello de Streamlit de la derecha */
+        @media (min-width: 1001px) {
+            .st-key-nob_bottom_nav {
+                left: 0; right: 0; margin: 0 auto;
+                width: min(880px, calc(100% - 320px)) !important; max-width: none;
+            }
+        }
 
         /* Ficha superior de la ventana de podios: medallas tocables para cambiar de medalla */
         .st-key-dlg_med_head {
