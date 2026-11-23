@@ -738,7 +738,8 @@ if db and st.session_state.user_id:
                         (_ins['id_competencia'] == _ev['id_competencia']) & (_ins['codnadador'] == user_id)].empty
                     _abierta = pd.notnull(_ev['fecha_limite']) and _ev['fecha_limite'].date() >= date.today()
                     _tag = ""
-                    if _abierta and not es_entrenador:
+                    # INSCRIPTO y sus pruebas se ven hasta el día del torneo; la invitación, solo con la inscripción abierta
+                    if (_abierta or _inscripto) and not es_entrenador:
                         if _inscripto:
                             # Pruebas en las que se inscribió, como mini etiquetas debajo de INSCRIPTO
                             _mi_ins = _ins[(_ins['id_competencia'] == _ev['id_competencia']) & (_ins['codnadador'] == user_id)]
@@ -784,8 +785,12 @@ if db and st.session_state.user_id:
 /* Mismo ancho y misma altura: cada nivel interno ocupa todo el alto de su celda */
 .st-key-nob_duo_st > div, .st-key-nob_duo_st [data-testid="stVerticalBlock"],
 .st-key-nob_duo_st [data-testid="stElementContainer"], .st-key-nob_duo_st [data-testid="stMarkdown"],
-.st-key-nob_duo_st [data-testid="stMarkdownContainer"] { height: 100% !important; width: 100% !important; }
+.st-key-nob_duo_st [data-testid="stMarkdownContainer"], .st-key-nob_duo_st [data-testid="stMarkdown"] > div,
+.st-key-nob_duo_st [data-testid="stLayoutWrapper"] { height: 100% !important; width: 100% !important; }
 .st-key-nob_duo_st .nob-goal, .st-key-nob_duo_st .nob-next { margin-bottom: 0; height: 100%; box-sizing: border-box; }
+/* Streamlit les da margen negativo a los bloques de solo HTML: en la grilla hace que se pisen */
+.st-key-nob_duo_st [data-testid="stElementContainer"], .st-key-nob_duo_st [data-testid="stLayoutWrapper"],
+.st-key-nob_duo_st [data-testid="stVerticalBlock"], .st-key-nob_duo_st [data-testid="stMarkdownContainer"] { margin: 0 !important; }
 @media (max-width: 520px) { .st-key-nob_duo_st { grid-template-columns: 1fr; } }
 .st-key-nob_torneo_card { position: relative; }
 .st-key-nob_torneo_card .st-key-btn_invitar_torneo { position: absolute !important; left: 0; top: 0; z-index: 2;
