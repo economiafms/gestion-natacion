@@ -70,7 +70,16 @@ def escudo_nob_src() -> str | None:
         ruta = RAIZ / nombre
         if ruta.exists():
             try:
-                return _img_data_uri(ruta)
+                if ruta.suffix.lower() == ".svg":
+                    return _img_data_uri(ruta)
+                # Achicar a 256 px: se muestra a 84 px y viaja embebido en cada página
+                from io import BytesIO
+                from PIL import Image
+                img = Image.open(ruta).convert("RGBA")
+                img.thumbnail((256, 256))
+                buf = BytesIO()
+                img.save(buf, format="PNG", optimize=True)
+                return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
             except Exception:
                 return None
     return None
