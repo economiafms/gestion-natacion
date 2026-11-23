@@ -2,6 +2,7 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 import time
+from nob_ui import aplicar_tema
 
 # --- 1. CONFIGURACIÓN DEL ÍCONO (ENLACE GITHUB RAW) ---
 # Usamos el enlace RAW directo de GitHub. Esto es lo más compatible que existe.
@@ -287,6 +288,7 @@ else:
             menu_pages["Administración"] = [pg_carga]
 
     pg = st.navigation(menu_pages)
+    aplicar_tema()
 
     with st.sidebar:
         st.write("") 
