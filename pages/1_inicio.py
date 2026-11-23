@@ -613,10 +613,15 @@ if "flash_msg" in st.session_state:
     del st.session_state.flash_type
 
 
+# Números de socio de los entrenadores (no nadadores)
+SOCIOS_ENTRENADOR = {"364604"}
+
 if db and st.session_state.user_id:
     user_id = st.session_state.user_id
     me = db['nadadores'][db['nadadores']['codnadador'] == user_id].iloc[0]
     # Nadador inactivo (sin marcas este año ni el anterior): sin rutinas ni resumen del año
+    # El entrenador tiene ficha en Nadadores pero no compite: su Inicio no muestra datos de nadador
+    es_entrenador = str(st.session_state.get("nro_socio") or "").strip() in SOCIOS_ENTRENADOR
     inactivo = st.session_state.role == "N" and actividad.id_txt(user_id) not in actividad.ids_activos(
         db.get('tiempos'), db.get('relevos'))
     
@@ -638,46 +643,54 @@ if db and st.session_state.user_id:
 
     # Tarjeta centrada: nombre como protagonista (→ ficha) y fila Categoría | Edad | Género
     with st.container(key="nob_profile"):
-        if st.button(f"{me['nombre']} {me['apellido']}", key="btn_nombre_perfil", help="Ver mi ficha completa"):
-            ir_a_mi_ficha()
-        # La celda Categoría lleva a Mi Categoría (botón invisible encima de la celda)
+        if st.button(f"{me['nombre']} {me['apellido']}", key="btn_nombre_perfil",
+                     help="Ver padrón de nadadores" if es_entrenador else "Ver mi ficha completa"):
+            ir_al_padron() if es_entrenador else ir_a_mi_ficha()
+        # La celda Categoría lleva a Mi Categoría (botón invisible encima de la celda).
+        # Entrenador: la celda dice "Entrenador" y lleva al padrón.
+        _celda = ('<small>Perfil</small><b class="cat">Entrenador</b>' if es_entrenador
+                  else f'<small>Categoría</small><b class="cat">{html.escape(str(cat))}</b>')
         with st.container(key="nob_idrow"):
             st.markdown(f"""<div class="nob-id-row">
-<div class="cat-link"><small>Categoría</small><b class="cat">{html.escape(str(cat))}</b></div>
+<div class="cat-link">{_celda}</div>
 <div><small>Edad</small><b>{edad}</b></div>
 <div><small>Género</small><b>{html.escape(genero_txt)}</b></div>
 </div>""", unsafe_allow_html=True)
             if st.button("Categoría", key="btn_cat_perfil"):
+                if es_entrenador:
+                    ir_al_padron()
                 # Manager: la página Categorías abre directamente en su categoría y género
                 st.session_state["cat_sel"] = cat
                 st.session_state["cat_gen"] = str(me['codgenero']).strip()
                 st.switch_page("pages/6_mi_categoria.py")
 
-    # Medallero personal: cada medalla abre la vista rápida de podios y marcas
-    with st.container(key="nob_medals"):
-        medallas_ui = [
-            (f"🥇 {mis_oros}", "med_oro", 1),
-            (f"🥈 {mis_platas}", "med_plata", 2),
-            (f"🥉 {mis_bronces}", "med_bronce", 3),
-        ]
-        cols_med = st.columns(4, gap="small")
-        for col, (label, key, pos) in zip(cols_med, medallas_ui):
-            with col:
-                if st.button(label, key=key, use_container_width=True, help="Ver mis podios y mejores marcas"):
-                    abrir_podios(pos)
-        with cols_med[3]:  # total de podios: solo informativo
-            st.markdown(f'<div class="nob-med-info"><div class="v">★ {mi_total}</div><div class="l">Podios</div></div>',
-                        unsafe_allow_html=True)
+    # Medallero personal: cada medalla abre la vista rápida de podios y marcas (no para el entrenador)
+    if not es_entrenador:
+        with st.container(key="nob_medals"):
+            medallas_ui = [
+                (f"🥇 {mis_oros}", "med_oro", 1),
+                (f"🥈 {mis_platas}", "med_plata", 2),
+                (f"🥉 {mis_bronces}", "med_bronce", 3),
+            ]
+            cols_med = st.columns(4, gap="small")
+            for col, (label, key, pos) in zip(cols_med, medallas_ui):
+                with col:
+                    if st.button(label, key=key, use_container_width=True, help="Ver mis podios y mejores marcas"):
+                        abrir_podios(pos)
+            with cols_med[3]:  # total de podios: solo informativo
+                st.markdown(f'<div class="nob-med-info"><div class="v">★ {mi_total}</div><div class="l">Podios</div></div>',
+                            unsafe_allow_html=True)
 
     # Manager: debajo de sus datos, accesos a su ficha y al padrón completo
     if st.session_state.role in ["M", "P"]:
-        if st.button("Ver mi ficha completa", type="primary", use_container_width=True,
-                     key="btn_ficha_inicio_m", icon=":material/person:"):
+        if not es_entrenador and st.button("Ver mi ficha completa", type="primary", use_container_width=True,
+                                           key="btn_ficha_inicio_m", icon=":material/person:"):
             ir_a_mi_ficha()
-        if st.button("Ver padrón de nadadores", use_container_width=True,
-                     key="btn_padron_inicio_m", icon=":material/groups:"):
+        if st.button("Ver padrón de nadadores", type="primary" if es_entrenador else "secondary",
+                     use_container_width=True, key="btn_padron_inicio_m", icon=":material/groups:"):
             ir_al_padron()
-        tarjeta_resumen_anual(me)
+        if not es_entrenador:
+            tarjeta_resumen_anual(me)
 
     # RESUMEN: OBJETIVO DEL MES + PRÓXIMO TORNEO (solo nadadores)
     if st.session_state.role == "N":
@@ -744,9 +757,9 @@ if db and st.session_state.user_id:
             st.markdown("\n".join(l.strip() for l in _html.splitlines() if l.strip()), unsafe_allow_html=True)
     
     if st.session_state.role == "N":
-        if st.button("Ver Mi Ficha Completa ➝", type="primary", use_container_width=True, key="btn_ficha_inicio"):
+        if not es_entrenador and st.button("Ver Mi Ficha Completa ➝", type="primary", use_container_width=True, key="btn_ficha_inicio"):
             ir_a_mi_ficha()
-        if not inactivo:
+        if not inactivo and not es_entrenador:
             tarjeta_resumen_anual(me)
     
     st.write("") 
