@@ -25,9 +25,13 @@ def _seg(t):
         return None
 
 
+METROS_RELEVO = 50   # cada nadador nada una posta de 50 m en los relevos
+
+
 def _metros(dist):
-    m = re.search(r"(\d+)", str(dist))
-    return int(m.group(1)) if m else 0
+    """Metros de una prueba individual ('50m', '100 m', '1500m')."""
+    nums = [int(n) for n in re.findall(r"\d+", str(dist))]
+    return max(nums) if nums else 0
 
 
 def _fmt_seg(s):
@@ -127,7 +131,9 @@ def calcular_resumen(db, id_nadador, anio, mis_resultados, clubes=None):
     r["plata"] = int((del_anio['posicion'] == 2).sum())
     r["bronce"] = int((del_anio['posicion'] == 3).sum())
     r["podios"] = r["oro"] + r["plata"] + r["bronce"]
-    r["metros"] = int(del_anio['Distancia'].map(_metros).sum())
+    # Individuales: la distancia de la prueba. Relevos: 50 m por posta nadada.
+    es_rel = del_anio['tipo'] == 'Relevo'
+    r["metros"] = int(del_anio.loc[~es_rel, 'Distancia'].map(_metros).sum() + METROS_RELEVO * int(es_rel.sum()))
 
     meses = del_anio['_f'].dt.month.value_counts()
     r["mes_activo"] = MESES[int(meses.idxmax()) - 1] if not meses.empty else None
