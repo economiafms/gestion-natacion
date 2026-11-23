@@ -116,13 +116,8 @@ def dialogo_gestion():
     st.markdown("Ingresá la palabra clave de gestión para cargar competencias.")
     with st.form("form_gestion", border=False):
         clave = st.text_input("Palabra clave", type="password", key="gestion_clave")
-        c1, c2 = st.columns([1, 2])
-        with c1:
-            cancelar = st.form_submit_button("Cancelar", use_container_width=True)
-        with c2:
-            ingresar = st.form_submit_button("Ingresar", type="primary", use_container_width=True)
-    if cancelar:
-        st.rerun()
+        # Único botón del formulario: Enter siempre "Ingresar" (para cancelar está la ✕ de la ventana)
+        ingresar = st.form_submit_button("Ingresar", type="primary", use_container_width=True)
     if ingresar:
         if clave.strip() == palabra_clave_gestion():
             # Igual que "Acceso Profesor" de Inicio: solo desbloquea la gestión.
