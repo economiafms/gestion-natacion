@@ -968,7 +968,7 @@ if db and st.session_state.user_id:
 
     # 2. MIS REGISTROS (FRECUENCIA DE ESTILOS)
     mis_regs = db['tiempos'][db['tiempos']['codnadador'] == user_id].copy()
-    if not mis_regs.empty:
+    if not mis_regs.empty and not es_entrenador:
         seccion("Mis estilos frecuentes")
         _ind_e, _todos_e = mis_resultados(user_id)
         conteo = _ind_e['Estilo'].dropna().value_counts()  # registros individuales, como antes
