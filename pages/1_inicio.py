@@ -724,9 +724,11 @@ if db and st.session_state.user_id:
         except Exception:
             pass
 
-        # Próximo torneo (cuenta regresiva)
+        # Próximo torneo (cuenta regresiva + ubicación). Con la inscripción abierta y sin inscribirse,
+        # invita a inscribirse; cerrada la inscripción, solo muestra el torneo.
+        _invitar = None
         try:
-            _comp, _ins, _ = cargar_datos_inscripcion_inicio()
+            _comp, _ins, _pil = cargar_datos_inscripcion_inicio()
             if _comp is not None and not _comp.empty:
                 _fut = _comp[_comp['fecha_evento'].dt.date >= date.today()].sort_values('fecha_evento')
                 if not _fut.empty:
@@ -734,15 +736,24 @@ if db and st.session_state.user_id:
                     _dias = (_ev['fecha_evento'].date() - date.today()).days
                     _inscripto = _ins is not None and not _ins.empty and not _ins[
                         (_ins['id_competencia'] == _ev['id_competencia']) & (_ins['codnadador'] == user_id)].empty
-                    if es_entrenador:
-                        _tag = ""
-                    elif _inscripto:
-                        _tag = '<span class="nob-tag ok">INSCRIPTO</span>'
-                    elif pd.notnull(_ev['fecha_limite']) and _ev['fecha_limite'].date() >= date.today():
-                        _cierre = (_ev['fecha_limite'].date() - date.today()).days
-                        _tag = f'<span class="nob-tag warn">INSCRIPCIÓN CIERRA EN {_cierre} DÍAS</span>'
-                    else:
-                        _tag = ""
+                    _abierta = pd.notnull(_ev['fecha_limite']) and _ev['fecha_limite'].date() >= date.today()
+                    _tag = ""
+                    if _abierta and not es_entrenador:
+                        if _inscripto:
+                            _tag = '<span class="nob-tag ok">INSCRIPTO</span>'
+                        else:
+                            _cierre = (_ev['fecha_limite'].date() - date.today()).days
+                            _cuando = "HOY" if _cierre == 0 else f"EN {_cierre} {'DÍA' if _cierre == 1 else 'DÍAS'}"
+                            _tag = f'<span class="nob-tag warn">INSCRIPCIÓN ABIERTA · CIERRA {_cuando}</span>'
+                            _invitar = _ev
+                    # Ubicación: club y dirección de la pileta
+                    _lugar = ""
+                    if _pil is not None and not _pil.empty and 'codpileta' in _pil.columns:
+                        _p = _pil[_pil['codpileta'].astype(str) == str(_ev.get('cod_pileta'))]
+                        if not _p.empty:
+                            _partes = [str(_p.iloc[0].get(c, "")).strip() for c in ("club", "ubicacion")]
+                            _lugar = " · ".join(x for x in _partes if x and x.lower() != "nan")
+                    _lugar_html = f'<div class="nob-next-meta">📍 {html.escape(_lugar)}</div>' if _lugar else ""
                     _txt_dias = "¡Es hoy!" if _dias == 0 else f"{_dias}<small>{'día' if _dias == 1 else 'días'}</small>"
                     tarjetas.append(f"""
                     <div class="nob-next">
@@ -750,6 +761,7 @@ if db and st.session_state.user_id:
                         <div class="nob-next-days">{_txt_dias}</div>
                         <div class="nob-next-name">{html.escape(str(_ev['nombre_evento']))}</div>
                         <div class="nob-next-meta">{_ev['fecha_evento'].strftime('%d/%m/%Y')}</div>
+                        {_lugar_html}
                         {_tag}
                     </div>""")
         except Exception:
@@ -760,6 +772,12 @@ if db and st.session_state.user_id:
             _html = f'<div class="{clase}">{"".join(tarjetas)}</div>'
             st.markdown("\n".join(l.strip() for l in _html.splitlines() if l.strip()), unsafe_allow_html=True)
     
+        if _invitar is not None:
+            if st.button(f"Inscribirme a {_invitar['nombre_evento']}", key="btn_invitar_torneo", type="primary",
+                         icon=":material/how_to_reg:", use_container_width=True):
+                st.session_state.ag_sel = _invitar['id_competencia']
+                st.switch_page("pages/7_agenda.py")
+
     if st.session_state.role == "N":
         if not es_entrenador and st.button("Ver Mi Ficha Completa ➝", type="primary", use_container_width=True, key="btn_ficha_inicio"):
             ir_a_mi_ficha()
