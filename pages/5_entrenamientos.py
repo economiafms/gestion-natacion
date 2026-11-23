@@ -6,6 +6,7 @@ from datetime import datetime, date
 import plotly.express as px
 import time
 import numpy as np
+import html
 from nob_ui import select_flechas
 
 # --- 1. CONFIGURACIÓN ---
@@ -55,70 +56,61 @@ def fmt_mm_ss(seconds):
     c = int(round((seconds - int(seconds)) * 100))
     return f"{m:02d}:{s:02d}.{c:02d}"
 
-from nob_ui import hero
+from nob_ui import hero, seccion
 hero("Centro de Entrenamiento", "🏋️")
 
-# --- CSS PERSONALIZADO ---
+# --- ESTILOS (mismo lenguaje visual que Inicio y Rutinas) ---
 st.markdown("""
 <style>
-    .test-card { 
-        background-color: #262730; 
-        border: 1px solid #444; 
-        border-radius: 10px; 
-        padding: 15px; 
-        margin-bottom: 12px; 
-        box-shadow: 0 4px 6px rgba(0,0,0,0.3); 
-        border-left: 5px solid #E30613; 
-    }
-    .test-header { 
-        display: flex; 
-        justify-content: space-between; 
-        align-items: flex-start; 
-        margin-bottom: 8px; 
-        border-bottom: 1px solid #444; 
-        padding-bottom: 8px; 
-    }
-    .test-style { font-size: 18px; font-weight: bold; color: white; text-transform: uppercase; }
-    .test-dist { font-size: 14px; color: #aaa; font-weight: bold; }
-    .test-date { font-size: 12px; color: #888; margin-left: 5px; }
-    .final-time { 
-        font-family: 'Courier New', monospace; 
-        font-size: 24px; 
-        font-weight: bold; 
-        color: #E30613; 
-        text-align: right; 
-        background: rgba(0,0,0,0.2); 
-        padding: 2px 8px; 
-        border-radius: 4px; 
-    }
-    .splits-container { 
-        margin-top: 10px; 
-        padding: 10px; 
-        background: #1e1e1e; 
-        border-radius: 6px; 
-        border: 1px solid #333; 
-    }
-    .splits-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
-    .split-item { text-align: center; background: rgba(255,255,255,0.05); padding: 5px; border-radius: 4px; }
-    .split-label { font-size: 10px; color: #aaa; display: block; }
-    .split-val { font-family: monospace; font-size: 14px; color: #eee; }
-    
-    .config-box { 
-        background-color: #1e1e1e; 
-        padding: 15px; 
-        border-radius: 8px; 
-        border-left: 4px solid #E30613; 
-        margin-top: 10px;
-        margin-bottom: 15px; 
-        color: #eee;
-        font-size: 14px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-    }
-    .section-title { color: #E30613; font-weight: bold; margin-top: 20px; margin-bottom: 10px; border-bottom: 1px solid #333; font-size: 14px; text-transform: uppercase; }
+/* Tarjetas de promedio por prueba */
+.tst-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-bottom: 4px; }
+.tst-tile, .tst-rec {
+  padding: 12px 14px; border-radius: 16px; position: relative; overflow: hidden;
+  background: linear-gradient(160deg, rgba(255,255,255,0.06), rgba(255,255,255,0.015));
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.tst-tile::before, .tst-rec::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
+  background: linear-gradient(180deg, #E30613, #FF6A72); }
+.tst-e { font-size: 15px; font-weight: 800; color: #fff; text-transform: uppercase; letter-spacing: .3px; }
+.tst-d { font-size: 12px; color: rgba(255,255,255,0.55); margin-top: 1px; }
+.tst-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; margin-top: 10px; }
+.tst-k { display: block; font-size: 9.5px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase;
+  color: rgba(255,255,255,0.45); margin-bottom: 3px; }
+.tst-time { font-size: 24px; font-weight: 900; color: #fff; line-height: 1; font-variant-numeric: tabular-nums; }
+.tst-pace { text-align: right; }
+.tst-pace b { font-size: 16px; font-weight: 800; color: #FF6B72; font-variant-numeric: tabular-nums; }
+.tst-n { display: inline-block; margin-top: 10px; padding: 2px 8px; border-radius: 999px; font-size: 10.5px; font-weight: 700;
+  color: rgba(255,255,255,0.7); background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); }
+/* Registro individual */
+.tst-rec { margin-bottom: 8px; }
+.tst-rec-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.tst-rec .tst-time { font-size: 26px; color: #fff; }
+.tst-fecha { display: inline-block; margin-left: 6px; font-size: 11px; color: rgba(255,255,255,0.5); }
+.tst-splits { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.tst-split { flex: 1 1 0; min-width: 62px; text-align: center; padding: 6px 4px; border-radius: 10px;
+  background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.06); }
+.tst-split small { display: block; font-size: 9.5px; font-weight: 700; letter-spacing: 1px; color: rgba(255,255,255,0.45); }
+.tst-split b { font-size: 14px; color: #eee; font-variant-numeric: tabular-nums; }
+/* Aviso de configuración de la prueba */
+.tst-info { padding: 12px 14px; border-radius: 14px; margin: 6px 0 10px; font-size: 13.5px; color: rgba(255,255,255,0.85);
+  background: rgba(227,6,19,0.08); border: 1px solid rgba(227,6,19,0.30); }
+.tst-info b { color: #fff; }
+/* Etiqueta de cada parcial en la carga */
+.tst-plab { padding-top: 8px; font-size: 13px; font-weight: 800; color: #fff; }
+.tst-plab small { display: block; font-size: 10.5px; font-weight: 600; color: rgba(255,255,255,0.5); }
 </style>
 """, unsafe_allow_html=True)
 
 conn = st.connection("gsheets", type=GSheetsConnection)
+
+def leer_entrenamientos_fresco():
+    """Hoja Entrenamientos recién leída (sin caché). None si falla la lectura."""
+    try:
+        return conn.read(worksheet="Entrenamientos", ttl=0).copy()
+    except pd.errors.EmptyDataError:
+        return pd.DataFrame()   # hoja totalmente vacía: no hay nada que proteger
+    except Exception:
+        return None
 
 def cargar_entrenamientos():
     try:
@@ -171,7 +163,7 @@ with tab_cargar:
     with st.container(key=f"carga_container_{st.session_state.form_reset_id}"):
         
         # --- PASO 1 ---
-        st.subheader("1. Definir Prueba")
+        seccion("1 · Prueba")
         c1, c2 = st.columns([1, 2])
         f_val = c1.date_input("Fecha", date.today(), format="DD/MM/YYYY")
         
@@ -209,7 +201,7 @@ with tab_cargar:
                 m_par = 100 if m_tot == 400 else (50 if m_tot == 200 else (25 if m_tot == 100 else 0))
                 msg_par = f"Se habilitarán tomas de parciales cada <b>{m_par} mts</b>." if m_par > 0 else "Distancia corta o relevo: Sin toma de parciales."
                 
-                st.markdown(f"<div class='config-box'><strong>CONFIGURACIÓN:</strong> {dist_t_val} {est_val}.<br>{msg_par}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='tst-info'><b>{dist_t_val} {est_val}</b><br>{msg_par}</div>", unsafe_allow_html=True)
                 
                 quiere_p = False
                 if m_par > 0:
@@ -219,12 +211,10 @@ with tab_cargar:
 
         # --- PASO 2 ---
         if mostrar_paso_2:
-            st.divider()
-            st.subheader("2. Registrar Tiempos")
+            seccion("2 · Tiempos")
             
             with st.form("form_reg", clear_on_submit=False):
-                st.markdown("<div class='section-title'>TIEMPO FINAL</div>", unsafe_allow_html=True)
-                st.text_input("Ref", value=dist_t_val, disabled=True, label_visibility="collapsed")
+                st.markdown(f'<div class="nob-top-tit">Tiempo final · {dist_t_val}</div>', unsafe_allow_html=True)
                 
                 tf1, tf2, tf3 = st.columns(3)
                 mf = tf1.number_input("Min", 0, 59, 0)
@@ -233,18 +223,16 @@ with tab_cargar:
                 
                 lp = []
                 if quiere_p:
-                    st.markdown(f"<div class='section-title'>PARCIALES ({m_par} mts)</div>", unsafe_allow_html=True)
+                    st.markdown(f'<div class="nob-top-tit" style="margin-top:10px;">Parciales cada {m_par} m</div>', unsafe_allow_html=True)
                     for i in range(1, 5):
-                        st.write(f"Parcial {i}")
-                        px1, px2, px3, px4 = st.columns([1.2, 1, 1, 1])
-                        # Clave dinámica para evitar el bug de actualización de estado
-                        px1.text_input(f"d{i}", value=f"{m_par} mts", disabled=True, label_visibility="collapsed", key=f"d_vis_{i}_{m_tot}")
+                        px1, px2, px3, px4 = st.columns([1.2, 1, 1, 1], vertical_alignment="center")
+                        px1.markdown(f'<div class="tst-plab">P{i}<small>{m_par * (i - 1)}–{m_par * i} m</small></div>', unsafe_allow_html=True)
                         pm = px2.number_input("M", 0, 59, 0, key=f"pm_{i}_{m_tot}", label_visibility="collapsed")
                         ps = px3.number_input("S", 0, 59, 0, key=f"ps_{i}_{m_tot}", label_visibility="collapsed")
                         pc = px4.number_input("C", 0, 99, 0, key=f"pc_{i}_{m_tot}", label_visibility="collapsed")
                         lp.append(f"{pm:02d}:{ps:02d}.{pc:02d}" if (pm+ps+pc)>0 else "")
                 
-                submitted = st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True)
+                submitted = st.form_submit_button("Guardar registro", type="primary", icon=":material/save:", use_container_width=True)
                 
                 if submitted:
                     s_final = (mf*60) + sf + (cf/100)
@@ -307,12 +295,33 @@ with tab_cargar:
                         
                         with st.spinner("Guardando..."):
                             try:
-                                max_id = pd.to_numeric(db['entrenamientos']['id_entrenamiento'], errors='coerce').max() if not db['entrenamientos'].empty else 0
+                                # Se relee la hoja en fresco antes de escribir: así no se pisan tests que
+                                # otro haya guardado mientras tanto (la copia en caché puede estar vieja).
+                                df_fresco = leer_entrenamientos_fresco()
+                                if df_fresco is None:
+                                    st.error("⚠️ No se pudo leer la planilla. No se guardó nada para proteger los datos; probá de nuevo.")
+                                    st.stop()
+                                ya_existe = False
+                                if not df_fresco.empty:
+                                    _f = df_fresco.copy()
+                                    _f.columns = _f.columns.str.strip().str.lower()
+                                    ya_existe = not _f[
+                                        (_f['codnadador'].astype(str).str.replace(r'\.0$', '', regex=True) == str(int(id_nad_target))) &
+                                        (_f['fecha'].astype(str) == fecha_str) &
+                                        (_f['codestilo'].astype(str).str.strip() == str(id_est)) &
+                                        (_f['coddistancia'].astype(str).str.strip() == str(id_dt))
+                                    ].empty
+                                if ya_existe:
+                                    st.error(f"⛔ Ya existe un registro de {est_val} {dist_t_val} para esta fecha.")
+                                    st.stop()
+
+                                _ids = df_fresco['id_entrenamiento'] if 'id_entrenamiento' in df_fresco.columns else pd.Series(dtype=float)
+                                max_id = pd.to_numeric(_ids, errors='coerce').max() if not df_fresco.empty else 0
                                 new_id = int(0 if pd.isna(max_id) else max_id) + 1
                                 id_dp = df_dist[df_dist['descripcion'].str.startswith(str(m_par))].iloc[0]['coddistancia'] if quiere_p else ""
 
                                 row = pd.DataFrame([{
-                                    "id_entrenamiento": new_id, "fecha": fecha_str, 
+                                    "id_entrenamiento": new_id, "fecha": fecha_str,
                                     "codnadador": int(id_nad_target), "codestilo": id_est,
                                     "coddistancia": id_dt, "coddistancia_parcial": id_dp,
                                     "tiempo_final": f"{mf:02d}:{sf:02d}.{cf:02d}",
@@ -320,7 +329,7 @@ with tab_cargar:
                                     "parcial_3": lp_final[2], "parcial_4": lp_final[3],
                                     "observaciones": ""
                                 }])
-                                conn.update(worksheet="Entrenamientos", data=pd.concat([db['entrenamientos'], row], ignore_index=True))
+                                conn.update(worksheet="Entrenamientos", data=pd.concat([df_fresco, row], ignore_index=True))
                                 st.success("✅ Guardado."); time.sleep(1); reset_carga(); datos.invalidar("Entrenamientos"); st.rerun()  # la pausa es a propósito: deja terminar la escritura en Google
                             except Exception as e: st.error(f"Error: {e}")
 
@@ -340,7 +349,7 @@ with tab_ver:
         else:
             lista_noms_filtrada = []
 
-        sel_n = st.selectbox("Consultar Historial de:", lista_noms_filtrada, index=None, key="h_nad")
+        sel_n = select_flechas("Nadador", lista_noms_filtrada, "h_nad") if lista_noms_filtrada else None
         if sel_n: 
             target_id = df_nad[(df_nad['apellido'].str.upper() + ", " + df_nad['nombre']) == sel_n].iloc[0]['codnadador']
     
@@ -351,7 +360,7 @@ with tab_ver:
             df_h = df_h.merge(df_est, on='codestilo', how='left').merge(df_dist, on='coddistancia', how='left')
             
             # --- SECCIÓN: PROMEDIOS Y RITMOS (100% LECTURA SEGURA) ---
-            st.markdown("<div class='section-title'>⏱️ Promedios y Ritmos Históricos</div>", unsafe_allow_html=True)
+            seccion("Promedios y ritmos")
             
             df_stats = df_h.copy()
             df_stats['seg_final'] = df_stats['tiempo_final'].apply(a_segundos)
@@ -378,38 +387,25 @@ with tab_ver:
                 stats_grouped['ritmo_seg'] = stats_grouped['promedio_seg'] / (stats_grouped['dist_num'] / stats_grouped['dist_ritmo'])
                 stats_grouped = stats_grouped.sort_values(['descripcion_x', 'dist_num'])
 
-                # Renderizar tarjetas lado a lado
-                for idx, row in stats_grouped.iterrows():
-                    label_ritmo = f"Ritmo c/{int(row['dist_ritmo'])}m:"
-                    texto_registros = f"{row['veces']} registro" if row['veces'] == 1 else f"{row['veces']} registros"
-                    
-                    st.markdown(f"""
-                    <div class="test-card">
-                        <div class="test-header" style="border-bottom: none; margin-bottom: 0; padding-bottom: 0; align-items: center;">
-                            <div>
-                                <div class="test-style">{row['descripcion_x']}</div>
-                                <div class="test-dist">{row['descripcion_y']}</div>
-                                <div class="test-date" style="margin-left: 0; margin-top: 2px;">{texto_registros}</div>
-                            </div>
-                            <div style="display: flex; gap: 20px; align-items: center; text-align: right;">
-                                <div>
-                                    <div style="font-size: 11px; color: #aaa; margin-bottom: 2px; letter-spacing: 0.5px;">TIEMPO MEDIO</div>
-                                    <div class="final-time" style="background: transparent; padding: 0; color: #eee;">{fmt_mm_ss(row['promedio_seg'])}</div>
-                                </div>
-                                <div style="border-left: 1px solid #444; padding-left: 20px;">
-                                    <div style="font-size: 11px; color: #888; margin-bottom: 2px; text-transform: uppercase;">{label_ritmo}</div>
-                                    <div style="font-family: 'Courier New', monospace; font-size: 18px; font-weight: bold; color: #E30613;">{fmt_mm_ss(row['ritmo_seg'])}</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
+                # Tarjetas en grilla: prueba, tiempo medio, ritmo y cantidad de registros
+                tiles = []
+                for _, row in stats_grouped.iterrows():
+                    n_reg = int(row['veces'])
+                    tiles.append(
+                        f'<div class="tst-tile"><div class="tst-e">{html.escape(str(row["descripcion_x"]))}</div>'
+                        f'<div class="tst-d">{html.escape(str(row["descripcion_y"]))}</div>'
+                        f'<div class="tst-row"><div><span class="tst-k">Tiempo medio</span>'
+                        f'<span class="tst-time">{fmt_mm_ss(row["promedio_seg"])}</span></div>'
+                        f'<div class="tst-pace"><span class="tst-k">Ritmo c/{int(row["dist_ritmo"])} m</span>'
+                        f'<b>{fmt_mm_ss(row["ritmo_seg"])}</b></div></div>'
+                        f'<span class="tst-n">{n_reg} {"registro" if n_reg == 1 else "registros"}</span></div>')
+                st.markdown(f'<div class="tst-grid">{"".join(tiles)}</div>', unsafe_allow_html=True)
             else:
                 st.info("Aún no hay suficientes registros de distancia (≥ 50m) para calcular promedios y ritmos.")
 
 
             # --- FILTROS DINÁMICOS ---
-            st.markdown("<div class='section-title'>🔍 Filtros</div>", unsafe_allow_html=True)
+            seccion("Registros")
             
             est_opts = ["Todos"] + sorted(df_h['descripcion_x'].unique().tolist())
             c_f1, c_f2 = st.columns(2)
@@ -428,7 +424,7 @@ with tab_ver:
 
             # --- GRÁFICO RESUMEN ---
             if f_est == "Todos" and f_dist == "Todos" and not df_filt.empty:
-                st.markdown("<div class='section-title'>📊 Distribución por Estilos</div>", unsafe_allow_html=True)
+                st.markdown('<div class="nob-top-tit" style="margin-top:8px;">Tests por estilo</div>', unsafe_allow_html=True)
                 
                 conteo = df_filt.groupby(['descripcion_x', 'descripcion_y']).size().reset_index(name='Cantidad')
                 conteo['Etiqueta'] = conteo['Cantidad'].apply(lambda x: str(x) if x > 1 else "")
@@ -463,7 +459,7 @@ with tab_ver:
 
             # --- GRÁFICO EVOLUCIÓN ---
             if f_est != "Todos" and f_dist != "Todos" and len(df_filt) >= 2:
-                st.markdown("<div class='section-title'>📈 Evolución</div>", unsafe_allow_html=True)
+                st.markdown('<div class="nob-top-tit" style="margin-top:8px;">Evolución</div>', unsafe_allow_html=True)
                 df_filt['seg'] = df_filt['tiempo_final'].apply(a_segundos)
                 df_filt['fecha_dt'] = pd.to_datetime(df_filt['fecha'])
                 
@@ -484,7 +480,7 @@ with tab_ver:
                 grafico_fijo(fig)
 
             # --- LISTADO ---
-            st.markdown("<div class='section-title'>📋 Registros</div>", unsafe_allow_html=True)
+            st.markdown(f'<div class="nob-top-tit" style="margin-top:8px;">{len(df_filt)} {"registro" if len(df_filt) == 1 else "registros"}</div>', unsafe_allow_html=True)
             for _, r in df_filt.sort_values(['fecha', 'id_entrenamiento'], ascending=False).iterrows():
                 f_fmt = datetime.strptime(str(r['fecha']), '%Y-%m-%d').strftime('%d/%m/%Y')
                 ps = [r.get(f'parcial_{i}') for i in range(1, 5)]
@@ -492,23 +488,17 @@ with tab_ver:
                 
                 splits_block = ""
                 if p_validos:
-                    grid = "".join([f"<div class='split-item'><span class='split-label'>P{i+1}</span><span class='split-val'>{p}</span></div>" for i, p in enumerate(p_validos)])
-                    splits_block = f"<div class='splits-container'><div class='splits-grid'>{grid}</div></div>"
-                
-                st.markdown(f"""
-                <div class="test-card">
-                    <div class="test-header">
-                        <div>
-                            <div class="test-style">{r.get('descripcion_x', '-')}</div>
-                            <div class="test-dist">{r.get('descripcion_y', '-')} <span class="test-date">| {f_fmt}</span></div>
-                        </div>
-                        <div class="final-time">{r['tiempo_final']}</div>
-                    </div>
-                    {splits_block}
-                </div>
-                """, unsafe_allow_html=True)
+                    grid = "".join(f'<div class="tst-split"><small>P{i+1}</small><b>{html.escape(str(p))}</b></div>'
+                                   for i, p in enumerate(p_validos))
+                    splits_block = f'<div class="tst-splits">{grid}</div>'
 
-                if p_validos and st.checkbox(f"Analizar tramos", key=f"chk_{r['id_entrenamiento']}"):
+                st.markdown(f"""<div class="tst-rec"><div class="tst-rec-top"><div>
+<div class="tst-e">{html.escape(str(r.get('descripcion_x', '-')))}</div>
+<div class="tst-d">{html.escape(str(r.get('descripcion_y', '-')))}<span class="tst-fecha">· {f_fmt}</span></div></div>
+<div><span class="tst-k" style="text-align:right">Final</span><span class="tst-time">{html.escape(str(r['tiempo_final']))}</span></div>
+</div>{splits_block}</div>""", unsafe_allow_html=True)
+
+                if p_validos and st.toggle("Analizar tramos", key=f"chk_{r['id_entrenamiento']}"):
                     p_seg = [a_segundos(p) for p in p_validos]
                     p_labels = [fmt_mm_ss(s) for s in p_seg]
                     
@@ -533,14 +523,14 @@ with tab_ver:
                     )
                     grafico_fijo(fig_bar)
         else:
-            st.info("No hay registros.")
+            st.info("Todavía no hay tests cargados.")
 
 # ==============================================================================
 #  PROMEDIOS DEL EQUIPO (SOLO USUARIOS 'M')
 # ==============================================================================
 if rol == "M":
     with tab_equipo:
-        st.markdown("<div class='section-title'>👥 Promedios del Equipo por Prueba</div>", unsafe_allow_html=True)
+        seccion("Promedios del equipo")
         
         if not df_ent.empty:
             # Unir toda la información para cruzar entrenamientos con datos de los nadadores
@@ -551,11 +541,11 @@ if rol == "M":
             # --- FILTROS DE LA PRUEBA ---
             c_f1_eq, c_f2_eq = st.columns(2)
             estilos_disp = sorted(df_global['descripcion_x'].dropna().unique().tolist())
-            f_est_eq = select_flechas("Seleccionar Estilo", estilos_disp, "eq_est", contenedor=c_f1_eq)
+            f_est_eq = select_flechas("Estilo", estilos_disp, "eq_est", contenedor=c_f1_eq)
             
             if f_est_eq:
                 dist_disp = sorted(df_global[df_global['descripcion_x'] == f_est_eq]['descripcion_y'].dropna().unique().tolist())
-                f_dist_eq = select_flechas("Seleccionar Distancia", dist_disp, "eq_dist", contenedor=c_f2_eq)
+                f_dist_eq = select_flechas("Distancia", dist_disp, "eq_dist", contenedor=c_f2_eq)
                 
                 if f_dist_eq:
                     # Filtrar por la prueba seleccionada
@@ -589,33 +579,18 @@ if rol == "M":
                         # Ordenar del más rápido al más lento
                         stats_eq = stats_eq.sort_values('promedio_seg')
                         
-                        st.write(f"**Resultados para {f_est_eq} | {f_dist_eq}**")
-                        
-                        for _, row_eq in stats_eq.iterrows():
-                            nombre_nadador = f"{row_eq['apellido'].upper()}, {row_eq['nombre']}"
-                            
-                            label_ritmo_eq = f"Ritmo c/{int(dist_ritmo_eq)}m:" if dist_num_eq >= 50 else "Ritmo:"
-                            
-                            st.markdown(f"""
-                            <div class="test-card">
-                                <div class="test-header" style="border-bottom: none; margin-bottom: 0; padding-bottom: 0; align-items: center;">
-                                    <div>
-                                        <div class="test-style" style="font-size: 17px;">{nombre_nadador}</div>
-                                        <div class="test-dist" style="margin-top: 4px; font-size: 13px;">{f_est_eq} <span style="color:#666; margin: 0 4px;">|</span> {f_dist_eq}</div>
-                                    </div>
-                                    <div style="display: flex; gap: 20px; align-items: center; text-align: right;">
-                                        <div>
-                                            <div style="font-size: 11px; color: #aaa; margin-bottom: 2px; letter-spacing: 0.5px;">TIEMPO MEDIO</div>
-                                            <div class="final-time" style="background: transparent; padding: 0; color: #eee;">{fmt_mm_ss(row_eq['promedio_seg'])}</div>
-                                        </div>
-                                        <div style="border-left: 1px solid #444; padding-left: 20px;">
-                                            <div style="font-size: 11px; color: #888; margin-bottom: 2px; text-transform: uppercase;">{label_ritmo_eq}</div>
-                                            <div style="font-family: 'Courier New', monospace; font-size: 18px; font-weight: bold; color: #E30613;">{fmt_mm_ss(row_eq['ritmo_seg'])}</div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            """, unsafe_allow_html=True)
+                        st.markdown(f'<div class="nob-top-tit">{html.escape(f_est_eq)} · {html.escape(f_dist_eq)} · '
+                                    f'{len(stats_eq)} nadadores</div>', unsafe_allow_html=True)
+                        label_ritmo_eq = f"c/{int(dist_ritmo_eq)} m" if dist_num_eq >= 50 else "ritmo"
+                        filas_eq = []
+                        for pos, (_, row_eq) in enumerate(stats_eq.iterrows(), start=1):
+                            nombre_nadador = f"{str(row_eq['apellido']).upper()}, {row_eq['nombre']}"
+                            filas_eq.append(
+                                f'<div class="nob-top"><span class="p">{pos}</span>'
+                                f'<span class="n">{html.escape(nombre_nadador)}</span>'
+                                f'<span class="m">{label_ritmo_eq} {fmt_mm_ss(row_eq["ritmo_seg"])}</span>'
+                                f'<span class="t">{fmt_mm_ss(row_eq["promedio_seg"])}</span></div>')
+                        st.markdown("".join(filas_eq), unsafe_allow_html=True)
                     else:
                         st.info("No hay tiempos registrados para esta prueba específica.")
         else:
