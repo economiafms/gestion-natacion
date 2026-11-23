@@ -748,7 +748,8 @@ if db and st.session_state.user_id:
                             _chips = "".join(f'<span style="display:inline-block;margin:4px 4px 0 0;padding:2px 8px;border-radius:999px;'
                                              f'font-size:11px;font-weight:700;color:rgba(255,255,255,0.85);background:rgba(255,255,255,0.06);'
                                              f'border:1px solid rgba(255,255,255,0.12);">{html.escape(x)}</span>' for x in _pruebas)
-                            _tag = '<span class="nob-tag ok">INSCRIPTO</span>' + (f'<div>{_chips}</div>' if _chips else "")
+                            # Solo las pruebas; si no tuviera pruebas cargadas, queda INSCRIPTO para que se sepa
+                            _tag = f'<div style="margin-top:6px;">{_chips}</div>' if _chips else '<span class="nob-tag ok">INSCRIPTO</span>'
                         else:
                             _cierre = (_ev['fecha_limite'].date() - date.today()).days
                             _cuando = "HOY" if _cierre == 0 else f"EN {_cierre} {'DÍA' if _cierre == 1 else 'DÍAS'}"
