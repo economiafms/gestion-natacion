@@ -103,6 +103,37 @@ def ir_a_mi_ficha_nav():
     st.switch_page("pages/2_visualizar_datos.py")
 
 
+def credenciales_gestion():
+    """Mismas credenciales que el desbloqueo de gestión de Inicio: secrets o clave de respaldo."""
+    try:
+        return st.secrets["admin"]["usuario"], st.secrets["admin"]["password"]
+    except Exception:
+        return "entrenador", "nob1903"
+
+
+@st.dialog("Gestión de competencias")
+def dialogo_gestion():
+    st.markdown("Ingresá el usuario y la contraseña de gestión para cargar competencias.")
+    with st.form("form_gestion", border=False):
+        usuario = st.text_input("Usuario", key="gestion_usuario")
+        clave = st.text_input("Contraseña", type="password", key="gestion_clave")
+        c1, c2 = st.columns([1, 2])
+        with c1:
+            cancelar = st.form_submit_button("Cancelar", use_container_width=True)
+        with c2:
+            ingresar = st.form_submit_button("Ingresar", type="primary", use_container_width=True)
+    if cancelar:
+        st.rerun()
+    if ingresar:
+        sec_user, sec_pass = credenciales_gestion()
+        if usuario == sec_user and clave == sec_pass:
+            st.session_state.admin_unlocked = True
+            st.session_state.ir_a_carga = True
+            st.rerun()
+        else:
+            st.error("Usuario o contraseña incorrectos.")
+
+
 def cerrar_sesion():
     for key in list(st.session_state.keys()):
         del st.session_state[key]
@@ -313,13 +344,23 @@ else:
 
     extras = []
     if st.session_state.role in ["M", "P"]:
-        extras += [("🏆", "Ranking", pg_ranking), ("⏱️", "Simulador", pg_simulador)]
+        extras += [("🏆", "Ranking", pg_ranking), ("🏊", "Simulador", pg_simulador)]
         if st.session_state.admin_unlocked:
             extras.append(("⚙️", "Carga de Datos", pg_carga))
     # Cerrar sesión no va en el panel: tiene su propio botón fijo en la franja
 
+    # Solo computadora (manager): Simulador a la izquierda, Ranking a la derecha y Gestión en lugar del "+"
+    es_manager = st.session_state.role in ["M", "P"]
+    web_izq = ("🏊", "Simulador", pg.url_path == pg_simulador.url_path) if es_manager else None
+    web_der = ("🏆", "Ranking", pg.url_path == pg_ranking.url_path) if es_manager else None
+
+    # Después de desbloquear la gestión desde el diálogo, ir directo a Carga de Datos
+    if st.session_state.pop("ir_a_carga", False) and st.session_state.admin_unlocked:
+        st.switch_page(pg_carga)
+
     accion = barra_movil([(i, e) for i, e, _ in principales], st.session_state.user_name or "Mi Ficha",
-                         [(i, e) for i, e, _ in extras], activo)
+                         [(i, e) for i, e, _ in extras], activo,
+                         web_izq=web_izq, web_der=web_der, web_gestion=es_manager)
     if accion is not None:
         if accion[0] == "principal":
             st.switch_page(principales[accion[1]][2])
@@ -329,6 +370,15 @@ else:
             st.switch_page(extras[accion[1]][2])
         elif accion[0] == "salir":
             cerrar_sesion()
+        elif accion[0] == "web_izq":
+            st.switch_page(pg_simulador)
+        elif accion[0] == "web_der":
+            st.switch_page(pg_ranking)
+        elif accion[0] == "gestion":
+            if st.session_state.admin_unlocked:
+                st.switch_page(pg_carga)
+            else:
+                dialogo_gestion()
 
     with st.sidebar:
         st.write("") 

@@ -132,7 +132,7 @@ def hero(titulo: str, icono: str | None = None, subtitulo: str | None = None,
     )
 
 
-def barra_movil(principales, nombre, extras, activo=None):
+def barra_movil(principales, nombre, extras, activo=None, web_izq=None, web_der=None, web_gestion=False):
     """Barra de navegación fija abajo, SOLO en el celular (en computadora no se muestra).
 
     Estructura (de arriba hacia abajo):
@@ -143,8 +143,14 @@ def barra_movil(principales, nombre, extras, activo=None):
       - Franja inferior: nombre del nadador (va a Mi Ficha), botón "+" (solo si hay `extras`) y
         botón de cerrar sesión (siempre). El rincón derecho queda libre para el sello de Streamlit Cloud.
 
+    Solo en la computadora (el celular no los muestra):
+      - `web_izq` / `web_der`: (icono, etiqueta, activo) a la izquierda y a la derecha de la fila principal
+        (para el manager: Simulador y Ranking).
+      - `web_gestion`: botón de Gestión en lugar del "+".
+
     `activo`: índice (0-4) de la página actual en la fila principal, o None.
-    Devuelve ("principal", i) | ("ficha",) | ("extra", i) | ("salir",) | None.
+    Devuelve ("principal", i) | ("ficha",) | ("extra", i) | ("salir",) |
+             ("web_izq",) | ("web_der",) | ("gestion",) | None.
     """
     css = [f'.st-key-bn_{i} button::after {{ content: "{e.replace(chr(34), "")}"; }}'
            for i, (_, e) in enumerate(principales)]
@@ -164,6 +170,12 @@ def barra_movil(principales, nombre, extras, activo=None):
         )
     css += [f'.st-key-bnx_{i} button::after {{ content: "{e.replace(chr(34), "")}"; }}'
             for i, (_, e) in enumerate(extras)]
+    for clave, lateral in (("bnw_izq", web_izq), ("bnw_der", web_der)):
+        if lateral:
+            css.append(f'.st-key-{clave} button::after {{ content: "{lateral[1].replace(chr(34), "")}"; }}')
+            if lateral[2]:
+                css.append(f'.st-key-{clave} button::after {{ color: #FF4D57 !important; font-weight: 800 !important; }}'
+                           f'.st-key-{clave} button {{ box-shadow: inset 0 2px 0 #E30613 !important; }}')
 
     accion = None
     with st.container(key="nob_bottom_nav"):
@@ -179,6 +191,14 @@ def barra_movil(principales, nombre, extras, activo=None):
                         with col:
                             if st.button(icono, key=f"bnx_{j}", use_container_width=True):
                                 accion = ("extra", j)
+
+        # Solo computadora: accesos laterales del manager y botón de Gestión
+        if web_izq and st.button(web_izq[0], key="bnw_izq"):
+            accion = ("web_izq",)
+        if web_der and st.button(web_der[0], key="bnw_der"):
+            accion = ("web_der",)
+        if web_gestion and st.button("", key="bnw_gestion", icon=":material/settings:", help="Gestión de competencias"):
+            accion = ("gestion",)
 
         with st.container(key="bn_row"):
             for i, (col, (icono, _)) in enumerate(zip(st.columns(5, gap="small"), principales)):
@@ -557,8 +577,10 @@ def aplicar_tema():
         .nob-mas-btn:has(input:checked) .cerrar { display: inline; }
         .nob-mas-btn:has(input:checked) { border-color: #E30613 !important; }
         .st-key-bn_panel { display: none !important; }
+        /* Botones solo para la computadora (manager): ocultos por defecto */
+        .st-key-bnw_izq, .st-key-bnw_der, .st-key-bnw_gestion { display: none !important; }
         .st-key-nob_bottom_nav:has(#nob-mas-chk:checked) .st-key-bn_panel { display: flex !important; }
-        @media (max-width: 640px) {
+        @media (max-width: 900px) {
             .st-key-nob_bottom_nav {
                 display: flex !important; position: fixed; left: 0; right: 0; bottom: 0; z-index: 999990;
                 gap: 0 !important;
@@ -566,8 +588,9 @@ def aplicar_tema():
                 background: rgba(10,11,14,0.97); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
                 border-top: 1px solid rgba(255,255,255,0.08);
             }
-            /* Ocultar el menú lateral en el celular: todo está en la barra */
-            [data-testid="stExpandSidebarButton"] { display: none !important; }
+            /* Ocultar el menú lateral en el celular / tablet: todo está en la barra */
+            [data-testid="stExpandSidebarButton"], [data-testid="stSidebar"],
+            [data-testid="stSidebarCollapsedControl"] { display: none !important; }
 
             /* Fila principal fija */
             .st-key-bn_row { margin-top: 4px; }
@@ -633,6 +656,7 @@ def aplicar_tema():
             .st-key-bn_panel button::after { font-size: 13px; font-weight: 700; color: #fff; white-space: nowrap; }
             /* Botón central elevado */
             .st-key-bn_2 button {
+                max-width: 96px; margin-left: auto !important; margin-right: auto !important;
                 position: relative; min-height: 76px !important; margin-top: -20px;
                 border-radius: 22px !important;
                 background-color: #1A0204 !important;
@@ -647,7 +671,7 @@ def aplicar_tema():
         }
 
         /* ---------- Computadora: la misma barra como dock flotante abajo al centro ---------- */
-        @media (min-width: 641px) {
+        @media (min-width: 901px) {
             /* El menú lateral se reemplaza por el dock */
             [data-testid="stSidebar"], [data-testid="stSidebarCollapsedControl"],
             [data-testid="stExpandSidebarButton"] { display: none !important; }
@@ -667,9 +691,39 @@ def aplicar_tema():
             .st-key-nob_bottom_nav > [data-testid="stLayoutWrapper"],
             .st-key-bn_strip { display: contents !important; }
             .st-key-bn_nombre { order: 0; flex: 0 1 auto !important; min-width: 0; width: auto !important; }
-            .st-key-bn_row    { order: 1; flex: 1 1 auto !important; min-width: 0; width: auto !important; }
-            [data-testid="stElementContainer"]:has(.nob-mas-btn)    { order: 2; flex: 0 0 auto !important; width: auto !important; }
-            .st-key-bn_salir  { order: 3; flex: 0 0 auto !important; width: auto !important; }
+            .st-key-bnw_izq   { order: 1; }
+            .st-key-bn_row    { order: 2; flex: 1 1 auto !important; min-width: 0; width: auto !important; }
+            .st-key-bnw_der   { order: 3; }
+            [data-testid="stElementContainer"]:has(.nob-mas-btn)    { order: 4; flex: 0 0 auto !important; width: auto !important; }
+            .st-key-bnw_gestion { order: 4; }
+            .st-key-bn_salir  { order: 5; flex: 0 0 auto !important; width: auto !important; }
+
+            /* Manager en la computadora: Simulador / Ranking a los lados y Gestión en lugar del "+" */
+            .st-key-bnw_izq, .st-key-bnw_der, .st-key-bnw_gestion {
+                display: block !important; flex: 0 0 auto !important; width: auto !important;
+            }
+            .st-key-nob_bottom_nav:has(.st-key-bnw_gestion) [data-testid="stElementContainer"]:has(.nob-mas-btn),
+            .st-key-nob_bottom_nav:has(.st-key-bnw_gestion) .st-key-bn_panel { display: none !important; }
+            .st-key-bnw_izq button, .st-key-bnw_der button {
+                flex-direction: column !important; gap: 2px; min-height: 56px !important; min-width: 74px;
+                padding: 4px 6px !important; border-radius: 14px !important; transform: none !important;
+                background: transparent !important; border: none !important; box-shadow: none !important;
+            }
+            .st-key-bnw_izq button:hover, .st-key-bnw_der button:hover { background-color: rgba(255,255,255,0.05) !important; }
+            .st-key-bnw_izq button p, .st-key-bnw_der button p { font-size: 22px !important; line-height: 1.1; }
+            .st-key-bnw_izq button::after, .st-key-bnw_der button::after {
+                font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.65); white-space: nowrap;
+            }
+            /* Separadores sutiles entre los accesos del manager y las secciones */
+            .st-key-bnw_izq { border-right: 1px solid rgba(255,255,255,0.08); padding-right: 6px; }
+            .st-key-bnw_der { border-left: 1px solid rgba(255,255,255,0.08); padding-left: 6px; }
+            .st-key-bnw_gestion button {
+                border-radius: 999px !important; min-width: 48px !important; min-height: 44px !important; padding: 2px 12px !important;
+                background: rgba(255,255,255,0.08) !important; border: 1px solid rgba(255,255,255,0.16) !important;
+                box-shadow: none !important; transform: none !important;
+            }
+            .st-key-bnw_gestion button:hover { border-color: #E30613 !important; }
+            .st-key-bnw_gestion button [data-testid="stIconMaterial"] { font-size: 24px !important; color: #fff; margin: 0 !important; }
 
             .st-key-bn_nombre button {
                 background: transparent !important; border: none !important; box-shadow: none !important;
@@ -732,6 +786,16 @@ def aplicar_tema():
             .st-key-bn_panel button::after { font-size: 13px; font-weight: 700; color: #fff; white-space: nowrap; }
 
             .block-container { padding-bottom: 140px !important; }
+        }
+        /* Computadoras con pantalla mediana: el dock del manager tiene 7 accesos, se compacta un poco */
+        @media (min-width: 901px) and (max-width: 1250px) {
+            .st-key-nob_bottom_nav:has(.st-key-bnw_izq) { gap: 8px !important; padding-left: 14px; }
+            .st-key-nob_bottom_nav:has(.st-key-bnw_izq) .st-key-bn_nombre button p { font-size: 13px !important; max-width: 110px; }
+            .st-key-nob_bottom_nav:has(.st-key-bnw_izq) .st-key-bn_row button::after,
+            .st-key-nob_bottom_nav:has(.st-key-bnw_izq) .st-key-bnw_izq button::after,
+            .st-key-nob_bottom_nav:has(.st-key-bnw_izq) .st-key-bnw_der button::after { font-size: 9.5px; letter-spacing: -0.2px; }
+            .st-key-nob_bottom_nav:has(.st-key-bnw_izq) .st-key-bnw_izq button,
+            .st-key-nob_bottom_nav:has(.st-key-bnw_izq) .st-key-bnw_der button { min-width: 60px; }
         }
         /* Pantallas anchas: dock centrado de verdad (alineado con el contenido), con el mismo margen
            a ambos lados para no tocar el sello de Streamlit de la derecha */
