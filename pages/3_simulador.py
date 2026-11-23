@@ -145,7 +145,7 @@ def eliminar_equipo_borrador(index):
 # Si se llega desde la Agenda con inscriptos, abrir directo en "Por grupo"
 if st.session_state.pop("sim_abrir_grupo", False):
     st.session_state["sim_tabs"] = "🎯 Por grupo de nadadores"
-tab_manual, tab_grupo = st.tabs(["🧪 Posta manual", "🎯 Por grupo de nadadores"], key="sim_tabs", on_change="rerun")
+tab_grupo, tab_manual = st.tabs(["🎯 Por grupo de nadadores", "🧪 Posta manual"], key="sim_tabs", on_change="rerun")
 
 # --- POSTA MANUAL ---
 with tab_manual:
