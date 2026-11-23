@@ -744,7 +744,7 @@ if db and st.session_state.user_id:
                         else:
                             _cierre = (_ev['fecha_limite'].date() - date.today()).days
                             _cuando = "HOY" if _cierre == 0 else f"EN {_cierre} {'DÍA' if _cierre == 1 else 'DÍAS'}"
-                            _tag = f'<span class="nob-tag warn">INSCRIPCIÓN ABIERTA · CIERRA {_cuando}</span>'
+                            _tag = f'<span class="nob-tag warn">INSCRIBITE · CIERRA {_cuando} ›</span>'
                             _invitar = _ev
                     # Ubicación: club y dirección de la pileta
                     _lugar = ""
@@ -758,9 +758,8 @@ if db and st.session_state.user_id:
                     tarjetas.append(f"""
                     <div class="nob-next">
                         <div class="nob-next-k">Próximo torneo</div>
-                        <div class="nob-next-days">{_txt_dias}</div>
+                        <div class="nob-next-days">{_txt_dias}<small>· {_ev['fecha_evento'].strftime('%d/%m/%Y')}</small></div>
                         <div class="nob-next-name">{html.escape(str(_ev['nombre_evento']))}</div>
-                        <div class="nob-next-meta">{_ev['fecha_evento'].strftime('%d/%m/%Y')}</div>
                         {_lugar_html}
                         {_tag}
                     </div>""")
@@ -768,15 +767,31 @@ if db and st.session_state.user_id:
             pass
 
         if tarjetas:
-            clase = "nob-duo" if len(tarjetas) == 2 else ""
-            _html = f'<div class="{clase}">{"".join(tarjetas)}</div>'
-            st.markdown("\n".join(l.strip() for l in _html.splitlines() if l.strip()), unsafe_allow_html=True)
-    
-        if _invitar is not None:
-            if st.button(f"Inscribirme a {_invitar['nombre_evento']}", key="btn_invitar_torneo", type="primary",
-                         icon=":material/how_to_reg:", use_container_width=True):
-                st.session_state.ag_sel = _invitar['id_competencia']
-                st.switch_page("pages/7_agenda.py")
+            # Las tarjetas van como elementos de Streamlit (no un solo HTML) para que la del torneo
+            # pueda ser clickeable: con la inscripción abierta, tocarla abre la Agenda en ese torneo.
+            _limpio = lambda h: "\n".join(l.strip() for l in h.splitlines() if l.strip())
+            st.markdown("""<style>
+.st-key-nob_duo_st { display: grid !important; grid-template-columns: repeat(var(--duo-n), 1fr); gap: 12px !important; margin-bottom: 14px; }
+.st-key-nob_duo_st .nob-goal, .st-key-nob_duo_st .nob-next { margin-bottom: 0; height: 100%; }
+@media (max-width: 520px) { .st-key-nob_duo_st { grid-template-columns: 1fr; } }
+.st-key-nob_torneo_card { position: relative; }
+.st-key-nob_torneo_card .st-key-btn_invitar_torneo { position: absolute !important; left: 0; top: 0; z-index: 2;
+  width: 100% !important; height: 100% !important; }
+.st-key-nob_torneo_card .st-key-btn_invitar_torneo [data-testid="stButton"],
+.st-key-nob_torneo_card .st-key-btn_invitar_torneo .stButton { width: 100% !important; height: 100% !important; }
+.st-key-nob_torneo_card .st-key-btn_invitar_torneo button { width: 100% !important; height: 100% !important;
+  min-height: 0 !important; padding: 0 !important; opacity: 0; cursor: pointer; }
+</style>""" + f"<style>.st-key-nob_duo_st {{ --duo-n: {len(tarjetas)}; }}</style>", unsafe_allow_html=True)
+            with st.container(key="nob_duo_st"):
+                for _t in tarjetas:
+                    if _invitar is not None and 'class="nob-next"' in _t:
+                        with st.container(key="nob_torneo_card"):
+                            st.markdown(_limpio(_t), unsafe_allow_html=True)
+                            if st.button("Inscribirme", key="btn_invitar_torneo"):
+                                st.session_state.ag_sel = _invitar['id_competencia']
+                                st.switch_page("pages/7_agenda.py")
+                    else:
+                        st.markdown(_limpio(_t), unsafe_allow_html=True)
 
     if st.session_state.role == "N":
         if not es_entrenador and st.button("Ver Mi Ficha Completa ➝", type="primary", use_container_width=True, key="btn_ficha_inicio"):
