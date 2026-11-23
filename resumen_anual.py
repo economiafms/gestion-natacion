@@ -81,7 +81,6 @@ def calcular_resumen(db, id_nadador, anio, mis_resultados):
     # Medallas totales con NOB (toda su historia en el club, individuales + relevos)
     hist = todos[todos['posicion'].between(1, 3)]
     r["medallas_nob"] = int(len(hist))
-    r["oros_nob"] = int((hist['posicion'] == 1).sum())
     return r
 
 
@@ -225,8 +224,8 @@ def generar_imagen(r, nombre, formato="Historia (1080×1920)"):
     if r.get("mejor_mejora"):
         destacados.append(("Mayor mejora", r["mejor_mejora"]))
     if r.get("medallas_nob"):
-        n, o = r["medallas_nob"], r.get("oros_nob", 0)
-        txt = f"{n} medalla{'s' if n != 1 else ''}" + (f" · {o} de oro" if o else "")
+        n = r["medallas_nob"]
+        txt = f"{n} medalla{'s' if n != 1 else ''}"
         destacados.append(("Medallas totales en NOB", txt))
     if not historia:
         destacados = destacados[:1]   # el posteo es más bajo: solo el destacado principal
