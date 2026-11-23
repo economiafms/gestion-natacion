@@ -620,6 +620,8 @@ if db and st.session_state.user_id:
     # El entrenador tiene ficha en Nadadores pero no compite: su Inicio no muestra datos de nadador
     es_entrenador = str(st.session_state.get("nro_socio") or "").strip() == "253973"
     # El entrenador tampoco tiene rutinas: se trata como inactivo para esas tarjetas
+    # Vista de staff (entrenador y managers): top 10 clickeable y nadadores por categoría
+    vista_staff = es_entrenador or st.session_state.role in ["M", "P"]
     inactivo = es_entrenador or (st.session_state.role == "N" and actividad.id_txt(user_id) not in actividad.ids_activos(
         db.get('tiempos'), db.get('relevos')))
     
@@ -1083,20 +1085,23 @@ if db and st.session_state.user_id:
     # El entrenador no compite: no figura en el top de medallistas
     if es_entrenador and _yo is not None:
         tabla = tabla.drop(index=_yo, errors="ignore")
+    _n_top = 10 if vista_staff else 3
+    cods_top = list(tabla.head(_n_top).index)
     filas_top = [_fila_top(pos, cod, r, _yo is not None and cod == _yo)
-                 for pos, (cod, r) in enumerate(tabla.head(10 if es_entrenador else 3).iterrows(), start=1)]
-    # El usuario siempre aparece: si no está en el top 3, su fila va al final con su posición
+                 for pos, (cod, r) in enumerate(tabla.head(_n_top).iterrows(), start=1)]
+    # El usuario siempre aparece: si no está en el top, su fila va al final con su posición
     # (o "–" si todavía no tiene medallas en el año)
-    if _yo is not None and not es_entrenador and _yo not in list(tabla.head(3).index):
+    if _yo is not None and not es_entrenador and _yo not in cods_top:
         if _yo in tabla.index:
             filas_top.append(_fila_top(list(tabla.index).index(_yo) + 1, _yo, tabla.loc[_yo], True))
         else:
             filas_top.append(_fila_top("–", _yo, None, True))
+        cods_top.append(_yo)
     # El top es del año en curso: hasta que haya medallas en el año (p. ej. al empezar 2027) no se muestra
     if tabla.empty:
         filas_top = []
-    if filas_top and es_entrenador:
-        # Entrenador: el top se ve igual que siempre; encima de cada fila hay un botón invisible
+    if filas_top and vista_staff:
+        # Entrenador y managers: el top se ve igual que siempre; encima de cada fila hay un botón invisible
         # (todas las filas miden lo mismo) que abre la ficha del nadador en el Fichero.
         st.markdown("""<style>
 .st-key-ent_tops { gap: 0 !important; }
@@ -1114,7 +1119,7 @@ if db and st.session_state.user_id:
         with _rows:
             st.markdown("".join(filas_top), unsafe_allow_html=True)
             with st.container(key="ent_topbtns"):
-                for _k, _cod in enumerate(tabla.head(10).index):
+                for _k, _cod in enumerate(cods_top):
                     if st.button("Ver ficha", key=f"ent_topbtn_{_k}"):
                         _n = _filas_nad[_filas_nad['_cod'] == _cod]
                         if not _n.empty:
@@ -1129,10 +1134,10 @@ if db and st.session_state.user_id:
     if st.button("Ver más estadísticas", key="btn_club_stats", icon=":material/bar_chart:", use_container_width=True):
         dialogo_club(df_t, df_r)
 
-    # Entrenador: nadadores por categoría (total y activos). Cada género abre Categorías
+    # Entrenador y managers: nadadores por categoría (total y activos). Cada género abre Categorías
     # con esa categoría y ese género ya elegidos. Se usan las categorías de la hoja Categorias,
     # igual que en la página Categorías, para que coincidan.
-    if es_entrenador:
+    if vista_staff:
         _dc = db['categorias'].copy()
         _dc.columns = _dc.columns.str.strip().str.lower()
         _dc['edad_min'] = pd.to_numeric(_dc['edad_min'], errors='coerce')
