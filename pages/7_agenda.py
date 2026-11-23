@@ -877,11 +877,7 @@ def bloque_simulador():
         st.switch_page("pages/3_simulador.py")
 
 # ---------- Pestañas según el perfil ----------
-import actividad
-if actividad.es_entrenador():
-    # El entrenador no se inscribe ni inscribe: solo ve quiénes van
-    bloque_inscriptos()
-elif ES_MANAGER:
+if ES_MANAGER:
     t_ins, t_alta, t_ed, t_sim = st.tabs([f"👥 Inscriptos ({len(d_full)})", "➕ Inscribir", "⚙️ Editar", "🚀 Simulador"],
                                          key="ag_tabs_m", on_change="rerun")
     with t_ins:

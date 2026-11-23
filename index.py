@@ -316,12 +316,8 @@ if not st.session_state.role:
     pg.run()
 else:
     # --- MENÚ PRINCIPAL ---
-    # El entrenador (no nadador) no tiene rutinas: no aparecen en el menú ni en la barra
-    import actividad
-    sin_rutinas = actividad.es_entrenador()
     menu_pages = {
-        "Principal": [p for p in [pg_inicio, pg_datos, pg_rutinas, pg_entrenamientos, pg_categoria, pg_agenda]
-                      if not (sin_rutinas and p is pg_rutinas)]
+        "Principal": [pg_inicio, pg_datos, pg_rutinas, pg_entrenamientos, pg_categoria, pg_agenda]
     }
 
     # --- MENÚ HERRAMIENTAS ---
@@ -341,9 +337,7 @@ else:
     principales = [("📝", "Rutinas", pg_rutinas), ("⏱️", "Test", pg_entrenamientos),
                    ("escudo", "Inicio", pg_inicio),
                    ("🏅", TITULO_CATEGORIA, pg_categoria), ("📅", "Agenda", pg_agenda)]
-    if sin_rutinas:
-        principales[0] = ("👥", "Padrón", "padron")
-    activo = next((i for i, (_, _, p) in enumerate(principales) if getattr(p, "url_path", None) == pg.url_path), None)
+    activo = next((i for i, (_, _, p) in enumerate(principales) if p.url_path == pg.url_path), None)
 
     # Manager en Inicio: el botón central (escudo) dice "Padrón" y lleva al padrón de nadadores
     # Nadador en Inicio: el botón central (escudo) dice "Mi Ficha" y lleva a su ficha
