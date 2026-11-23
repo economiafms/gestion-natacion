@@ -388,7 +388,7 @@ def dialogo_estilo(estilo):
 
     st.markdown(f"""<div class="nob-est-head">
 <div class="nob-est-name">{html.escape(str(estilo))}</div>
-<div class="nob-est-info"><span><b>{len(todos_e)}</b> registros</span><span><b>{n1 + n2 + n3}</b> podios</span>
+<div class="nob-est-info"><span><b>{len(ind_e)}</b> registros</span><span><b>{n1 + n2 + n3}</b> podios</span>
 <span>🥇 {n1}</span><span>🥈 {n2}</span><span>🥉 {n3}</span></div>
 </div>""", unsafe_allow_html=True)
 
@@ -514,19 +514,19 @@ if db and st.session_state.user_id:
     mi_total = mis_oros + mis_platas + mis_bronces
 
     # 1. TARJETA PERFIL
-    nom_full = html.escape(f"{me['nombre']} {me['apellido']}")
     iniciales = html.escape((str(me['nombre'])[:1] + str(me['apellido'])[:1]).upper())
+    genero_txt = {"F": "Femenino", "M": "Masculino"}.get(str(me['codgenero']).strip().upper(), str(me['codgenero']))
 
+    # Tarjeta centrada estilo carnet: iniciales, nombre (→ ficha) y fila Categoría | Edad | Género
     with st.container(key="nob_profile"):
-        c_av, c_info, c_cat = st.columns([0.9, 5, 1.6], vertical_alignment="center", gap="small")
-        with c_av:
-            st.markdown(f'<div class="nob-avatar">{iniciales}</div>', unsafe_allow_html=True)
-        with c_info:
-            if st.button(f"{me['nombre']} {me['apellido']}", key="btn_nombre_perfil", help="Ver mi ficha completa"):
-                ir_a_mi_ficha()
-            st.markdown(f'<div class="nob-p-meta">{edad} años · {me["codgenero"]}</div>', unsafe_allow_html=True)
-        with c_cat:
-            st.markdown(f'<div class="nob-cat-badge"><small>Categoría</small><b>{cat}</b></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="nob-avatar">{iniciales}</div>', unsafe_allow_html=True)
+        if st.button(f"{me['nombre']} {me['apellido']}", key="btn_nombre_perfil", help="Ver mi ficha completa"):
+            ir_a_mi_ficha()
+        st.markdown(f"""<div class="nob-id-row">
+<div><small>Categoría</small><b class="cat">{html.escape(str(cat))}</b></div>
+<div><small>Edad</small><b>{edad}</b></div>
+<div><small>Género</small><b>{html.escape(genero_txt)}</b></div>
+</div>""", unsafe_allow_html=True)
 
     # Medallero personal: cada medalla abre la vista rápida de podios y marcas
     with st.container(key="nob_medals"):
@@ -825,24 +825,22 @@ if db and st.session_state.user_id:
     if not mis_regs.empty:
         seccion("Mis estilos frecuentes")
         _ind_e, _todos_e = mis_resultados(user_id)
-        conteo = _todos_e['Estilo'].dropna().value_counts()  # registros individuales + relevos
-        podios_estilo = _todos_e[_todos_e['posicion'].isin([1, 2, 3])]['Estilo'].value_counts()
+        conteo = _ind_e['Estilo'].dropna().value_counts()  # registros individuales, como antes
 
-        # Cada estilo abre su detalle (mejores marcas + historial); registros y podios son informativos
+        # Tarjetas simples: número de registros + nombre del estilo. Al tocarlas se abre el detalle.
+        items = list(conteo.items())
+        # El nombre de cada estilo se muestra debajo del número (CSS por tarjeta)
+        nombres_css = "".join(
+            f'.st-key-est_{i} button::after {{ content: "{str(estilo).upper().replace(chr(34), "")}"; }}'
+            for i, (estilo, _) in enumerate(items)
+        )
+        st.markdown(f"<style>{nombres_css}</style>", unsafe_allow_html=True)
         with st.container(key="nob_estilos"):
-            items = list(conteo.items())
-            for i in range(0, len(items), 2):
-                cols = st.columns(2, gap="small")
-                for j, (col, (estilo, cantidad)) in enumerate(zip(cols, items[i:i + 2])):
-                    n_pod = int(podios_estilo.get(estilo, 0))
-                    with col:
-                        if st.button(f"**{estilo}**", key=f"est_{i + j}", use_container_width=True,
-                                     help=f"Ver mejores marcas e historial de {estilo}"):
-                            dialogo_estilo(estilo)
-                        st.markdown(
-                            f'<div class="nob-est-chip"><span><b>{cantidad}</b> {"registro" if cantidad == 1 else "registros"}</span>'
-                            f'<span><b>{n_pod}</b> {"podio" if n_pod == 1 else "podios"}</span></div>',
-                            unsafe_allow_html=True)
+            for i, (col, (estilo, cantidad)) in enumerate(zip(st.columns(len(items), gap="small"), items)):
+                with col:
+                    if st.button(str(cantidad), key=f"est_{i}", use_container_width=True,
+                                 help=f"Ver mejores marcas e historial de {estilo}"):
+                        dialogo_estilo(estilo)
     
     # =================================================================
     # 3. ACCESOS RÁPIDOS (LÓGICA POR ROL)

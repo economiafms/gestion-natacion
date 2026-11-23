@@ -321,26 +321,41 @@ def aplicar_tema():
         .nob-chip .l { font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: rgba(255,255,255,0.5); }
 
         /* ---------- Perfil interactivo (Inicio) ---------- */
+        /* Tarjeta centrada estilo carnet */
         .st-key-nob_profile {
-            padding: 16px 18px; border-radius: 18px; margin-bottom: 4px;
+            padding: 22px 18px 18px; border-radius: 20px; margin-bottom: 4px;
             background: linear-gradient(160deg, rgba(255,255,255,0.06), rgba(255,255,255,0.015));
             border: 1px solid rgba(255,255,255,0.08);
+            align-items: center; text-align: center; gap: 8px !important;
         }
-        .st-key-nob_profile [data-testid="stHorizontalBlock"],
+        .st-key-nob_profile .nob-avatar { margin: 0 auto 12px; }
+        .st-key-nob_profile [data-testid="stElementContainer"] { width: 100% !important; display: flex; justify-content: center; }
+        .st-key-nob_profile [data-testid="stMarkdown"],
+        .st-key-nob_profile [data-testid="stMarkdownContainer"] { width: 100% !important; }
+        .nob-id-row {
+            display: grid; grid-template-columns: repeat(3, 1fr);
+            width: 100%; max-width: 460px; margin: 6px auto 0;
+            padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.08);
+        }
+        .nob-id-row > div { padding: 2px 6px; text-align: center; }
+        .nob-id-row > div + div { border-left: 1px solid rgba(255,255,255,0.10); }
+        .nob-id-row small {
+            display: block; font-size: 10px; font-weight: 700; letter-spacing: 1.5px;
+            text-transform: uppercase; color: rgba(255,255,255,0.5);
+        }
+        .nob-id-row b { display: block; margin-top: 4px; font-size: 18px; font-weight: 800; color: #fff; }
+        .nob-id-row b.cat { color: #6FDB74; }
         .st-key-nob_medals [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; }
-        .st-key-nob_profile [data-testid="stColumn"],
         .st-key-nob_medals [data-testid="stColumn"] { min-width: 0 !important; }
-        .st-key-nob_profile [data-testid="stColumn"]:first-child { flex: 0 0 auto !important; width: auto !important; }
-        .st-key-nob_profile [data-testid="stColumn"]:last-child { flex: 0 0 auto !important; width: auto !important; }
 
         /* Nombre como enlace a la ficha */
         .st-key-btn_nombre_perfil button {
             background: none !important; border: none !important; box-shadow: none !important;
-            padding: 0 !important; min-height: 0 !important; justify-content: flex-start !important;
+            padding: 0 !important; min-height: 0 !important; justify-content: center !important;
             transform: none !important;
         }
         .st-key-btn_nombre_perfil button p {
-            font-size: 19px !important; font-weight: 800 !important; color: #fff; text-align: left;
+            font-size: 21px !important; font-weight: 800 !important; color: #fff; text-align: center;
             line-height: 1.2;
         }
         .st-key-btn_nombre_perfil button p::after {
@@ -348,7 +363,7 @@ def aplicar_tema():
         }
         .st-key-btn_nombre_perfil button:hover p { color: #FF4D57 !important; }
         .st-key-btn_nombre_perfil button:hover p::after { opacity: 1; }
-        .st-key-btn_nombre_perfil [data-testid="stTooltipHoverTarget"] { justify-content: flex-start; }
+        .st-key-btn_nombre_perfil [data-testid="stTooltipHoverTarget"] { justify-content: center; }
 
         /* Medallas como tarjetas clicables */
         .st-key-nob_medals button {
@@ -374,23 +389,20 @@ def aplicar_tema():
         .nob-med-info .v { font-size: 22px; font-weight: 900; color: #fff; line-height: 1.3; }
         .nob-med-info .l { font-size: 10px; letter-spacing: 1.4px; font-weight: 700; color: rgba(255,255,255,0.5); text-transform: uppercase; }
 
-        /* Estilos frecuentes: botón + datos informativos unidos en una tarjeta */
+        /* Estilos frecuentes: tarjetas simples (número + estilo), tocables */
         .st-key-nob_estilos [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; }
         .st-key-nob_estilos [data-testid="stColumn"] { min-width: 0 !important; }
-        .st-key-nob_estilos [data-testid="stColumn"] [data-testid="stVerticalBlock"] { gap: 0 !important; }
         .st-key-nob_estilos button {
-            border-radius: 14px 14px 0 0 !important; min-height: 46px !important;
-            border-bottom: none !important; background: rgba(255,255,255,0.05) !important;
+            flex-direction: column !important; gap: 2px;
+            min-height: 72px !important; border-radius: 14px !important;
+            background: rgba(255,255,255,0.035) !important; border-color: rgba(255,255,255,0.08) !important;
         }
-        .st-key-nob_estilos button p { font-size: 15px !important; text-transform: uppercase; letter-spacing: 1px; }
-        .st-key-nob_estilos button p::after { content: "  ›"; color: #FF4D57; }
-        .nob-est-chip {
-            display: flex; justify-content: center; gap: 14px;
-            padding: 8px 10px 10px; border-radius: 0 0 14px 14px;
-            background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.12); border-top: 1px dashed rgba(255,255,255,0.08);
-            font-size: 12px; color: rgba(255,255,255,0.55);
+        .st-key-nob_estilos button p { font-size: 22px !important; font-weight: 800 !important; color: #fff; line-height: 1.1; }
+        .st-key-nob_estilos button::after {
+            font-size: 10px; letter-spacing: 1px; font-weight: 600; color: rgba(255,255,255,0.5);
+            max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
         }
-        .nob-est-chip b { color: #fff; font-size: 14px; }
+        .st-key-nob_estilos button:hover { border-color: rgba(227,6,19,0.5) !important; transform: translateY(-2px); }
 
         /* Encabezado del detalle por estilo */
         .nob-est-head {
@@ -458,6 +470,8 @@ def aplicar_tema():
         .nob-tag.warn { background: rgba(255,193,7,0.12); color: #FFD54F; border: 1px solid rgba(255,193,7,0.4); }
 
         @media (max-width: 520px) {
+            .st-key-nob_estilos button { padding-left: 4px !important; padding-right: 4px !important; }
+            .st-key-nob_estilos button::after { font-size: 9px; letter-spacing: 0.2px; }
             .nob-hero { gap: 14px; padding: 18px; }
             .nob-hero-crest { width: 56px; height: 56px; }
             .nob-duo { grid-template-columns: 1fr; }
