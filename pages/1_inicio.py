@@ -645,19 +645,20 @@ if db and st.session_state.user_id:
                      help="Ver padrón de nadadores" if es_entrenador else "Ver mi ficha completa"):
             ir_al_padron() if es_entrenador else ir_a_mi_ficha()
         # La celda Categoría lleva a Mi Categoría (botón invisible encima de la celda).
-        # Entrenador: la celda dice "Entrenador" y es solo lectura.
-        _celda = ('<div><small>Categoría</small><b class="cat">Entrenador</b></div>' if es_entrenador
-                  else f'<div class="cat-link"><small>Categoría</small><b class="cat">{html.escape(str(cat))}</b></div>')
+        # Entrenador: la celda dice "Entrenador" y lleva a Categorías sin preseleccionar ninguna.
+        _cat_txt = "Entrenador" if es_entrenador else str(cat)
+        _celda = f'<div class="cat-link"><small>Categoría</small><b class="cat">{html.escape(_cat_txt)}</b></div>'
         with st.container(key="nob_idrow"):
             st.markdown(f"""<div class="nob-id-row">
 {_celda}
 <div><small>Edad</small><b>{edad}</b></div>
 <div><small>Género</small><b>{html.escape(genero_txt)}</b></div>
 </div>""", unsafe_allow_html=True)
-            if not es_entrenador and st.button("Categoría", key="btn_cat_perfil"):
+            if st.button("Categoría", key="btn_cat_perfil"):
                 # Manager: la página Categorías abre directamente en su categoría y género
-                st.session_state["cat_sel"] = cat
-                st.session_state["cat_gen"] = str(me['codgenero']).strip()
+                if not es_entrenador:
+                    st.session_state["cat_sel"] = cat
+                    st.session_state["cat_gen"] = str(me['codgenero']).strip()
                 st.switch_page("pages/6_mi_categoria.py")
 
     # Medallero personal: cada medalla abre la vista rápida de podios y marcas (no para el entrenador)
@@ -1079,11 +1080,14 @@ if db and st.session_state.user_id:
                 f'<span class="n">{html.escape(_nombres_por_id.get(cod, "-"))}{" · vos" if es_yo else ""}</span>'
                 f'<span class="m">{meds}</span><span class="t">★ {total}</span></div>')
 
+    # El entrenador no compite: no figura en el top de medallistas
+    if es_entrenador and _yo is not None:
+        tabla = tabla.drop(index=_yo, errors="ignore")
     filas_top = [_fila_top(pos, cod, r, _yo is not None and cod == _yo)
                  for pos, (cod, r) in enumerate(tabla.head(3).iterrows(), start=1)]
     # El usuario siempre aparece: si no está en el top 3, su fila va al final con su posición
     # (o "–" si todavía no tiene medallas en el año)
-    if _yo is not None and _yo not in list(tabla.head(3).index):
+    if _yo is not None and not es_entrenador and _yo not in list(tabla.head(3).index):
         if _yo in tabla.index:
             filas_top.append(_fila_top(list(tabla.index).index(_yo) + 1, _yo, tabla.loc[_yo], True))
         else:
