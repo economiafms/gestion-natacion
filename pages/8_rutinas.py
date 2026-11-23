@@ -642,8 +642,9 @@ if rol in ["M", "P"]:
                     if "Error" in msg:
                         st.error(msg)
                     else:
-                        st.toast(msg)
+                        st.success(msg)
                         st.session_state.forzar_avance_sesion = True
+                        time.sleep(0.5)  # pausa a propósito: deja que Google termine de escribir antes de releer
                         st.rerun()
             
             if delete_btn:
@@ -651,8 +652,9 @@ if rol in ["M", "P"]:
                 if "Error" in msg:
                     st.error(msg)
                 else:
-                    st.toast(msg)
+                    st.warning(msg)
                     st.session_state.trigger_calculo = True
+                    time.sleep(1)  # pausa a propósito: deja que Google termine de escribir antes de releer
                     st.rerun()
 
     tab_explorar, tab_seguimiento = st.tabs(["📖 Explorar Sesiones", "📊 Seguimiento Alumnos"])

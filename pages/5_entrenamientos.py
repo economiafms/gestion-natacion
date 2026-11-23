@@ -321,7 +321,7 @@ with tab_cargar:
                                     "observaciones": ""
                                 }])
                                 conn.update(worksheet="Entrenamientos", data=pd.concat([db['entrenamientos'], row], ignore_index=True))
-                                st.toast("✅ Guardado."); reset_carga(); datos.invalidar("Entrenamientos"); st.rerun()
+                                st.success("✅ Guardado."); time.sleep(1); reset_carga(); datos.invalidar("Entrenamientos"); st.rerun()  # la pausa es a propósito: deja terminar la escritura en Google
                             except Exception as e: st.error(f"Error: {e}")
 
 # ==============================================================================
