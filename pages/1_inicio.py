@@ -1084,7 +1084,7 @@ if db and st.session_state.user_id:
     if es_entrenador and _yo is not None:
         tabla = tabla.drop(index=_yo, errors="ignore")
     filas_top = [_fila_top(pos, cod, r, _yo is not None and cod == _yo)
-                 for pos, (cod, r) in enumerate(tabla.head(3).iterrows(), start=1)]
+                 for pos, (cod, r) in enumerate(tabla.head(10 if es_entrenador else 3).iterrows(), start=1)]
     # El usuario siempre aparece: si no está en el top 3, su fila va al final con su posición
     # (o "–" si todavía no tiene medallas en el año)
     if _yo is not None and not es_entrenador and _yo not in list(tabla.head(3).index):
@@ -1099,6 +1099,26 @@ if db and st.session_state.user_id:
     st.write("")
     if st.button("Ver más estadísticas", key="btn_club_stats", icon=":material/bar_chart:", use_container_width=True):
         dialogo_club(df_t, df_r)
+
+    # Entrenador: nadadores por categoría (total, por género y activos)
+    if es_entrenador:
+        _dn = db['nadadores'].copy()
+        _dn['_anio'] = pd.to_datetime(_dn['fechanac'], errors='coerce').dt.year
+        _dn = _dn.dropna(subset=['_anio'])
+        _dn['_cat'] = _dn['_anio'].apply(calcular_categoria_grafico)
+        _dn['_gen'] = _dn['codgenero'].astype(str).str.strip().str.upper()
+        _dn['_act'] = pd.to_numeric(_dn['codnadador'], errors='coerce').isin(_ids_act)
+        _orden = ["Juvenil", "PRE", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K+"]
+        _cats = sorted(_dn['_cat'].unique(), key=lambda c: _orden.index(c) if c in _orden else len(_orden))
+        _filas = []
+        for _c in _cats:
+            _g = _dn[_dn['_cat'] == _c]
+            _filas.append(f'<div class="nob-top"><span class="n">{html.escape(str(_c))}</span>'
+                          f'<span class="m">♂ {int((_g["_gen"] == "M").sum())} · ♀ {int((_g["_gen"] == "F").sum())}'
+                          f' · {int(_g["_act"].sum())} activos</span><span class="t">{len(_g)}</span></div>')
+        if _filas:
+            st.markdown(f'<div class="nob-top-tit" style="margin-top:14px;">Nadadores por categoría</div>{"".join(_filas)}',
+                        unsafe_allow_html=True)
 
     # --- 6. GESTIÓN (Perfil M) ---
     if st.session_state.role == "M":
