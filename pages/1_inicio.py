@@ -285,20 +285,11 @@ def mis_resultados(id_nadador):
     return ind, todos
 
 
-@st.dialog("Mis podios y mejores marcas", width="large")
-def dialogo_medallas(pos_inicial):
-    medallas = {1: "🥇", 2: "🥈", 3: "🥉"}
-    ind, todos = mis_resultados(st.session_state.user_id)
+MEDALLAS = {1: "🥇", 2: "🥈", 3: "🥉"}
 
-    # Filtro con la cantidad de cada medalla (etiquetas cortas para que entren en el celular)
-    cuenta = todos['posicion'].value_counts()
-    n1, n2, n3 = (int(cuenta.get(k, 0)) for k in (1, 2, 3))
-    opciones = [f"Todos {n1 + n2 + n3}", f"🥇 {n1}", f"🥈 {n2}", f"🥉 {n3}"]
-    sel = st.segmented_control("Filtrar podios", opciones, default=opciones[pos_inicial],
-                               label_visibility="collapsed")
-    pos_sel = opciones.index(sel) if sel else 0
 
-    # Nombre de sede (pileta)
+def mapa_sedes():
+    """codpileta -> 'Club (medida)'."""
     sedes = {}
     try:
         _, _, df_pil = cargar_datos_inscripcion_inicio()
@@ -308,47 +299,112 @@ def dialogo_medallas(pos_inicial):
                 sedes[p.get('codpileta')] = f"{p.get('club', '-')}{med}"
     except Exception:
         pass
+    return sedes
 
-    podios = todos[todos['posicion'].isin([1, 2, 3])]
-    if pos_sel:
-        podios = podios[podios['posicion'] == pos_sel]
-    podios = podios.assign(_f=pd.to_datetime(podios['fecha'], errors='coerce')).sort_values('_f', ascending=False)
 
-    seccion(f"Podios · {len(podios)}")
-    if podios.empty:
-        st.info("Todavía no hay podios en esta categoría. ¡El próximo puede ser tuyo! 💪")
-    else:
-        filas = []
-        for _, r in podios.iterrows():
-            fecha = r['_f'].strftime('%d/%m/%Y') if pd.notnull(r['_f']) else "-"
-            sede = html.escape(str(sedes.get(r['codpileta'], r['codpileta'] if pd.notna(r['codpileta']) else '-')))
-            tag = '<span class="nob-rec-tag">RELEVO</span>' if r['tipo'] == 'Relevo' else ''
-            filas.append(
-                f'<div class="nob-rec m{r["posicion"]}">'
-                f'<div class="nob-rec-med">{medallas[r["posicion"]]}</div>'
-                f'<div class="nob-rec-body"><div class="nob-rec-t">{html.escape(str(r["Distancia"]))} {html.escape(str(r["Estilo"]))} {tag}</div>'
-                f'<div class="nob-rec-m">{fecha} · {sede}</div></div>'
-                f'<div class="nob-rec-time">{html.escape(str(r["marca"]))}</div></div>'
-            )
-        st.markdown("".join(filas), unsafe_allow_html=True)
-
-    # Mejores marcas personales (individuales)
-    seccion("Mejores marcas personales")
-    if ind.empty:
-        st.caption("Aún no hay tiempos individuales registrados.")
-    else:
-        ind = ind.assign(_s=ind['tiempo'].apply(tiempo_a_seg),
-                         _d=pd.to_numeric(ind['Distancia'].astype(str).str.extract(r'(\d+)')[0], errors='coerce'))
-        pb = ind.sort_values('_s').drop_duplicates(['Estilo', 'Distancia']).sort_values(['Estilo', '_d'])
-        tarjetas = "".join(
-            f'<div class="nob-pb"><div class="k">{html.escape(str(r["Distancia"]))} · {html.escape(str(r["Estilo"]))}</div>'
-            f'<div class="v">{html.escape(str(r["tiempo"]))}</div></div>'
-            for _, r in pb.iterrows()
+def html_resultados(df, sedes, titulo_con_estilo=True, pbs=None):
+    """Filas de resultados (podios / historial). `pbs`: set de (Estilo, Distancia, marca) que son mejor marca."""
+    df = df.assign(_f=pd.to_datetime(df['fecha'], errors='coerce')).sort_values('_f', ascending=False)
+    filas = []
+    for _, r in df.iterrows():
+        pos = int(r['posicion']) if pd.notna(r['posicion']) else 0
+        fecha = r['_f'].strftime('%d/%m/%Y') if pd.notnull(r['_f']) else "-"
+        cod = r['codpileta']
+        sede = html.escape(str(sedes.get(cod, cod if pd.notna(cod) else '-')))
+        titulo = f"{r['Distancia']} {r['Estilo']}" if titulo_con_estilo else f"{r['Distancia']}"
+        tags = ""
+        if r['tipo'] == 'Relevo':
+            tags += '<span class="nob-rec-tag">RELEVO</span>'
+        if pbs and (r['Estilo'], r['Distancia'], r['marca']) in pbs and r['tipo'] == 'Individual':
+            tags += '<span class="nob-rec-tag pb">MEJOR MARCA</span>'
+        icono = MEDALLAS.get(pos, f'<span class="nob-rec-pos">{pos}°</span>' if pos > 0 else '<span class="nob-rec-pos">–</span>')
+        filas.append(
+            f'<div class="nob-rec m{pos}">'
+            f'<div class="nob-rec-med">{icono}</div>'
+            f'<div class="nob-rec-body"><div class="nob-rec-t">{html.escape(titulo)} {tags}</div>'
+            f'<div class="nob-rec-m">{fecha} · {sede}</div></div>'
+            f'<div class="nob-rec-time">{html.escape(str(r["marca"]))}</div></div>'
         )
-        st.markdown(f'<div class="nob-pb-grid">{tarjetas}</div>', unsafe_allow_html=True)
+    return "".join(filas)
+
+
+def mejores_marcas(ind):
+    """Mejor tiempo individual por (Estilo, Distancia), ordenado por estilo y distancia."""
+    if ind.empty:
+        return ind
+    ind = ind.assign(_s=ind['tiempo'].apply(tiempo_a_seg),
+                     _d=pd.to_numeric(ind['Distancia'].astype(str).str.extract(r'(\d+)')[0], errors='coerce'))
+    return ind.sort_values('_s').drop_duplicates(['Estilo', 'Distancia']).sort_values(['Estilo', '_d'])
+
+
+def html_mejores_marcas(pb, con_estilo=True):
+    return '<div class="nob-pb-grid">' + "".join(
+        f'<div class="nob-pb"><div class="k">{html.escape(str(r["Distancia"]))}'
+        f'{" · " + html.escape(str(r["Estilo"])) if con_estilo else ""}</div>'
+        f'<div class="v">{html.escape(str(r["tiempo"]))}</div></div>'
+        for _, r in pb.iterrows()
+    ) + '</div>'
+
+
+@st.dialog("Mis podios y mejores marcas", width="large")
+def dialogo_medallas(pos_inicial):
+    ind, todos = mis_resultados(st.session_state.user_id)
+    cuenta = todos['posicion'].value_counts()
+    n1, n2, n3 = (int(cuenta.get(k, 0)) for k in (1, 2, 3))
+
+    # Pestañas: mejores marcas o podios de una medalla (etiquetas cortas para el celular)
+    opciones = ["⏱️ Mejores marcas", f"🥇 {n1}", f"🥈 {n2}", f"🥉 {n3}"]
+    sel = st.segmented_control("Ver", opciones, default=opciones[pos_inicial], label_visibility="collapsed")
+    pos_sel = opciones.index(sel) if sel else 0
+
+    if pos_sel == 0:
+        seccion("Mejores marcas personales")
+        pb = mejores_marcas(ind)
+        if pb.empty:
+            st.caption("Aún no hay tiempos individuales registrados.")
+        else:
+            st.markdown(html_mejores_marcas(pb), unsafe_allow_html=True)
+    else:
+        podios = todos[todos['posicion'] == pos_sel]
+        nombre = {1: "Oros", 2: "Platas", 3: "Bronces"}[pos_sel]
+        seccion(f"{nombre} · {len(podios)}")
+        if podios.empty:
+            st.info("Todavía no hay podios de esta medalla. ¡El próximo puede ser tuyo! 💪")
+        else:
+            st.markdown(html_resultados(podios, mapa_sedes()), unsafe_allow_html=True)
 
     st.write("")
     if st.button("Ver ficha completa →", type="primary", use_container_width=True, key="dlg_ficha"):
+        ir_a_mi_ficha()
+
+
+@st.dialog("Detalle por estilo", width="large")
+def dialogo_estilo(estilo):
+    ind, todos = mis_resultados(st.session_state.user_id)
+    ind_e = ind[ind['Estilo'] == estilo]
+    todos_e = todos[todos['Estilo'] == estilo]
+    cuenta = todos_e[todos_e['posicion'].isin([1, 2, 3])]['posicion'].value_counts()
+    n1, n2, n3 = (int(cuenta.get(k, 0)) for k in (1, 2, 3))
+
+    st.markdown(f"""<div class="nob-est-head">
+<div class="nob-est-name">{html.escape(str(estilo))}</div>
+<div class="nob-est-info"><span><b>{len(todos_e)}</b> registros</span><span><b>{n1 + n2 + n3}</b> podios</span>
+<span>🥇 {n1}</span><span>🥈 {n2}</span><span>🥉 {n3}</span></div>
+</div>""", unsafe_allow_html=True)
+
+    pb = mejores_marcas(ind_e)
+    seccion("Mejores marcas")
+    if pb.empty:
+        st.caption("Aún no hay tiempos individuales en este estilo.")
+    else:
+        st.markdown(html_mejores_marcas(pb, con_estilo=False), unsafe_allow_html=True)
+
+    seccion(f"Historial · {len(todos_e)}")
+    pbs = {(r['Estilo'], r['Distancia'], r['tiempo']) for _, r in pb.iterrows()} if not pb.empty else set()
+    st.markdown(html_resultados(todos_e, mapa_sedes(), titulo_con_estilo=False, pbs=pbs), unsafe_allow_html=True)
+
+    st.write("")
+    if st.button("Ver ficha completa →", type="primary", use_container_width=True, key="dlg_ficha_estilo"):
         ir_a_mi_ficha()
 
 
@@ -460,7 +516,6 @@ if db and st.session_state.user_id:
     # 1. TARJETA PERFIL
     nom_full = html.escape(f"{me['nombre']} {me['apellido']}")
     iniciales = html.escape((str(me['nombre'])[:1] + str(me['apellido'])[:1]).upper())
-    mis_carreras = len(df_t[df_t['codnadador'] == user_id])
 
     with st.container(key="nob_profile"):
         c_av, c_info, c_cat = st.columns([0.9, 5, 1.6], vertical_alignment="center", gap="small")
@@ -469,8 +524,7 @@ if db and st.session_state.user_id:
         with c_info:
             if st.button(f"{me['nombre']} {me['apellido']}", key="btn_nombre_perfil", help="Ver mi ficha completa"):
                 ir_a_mi_ficha()
-            st.markdown(f'<div class="nob-p-meta">{edad} años · {me["codgenero"]} · {mis_carreras} carreras registradas</div>',
-                        unsafe_allow_html=True)
+            st.markdown(f'<div class="nob-p-meta">{edad} años · {me["codgenero"]}</div>', unsafe_allow_html=True)
         with c_cat:
             st.markdown(f'<div class="nob-cat-badge"><small>Categoría</small><b>{cat}</b></div>', unsafe_allow_html=True)
 
@@ -480,12 +534,15 @@ if db and st.session_state.user_id:
             (f"🥇 {mis_oros}", "med_oro", 1),
             (f"🥈 {mis_platas}", "med_plata", 2),
             (f"🥉 {mis_bronces}", "med_bronce", 3),
-            (f"★ {mi_total}", "med_total", 0),
         ]
-        for col, (label, key, pos) in zip(st.columns(4, gap="small"), medallas_ui):
+        cols_med = st.columns(4, gap="small")
+        for col, (label, key, pos) in zip(cols_med, medallas_ui):
             with col:
                 if st.button(label, key=key, use_container_width=True, help="Ver mis podios y mejores marcas"):
                     dialogo_medallas(pos)
+        with cols_med[3]:  # total de podios: solo informativo
+            st.markdown(f'<div class="nob-med-info"><div class="v">★ {mi_total}</div><div class="l">Podios</div></div>',
+                        unsafe_allow_html=True)
     st.markdown('<div class="nob-hint">Tocá una medalla para ver tus podios y mejores marcas · Tocá tu nombre para ir a tu ficha</div>',
                 unsafe_allow_html=True)
 
@@ -767,16 +824,25 @@ if db and st.session_state.user_id:
     mis_regs = db['tiempos'][db['tiempos']['codnadador'] == user_id].copy()
     if not mis_regs.empty:
         seccion("Mis estilos frecuentes")
-        mis_regs = mis_regs.merge(db['estilos'], on='codestilo', how='left')
-        col_desc = 'descripcion' if 'descripcion' in mis_regs.columns and 'descripcion_x' in mis_regs.columns else 'descripcion_x'
-        if col_desc not in mis_regs.columns: col_desc = 'descripcion'
+        _ind_e, _todos_e = mis_resultados(user_id)
+        conteo = _todos_e['Estilo'].dropna().value_counts()  # registros individuales + relevos
+        podios_estilo = _todos_e[_todos_e['posicion'].isin([1, 2, 3])]['Estilo'].value_counts()
 
-        conteo = mis_regs[col_desc].value_counts()
-        chips = "".join(
-            f'<div class="nob-chip"><div class="v">{cantidad}</div><div class="l">{html.escape(str(estilo))}</div></div>'
-            for estilo, cantidad in conteo.items()
-        )
-        st.markdown(f'<div class="nob-chip-row">{chips}</div>', unsafe_allow_html=True)
+        # Cada estilo abre su detalle (mejores marcas + historial); registros y podios son informativos
+        with st.container(key="nob_estilos"):
+            items = list(conteo.items())
+            for i in range(0, len(items), 2):
+                cols = st.columns(2, gap="small")
+                for j, (col, (estilo, cantidad)) in enumerate(zip(cols, items[i:i + 2])):
+                    n_pod = int(podios_estilo.get(estilo, 0))
+                    with col:
+                        if st.button(f"**{estilo}**", key=f"est_{i + j}", use_container_width=True,
+                                     help=f"Ver mejores marcas e historial de {estilo}"):
+                            dialogo_estilo(estilo)
+                        st.markdown(
+                            f'<div class="nob-est-chip"><span><b>{cantidad}</b> {"registro" if cantidad == 1 else "registros"}</span>'
+                            f'<span><b>{n_pod}</b> {"podio" if n_pod == 1 else "podios"}</span></div>',
+                            unsafe_allow_html=True)
     
     # =================================================================
     # 3. ACCESOS RÁPIDOS (LÓGICA POR ROL)
