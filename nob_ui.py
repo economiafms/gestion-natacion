@@ -1,11 +1,15 @@
 """Tema visual compartido y componentes motivacionales para todas las páginas."""
-import hashlib
+import base64
 import html
+import random
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import streamlit as st
 
 ROJO = "#E30613"
+ESCUDO_PATH = Path(__file__).parent / "escudo.png"
+ESCUDO_URL = "https://raw.githubusercontent.com/economiafms/gestion-natacion/main/escudo.png"
 
 FRASES = [
     "Cada largo cuenta. Hoy sumás uno más.",
@@ -23,48 +27,66 @@ FRASES = [
     "El progreso no siempre se ve, pero siempre suma.",
     "Que el cronómetro sea tu motivación, no tu miedo.",
     "Hoy es un buen día para nadar tu mejor marca.",
+    "El esfuerzo de hoy es la marca de mañana.",
+    "Nadie se arrepiente de haber entrenado.",
+    "La pileta es el lugar donde se forja el carácter.",
+    "Pequeñas mejoras, todos los días, hacen grandes nadadores.",
+    "El talento te pone en el agua; la disciplina te lleva al podio.",
+    "Respirá, empujá la pared y andá por más.",
+    "Los límites están para nadarlos de largo.",
+    "Entrená como si la próxima competencia fuera mañana.",
+    "Con el escudo en el pecho, cada brazada vale doble.",
+    "La mejor versión de vos está a un entrenamiento de distancia.",
 ]
+
+
+@st.cache_data
+def escudo_src() -> str:
+    """Escudo embebido en base64 (no depende de internet); si falta el archivo usa GitHub."""
+    try:
+        return "data:image/png;base64," + base64.b64encode(ESCUDO_PATH.read_bytes()).decode()
+    except Exception:
+        return ESCUDO_URL
 
 
 def ahora_arg():
     return datetime.now(timezone.utc) - timedelta(hours=3)
 
 
-def primer_nombre():
-    nombre = st.session_state.get("user_name") or ""
-    return nombre.split(" ")[0].strip().title() if nombre else "Nadador"
+def frase_motivadora(pagina: str = "") -> str:
+    """Frase al azar que cambia en cada ingreso (login) y es distinta en cada página.
+
+    El orden se baraja una vez por sesión, así la frase no cambia con cada clic
+    dentro de la misma página, pero sí la próxima vez que el nadador ingrese.
+    """
+    if "nob_frases_orden" not in st.session_state:
+        orden = list(range(len(FRASES)))
+        random.shuffle(orden)
+        st.session_state.nob_frases_orden = orden
+        st.session_state.nob_frases_pag = {}
+    asignadas = st.session_state.nob_frases_pag
+    if pagina not in asignadas:
+        asignadas[pagina] = st.session_state.nob_frases_orden[len(asignadas) % len(FRASES)]
+    return FRASES[asignadas[pagina]]
 
 
-def saludo():
-    h = ahora_arg().hour
-    if 5 <= h < 13:
-        return "Buen día"
-    if 13 <= h < 20:
-        return "Buenas tardes"
-    return "Buenas noches"
+def hero(titulo: str, icono: str | None = None, subtitulo: str | None = None,
+         saludar: bool | None = None, eyebrow: str = "Newell's Old Boys · Natación"):
+    """Encabezado institucional: escudo, título y frase motivadora.
 
-
-def frase_del_dia(extra: str = ""):
-    """Frase estable durante el día para cada nadador (cambia al día siguiente)."""
-    clave = f"{st.session_state.get('user_id')}-{ahora_arg().date()}-{extra}"
-    idx = int(hashlib.md5(clave.encode()).hexdigest(), 16) % len(FRASES)
-    return FRASES[idx]
-
-
-def hero(titulo: str, icono: str = "", subtitulo: str | None = None, saludar: bool = True):
-    """Encabezado de página personalizado y motivador."""
-    nombre = html.escape(primer_nombre())
-    sub = html.escape(subtitulo) if subtitulo else html.escape(frase_del_dia(titulo))
-    saludo_html = (
-        f'<div class="nob-hero-hi">{saludo()}, <b>{nombre}</b> 👋</div>' if saludar else ""
-    )
+    `icono` y `saludar` se mantienen por compatibilidad con llamadas existentes, pero ya no se usan.
+    """
+    frase = html.escape(subtitulo) if subtitulo else html.escape(frase_motivadora(titulo))
     st.markdown(
         f"""
         <div class="nob-hero">
             <div class="nob-hero-wave"></div>
-            {saludo_html}
-            <div class="nob-hero-title"><span class="nob-hero-ico">{icono}</span>{html.escape(titulo)}</div>
-            <div class="nob-hero-sub">{sub}</div>
+            <img class="nob-hero-crest" src="{escudo_src()}" alt="Escudo Newell's Old Boys">
+            <div class="nob-hero-body">
+                <div class="nob-hero-eyebrow">{html.escape(eyebrow)}</div>
+                <div class="nob-hero-title">{html.escape(titulo)}</div>
+                <div class="nob-hero-sub">“{frase}”</div>
+            </div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -106,37 +128,44 @@ def aplicar_tema():
             background: rgba(227,6,19,0.16);
         }
 
-        /* ---------- Hero personalizado ---------- */
+        /* ---------- Encabezado institucional ---------- */
         .nob-hero {
             position: relative; overflow: hidden;
-            padding: 22px 24px 20px; margin-bottom: 22px;
+            display: flex; align-items: center; gap: 20px;
+            padding: 22px 24px; margin-bottom: 22px;
             border-radius: 20px;
-            background: linear-gradient(135deg, #1B0204 0%, #2A0306 40%, #120F12 100%);
-            border: 1px solid rgba(227,6,19,0.30);
+            background: linear-gradient(120deg, #2A0306 0%, #160204 45%, #0E0F12 100%);
+            border: 1px solid rgba(227,6,19,0.28);
             box-shadow: 0 18px 40px rgba(0,0,0,0.45);
             animation: nobUp .5s ease-out both;
         }
         .nob-hero::before {
             content: ""; position: absolute; inset: 0 0 auto 0; height: 3px;
-            background: linear-gradient(90deg, #E30613, #FF4D57 50%, #111 50.1%);
+            background: linear-gradient(90deg, #E30613 0%, #FF4D57 40%, rgba(227,6,19,0.15) 100%);
         }
         .nob-hero-wave {
-            position: absolute; right: -60px; top: -60px; width: 220px; height: 220px;
+            position: absolute; right: -80px; top: -90px; width: 260px; height: 260px;
             border-radius: 50%;
-            background: radial-gradient(circle, rgba(227,6,19,0.35), transparent 65%);
+            background: radial-gradient(circle, rgba(227,6,19,0.28), transparent 65%);
         }
-        .nob-hero-hi { position: relative; font-size: 14px; color: rgba(255,255,255,0.72); margin-bottom: 4px; }
-        .nob-hero-hi b { color: #fff; }
+        .nob-hero-crest {
+            position: relative; flex: 0 0 auto;
+            width: 84px; height: 84px; object-fit: contain;
+            filter: drop-shadow(0 8px 18px rgba(227,6,19,0.40));
+        }
+        .nob-hero-body { position: relative; min-width: 0; }
+        .nob-hero-eyebrow {
+            font-size: 11px; font-weight: 700; letter-spacing: 2.5px; text-transform: uppercase;
+            color: #FF4D57; margin-bottom: 4px;
+        }
         .nob-hero-title {
-            position: relative; font-size: 28px; font-weight: 900; line-height: 1.1;
+            font-size: 28px; font-weight: 900; line-height: 1.1;
             color: #fff; letter-spacing: -0.6px;
         }
-        .nob-hero-ico { margin-right: 10px; }
         .nob-hero-sub {
-            position: relative; margin-top: 10px; display: inline-block;
-            padding: 6px 12px; border-radius: 999px;
-            background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08);
-            font-size: 13px; font-style: italic; color: rgba(255,255,255,0.78);
+            margin-top: 8px; padding-left: 12px;
+            border-left: 2px solid rgba(227,6,19,0.7);
+            font-size: 14px; font-style: italic; line-height: 1.4; color: rgba(255,255,255,0.75);
         }
 
         .nob-section {
@@ -291,11 +320,36 @@ def aplicar_tema():
         .nob-chip .v { font-size: 22px; font-weight: 800; color: #fff; }
         .nob-chip .l { font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: rgba(255,255,255,0.5); }
 
+        /* Tarjetas de resumen (Inicio) */
+        .nob-duo { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+        .nob-duo .nob-goal { margin-bottom: 0; }
+        .nob-next {
+            padding: 16px 18px; border-radius: 18px;
+            background: linear-gradient(160deg, rgba(255,255,255,0.06), rgba(255,255,255,0.015));
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+        .nob-next-k { font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: rgba(255,255,255,0.5); }
+        .nob-next-days { font-size: 34px; font-weight: 900; color: #fff; line-height: 1.1; margin-top: 6px; }
+        .nob-next-days small { font-size: 14px; font-weight: 600; color: rgba(255,255,255,0.6); margin-left: 4px; }
+        .nob-next-name { font-size: 14px; font-weight: 700; color: #fff; margin-top: 6px; }
+        .nob-next-meta { font-size: 12px; color: rgba(255,255,255,0.55); margin-top: 2px; }
+        .nob-tag {
+            display: inline-block; margin-top: 8px; padding: 3px 10px; border-radius: 999px;
+            font-size: 11px; font-weight: 700; letter-spacing: .5px;
+        }
+        .nob-tag.ok   { background: rgba(76,175,80,0.15); color: #7EE083; border: 1px solid rgba(76,175,80,0.4); }
+        .nob-tag.warn { background: rgba(255,193,7,0.12); color: #FFD54F; border: 1px solid rgba(255,193,7,0.4); }
+
         @media (max-width: 520px) {
+            .nob-hero { gap: 14px; padding: 18px; }
+            .nob-hero-crest { width: 56px; height: 56px; }
+            .nob-duo { grid-template-columns: 1fr; }
             .nob-hero-title { font-size: 23px; }
             .nob-stats { grid-template-columns: repeat(2, 1fr); }
-            .nob-profile { grid-template-columns: auto 1fr; }
-            .nob-cat-badge { grid-column: 1 / -1; }
+            .nob-profile { gap: 12px; padding: 14px; }
+            .nob-avatar { width: 46px; height: 46px; font-size: 18px; border-radius: 14px; }
+            .nob-cat-badge { padding: 6px 10px; }
+            .nob-cat-badge b { font-size: 17px; }
         }
         @keyframes nobUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
         </style>
