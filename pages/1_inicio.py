@@ -753,14 +753,15 @@ if db and st.session_state.user_id:
                         if not _p.empty:
                             _partes = [str(_p.iloc[0].get(c, "")).strip() for c in ("club", "ubicacion")]
                             _lugar = " · ".join(x for x in _partes if x and x.lower() != "nan")
-                    _lugar_html = f'<div class="nob-next-meta">📍 {html.escape(_lugar)}</div>' if _lugar else ""
+                    _lugar_html = (f'<span class="nob-next-meta" style="margin:0;text-align:right;max-width:60%;">'
+                                   f'📍 {html.escape(_lugar)}</span>' if _lugar else "")
                     _txt_dias = "¡Es hoy!" if _dias == 0 else f"{_dias}<small>{'día' if _dias == 1 else 'días'}</small>"
                     tarjetas.append(f"""
                     <div class="nob-next">
-                        <div class="nob-next-k">Próximo torneo</div>
+                        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
+                        <span class="nob-next-k">Próximo torneo</span>{_lugar_html}</div>
                         <div class="nob-next-days">{_txt_dias}<small>· {_ev['fecha_evento'].strftime('%d/%m/%Y')}</small></div>
                         <div class="nob-next-name">{html.escape(str(_ev['nombre_evento']))}</div>
-                        {_lugar_html}
                         {_tag}
                     </div>""")
         except Exception:
