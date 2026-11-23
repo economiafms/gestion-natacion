@@ -685,7 +685,8 @@ def aplicar_tema():
                 background: transparent !important; border: none !important; box-shadow: none !important;
                 border-radius: 14px !important; transform: none !important;
             }
-            .st-key-bn_row button:hover { background: rgba(255,255,255,0.05) !important; }
+            /* Solo el color: "background" completo borraría la imagen del escudo del botón central */
+            .st-key-bn_row button:hover { background-color: rgba(255,255,255,0.05) !important; }
             .st-key-bn_row button p { font-size: 22px !important; line-height: 1.1; }
             .st-key-bn_row button::after { font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.65); white-space: nowrap; }
             /* Escudo central elevado */
