@@ -192,16 +192,24 @@ def barra_movil(principales, nombre, extras, activo=None, web_izq=None, web_der=
                             if st.button(icono, key=f"bnx_{j}", use_container_width=True):
                                 accion = ("extra", j)
 
-        # Solo computadora: accesos laterales del manager y botón de Gestión
-        if web_izq and st.button(web_izq[0], key="bnw_izq"):
-            accion = ("web_izq",)
-        if web_der and st.button(web_der[0], key="bnw_der"):
-            accion = ("web_der",)
+        # Solo computadora: botón de Gestión (en lugar del "+")
         if web_gestion and st.button("", key="bnw_gestion", icon=":material/settings:", help="Gestión de competencias"):
             accion = ("gestion",)
 
         with st.container(key="bn_row"):
-            for i, (col, (icono, _)) in enumerate(zip(st.columns(5, gap="small"), principales)):
+            # Simulador y Ranking (manager) son columnas más de la misma fila, a los extremos:
+            # en la computadora se ven 7 accesos iguales; en el celular esas dos columnas se ocultan.
+            n_cols = 5 + (1 if web_izq else 0) + (1 if web_der else 0)
+            cols = list(st.columns(n_cols, gap="small"))
+            if web_izq:
+                with cols.pop(0):
+                    if st.button(web_izq[0], key="bnw_izq", use_container_width=True):
+                        accion = ("web_izq",)
+            if web_der:
+                with cols.pop():
+                    if st.button(web_der[0], key="bnw_der", use_container_width=True):
+                        accion = ("web_der",)
+            for i, (col, (icono, _)) in enumerate(zip(cols, principales)):
                 with col:
                     if st.button("·" if icono == "escudo" else icono, key=f"bn_{i}", use_container_width=True):
                         accion = ("principal", i)
@@ -578,7 +586,7 @@ def aplicar_tema():
         .nob-mas-btn:has(input:checked) { border-color: #E30613 !important; }
         .st-key-bn_panel { display: none !important; }
         /* Botones solo para la computadora (manager): ocultos por defecto */
-        .st-key-bnw_izq, .st-key-bnw_der, .st-key-bnw_gestion { display: none !important; }
+        .st-key-bnw_gestion { display: none !important; }
         .st-key-nob_bottom_nav:has(#nob-mas-chk:checked) .st-key-bn_panel { display: flex !important; }
         @media (max-width: 900px) {
             .st-key-nob_bottom_nav {
@@ -592,8 +600,10 @@ def aplicar_tema():
             [data-testid="stExpandSidebarButton"], [data-testid="stSidebar"],
             [data-testid="stSidebarCollapsedControl"] { display: none !important; }
 
-            /* Fila principal fija */
+            /* Fila principal fija (Simulador / Ranking del manager solo se ven en la computadora) */
             .st-key-bn_row { margin-top: 4px; }
+            .st-key-bn_row [data-testid="stColumn"]:has(.st-key-bnw_izq),
+            .st-key-bn_row [data-testid="stColumn"]:has(.st-key-bnw_der) { display: none !important; }
             .st-key-bn_row [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; gap: 2px !important; align-items: flex-end; }
             .st-key-bn_row [data-testid="stColumn"] { min-width: 0 !important; }
             .st-key-bn_row button {
@@ -691,32 +701,18 @@ def aplicar_tema():
             .st-key-nob_bottom_nav > [data-testid="stLayoutWrapper"],
             .st-key-bn_strip { display: contents !important; }
             .st-key-bn_nombre { order: 0; flex: 0 1 auto !important; min-width: 0; width: auto !important; }
-            .st-key-bnw_izq   { order: 1; }
-            .st-key-bn_row    { order: 2; flex: 1 1 auto !important; min-width: 0; width: auto !important; }
-            .st-key-bnw_der   { order: 3; }
-            [data-testid="stElementContainer"]:has(.nob-mas-btn)    { order: 4; flex: 0 0 auto !important; width: auto !important; }
-            .st-key-bnw_gestion { order: 4; }
-            .st-key-bn_salir  { order: 5; flex: 0 0 auto !important; width: auto !important; }
+            .st-key-bn_row    { order: 1; flex: 1 1 auto !important; min-width: 0; width: auto !important;
+                                /* Separador antes del grupo rueda / cerrar sesión (el nombre tiene el suyo) */
+                                border-right: 1px solid rgba(255,255,255,0.10); padding-right: 14px; }
+            [data-testid="stElementContainer"]:has(.nob-mas-btn)    { order: 2; flex: 0 0 auto !important; width: auto !important; }
+            .st-key-bnw_gestion { order: 2; }
+            .st-key-bn_salir  { order: 3; flex: 0 0 auto !important; width: auto !important; }
 
-            /* Manager en la computadora: Simulador / Ranking a los lados y Gestión en lugar del "+" */
-            .st-key-bnw_izq, .st-key-bnw_der, .st-key-bnw_gestion {
-                display: block !important; flex: 0 0 auto !important; width: auto !important;
-            }
+            /* Manager en la computadora: Simulador y Ranking son columnas de la misma fila (toman su
+               estilo) y Gestión reemplaza al "+" */
+            .st-key-bnw_gestion { display: block !important; flex: 0 0 auto !important; width: auto !important; }
             .st-key-nob_bottom_nav:has(.st-key-bnw_gestion) [data-testid="stElementContainer"]:has(.nob-mas-btn),
             .st-key-nob_bottom_nav:has(.st-key-bnw_gestion) .st-key-bn_panel { display: none !important; }
-            .st-key-bnw_izq button, .st-key-bnw_der button {
-                flex-direction: column !important; gap: 2px; min-height: 56px !important; min-width: 74px;
-                padding: 4px 6px !important; border-radius: 14px !important; transform: none !important;
-                background: transparent !important; border: none !important; box-shadow: none !important;
-            }
-            .st-key-bnw_izq button:hover, .st-key-bnw_der button:hover { background-color: rgba(255,255,255,0.05) !important; }
-            .st-key-bnw_izq button p, .st-key-bnw_der button p { font-size: 22px !important; line-height: 1.1; }
-            .st-key-bnw_izq button::after, .st-key-bnw_der button::after {
-                font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.65); white-space: nowrap;
-            }
-            /* Separadores sutiles entre los accesos del manager y las secciones */
-            .st-key-bnw_izq { border-right: 1px solid rgba(255,255,255,0.08); padding-right: 6px; }
-            .st-key-bnw_der { border-left: 1px solid rgba(255,255,255,0.08); padding-left: 6px; }
             .st-key-bnw_gestion button {
                 border-radius: 999px !important; min-width: 48px !important; min-height: 44px !important; padding: 2px 12px !important;
                 background: rgba(255,255,255,0.08) !important; border: 1px solid rgba(255,255,255,0.16) !important;
@@ -791,11 +787,7 @@ def aplicar_tema():
         @media (min-width: 901px) and (max-width: 1250px) {
             .st-key-nob_bottom_nav:has(.st-key-bnw_izq) { gap: 8px !important; padding-left: 14px; }
             .st-key-nob_bottom_nav:has(.st-key-bnw_izq) .st-key-bn_nombre button p { font-size: 13px !important; max-width: 110px; }
-            .st-key-nob_bottom_nav:has(.st-key-bnw_izq) .st-key-bn_row button::after,
-            .st-key-nob_bottom_nav:has(.st-key-bnw_izq) .st-key-bnw_izq button::after,
-            .st-key-nob_bottom_nav:has(.st-key-bnw_izq) .st-key-bnw_der button::after { font-size: 9.5px; letter-spacing: -0.2px; }
-            .st-key-nob_bottom_nav:has(.st-key-bnw_izq) .st-key-bnw_izq button,
-            .st-key-nob_bottom_nav:has(.st-key-bnw_izq) .st-key-bnw_der button { min-width: 60px; }
+            .st-key-nob_bottom_nav:has(.st-key-bnw_izq) .st-key-bn_row button::after { font-size: 9.5px; letter-spacing: -0.2px; }
         }
         /* Pantallas anchas: dock centrado de verdad (alineado con el contenido), con el mismo margen
            a ambos lados para no tocar el sello de Streamlit de la derecha */
