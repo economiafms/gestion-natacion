@@ -17,7 +17,8 @@ rol = st.session_state.role
 mi_id = st.session_state.user_id
 mi_nombre = st.session_state.user_name
 
-st.title("📊 Base de Datos del Club")
+from nob_ui import hero
+hero("Fichero del Club", "🗃️")
 
 # --- CSS PERSONALIZADO ---
 st.markdown("""
@@ -494,6 +495,7 @@ def render_tab_relevos_general():
 # ==============================================================================
 
 if rol == "N":
+    st.session_state.pop("fichero_tab_inicial", None)
     tab_yo, tab_otro = st.tabs(["👤 Mi Ficha", "🔍 Consultar Compañero"])
     with tab_yo: render_tab_ficha(mi_id, unique_key_suffix="_me")
     with tab_otro:
@@ -506,7 +508,10 @@ if rol == "N":
 
 else:
     # ROL MASTER (M)
-    tab1, tab2, tab3 = st.tabs(["👥 Padrón", "👤 Ficha Técnica", "🏊‍♂️ Relevos"])
+    # Si se llega desde Inicio (nombre o medallas), abrir directo en la Ficha Técnica
+    if st.session_state.pop("fichero_tab_inicial", None) == "ficha":
+        st.session_state["fichero_tabs_m"] = "👤 Ficha Técnica"
+    tab1, tab2, tab3 = st.tabs(["👥 Padrón", "👤 Ficha Técnica", "🏊‍♂️ Relevos"], key="fichero_tabs_m", on_change="rerun")
     
     with tab1: render_tab_padron()
     
