@@ -337,6 +337,10 @@ else:
                    ("🏅", "Mi Categoría", pg_categoria), ("📅", "Agenda", pg_agenda)]
     activo = next((i for i, (_, _, p) in enumerate(principales) if p.url_path == pg.url_path), None)
 
+    # Manager en Inicio: el botón central (escudo) dice "Padrón" y lleva al padrón de nadadores
+    if st.session_state.role in ["M", "P"] and pg.url_path == pg_inicio.url_path:
+        principales[2] = ("escudo", "Padrón", "padron")
+
     extras = []
     if st.session_state.role in ["M", "P"]:
         extras += [("👥", "Padrón", "padron"), ("🏆", "Ranking", pg_ranking), ("🏊", "Simulador", pg_simulador)]
@@ -359,7 +363,12 @@ else:
                          web_izq=web_izq, web_der=web_der, web_gestion=web_gestion)
     if accion is not None:
         if accion[0] == "principal":
-            st.switch_page(principales[accion[1]][2])
+            destino = principales[accion[1]][2]
+            if destino == "padron":
+                st.session_state.fichero_tab_inicial = "padron"
+                st.switch_page(pg_datos)
+            else:
+                st.switch_page(destino)
         elif accion[0] == "ficha":
             ir_a_mi_ficha_nav()
         elif accion[0] == "extra":
