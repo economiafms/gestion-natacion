@@ -471,7 +471,15 @@ def aplicar_tema():
             box-shadow: 0 10px 28px rgba(0,0,0,0.35) !important;
             transition: transform .15s ease, border-color .15s ease;
         }
-        .padron-card:hover, .test-card:hover, .swimmer-card:hover, .mobile-card:hover { border-color: rgba(227,6,19,0.35) !important; }
+        /* Solo las tarjetas con acción se iluminan; las informativas no parecen seleccionables */
+        .padron-card:hover { border-color: rgba(227,6,19,0.35) !important; }
+        .swimmer-card, .test-card, .mobile-card { cursor: default; user-select: none; -webkit-user-select: none; }
+        .cat-tag {
+            display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px;
+            font-size: 10px; font-weight: 800; letter-spacing: .4px; vertical-align: middle;
+        }
+        .cat-tag.sale  { background: rgba(255,193,7,0.14); color: #FFD54F; border: 1px solid rgba(255,193,7,0.45); }
+        .cat-tag.entra { background: rgba(76,175,80,0.14); color: #7EE083; border: 1px solid rgba(76,175,80,0.45); }
         .test-card { border-left: 4px solid #E30613 !important; }
         .swimmer-card { border-left: 4px solid rgba(255,255,255,0.18) !important; }
         .swimmer-card.is-me {

@@ -185,19 +185,33 @@ if target_categoria and target_genero:
     st.markdown(f"<div class='section-title'>🏊 Padrón ({len(rivales)})</div>", unsafe_allow_html=True)
     
     if not rivales.empty:
+        # Rango de edad de la categoría: para marcar quién recién entra y quién sale el año próximo
+        rango = df_cat[df_cat['nombre_cat'] == target_categoria]
+        edad_min = pd.to_numeric(rango['edad_min'], errors='coerce').min() if not rango.empty else None
+        edad_max = pd.to_numeric(rango['edad_max'], errors='coerce').max() if not rango.empty else None
+
+        # Ordenado por edad: el mayor primero (el más cerca de pasar a la siguiente categoría)
+        rivales = rivales.sort_values(['edad_calculada', 'apellido'], ascending=[False, True])
+
         cols = st.columns(2)
         for i, (idx, row) in enumerate(rivales.iterrows()):
             es_yo = (str(row['codnadador']) == str(mi_id)) if rol == "N" else False
             clase = "swimmer-card is-me" if es_yo else "swimmer-card"
             yo_lbl = " (TÚ)" if es_yo else ""
-            edad_txt = int(row['edad_calculada']) if pd.notna(row['edad_calculada']) else "-"
-            
+            edad = row['edad_calculada']
+            edad_txt = int(edad) if pd.notna(edad) else "-"
+            etiqueta = ""
+            if pd.notna(edad) and edad_max is not None and pd.notna(edad_max) and int(edad) >= int(edad_max):
+                etiqueta = '<span class="cat-tag sale">Último año</span>'
+            elif pd.notna(edad) and edad_min is not None and pd.notna(edad_min) and int(edad) <= int(edad_min):
+                etiqueta = '<span class="cat-tag entra">Primer año</span>'
+
             with cols[i % 2]:
                 st.markdown(f"""
                 <div class="{clase}">
                     <div class="card-info">
                         <div class="card-name">{row['apellido'].upper()}, {row['nombre']}{yo_lbl}</div>
-                        <div class="card-sub">Edad: {edad_txt} | {row['categoria_actual']}</div>
+                        <div class="card-sub">Edad: {edad_txt} | {row['categoria_actual']} {etiqueta}</div>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
@@ -278,18 +292,24 @@ if target_categoria and target_genero:
                     fig.update_xaxes(categoryorder='array', categoryarray=avg_times['Atleta'])
 
                     # Texto grande en las barras
-                    fig.update_traces(textposition='auto', textfont=dict(size=16), hovertemplate='Promedio: %{text}<extra></extra>')
-                    
+                    fig.update_traces(textposition='auto', textfont=dict(size=16),
+                                      hovertemplate='<b>%{x}</b><br>Promedio: %{text}<extra></extra>')
+
                     fig.update_layout(
-                        height=320, 
-                        template="plotly_dark", 
+                        height=320,
+                        template="plotly_dark",
                         showlegend=False,
                         margin=dict(l=0, r=0, t=30, b=0),
                         # EJE Y: Título visible, números ocultos
-                        yaxis=dict(title="TIEMPO", showticklabels=False, showgrid=False, range=[0, max_y]),
-                        xaxis_title=None
+                        yaxis=dict(title="TIEMPO", showticklabels=False, showgrid=False, range=[0, max_y], fixedrange=True),
+                        xaxis=dict(fixedrange=True),
+                        xaxis_title=None,
+                        # Gráfico estático: no se puede mover ni hacer zoom, solo tocar para ver el cartel
+                        dragmode=False, hovermode="closest",
+                        hoverlabel=dict(bgcolor="#1A0204", bordercolor="#E30613", font_size=13)
                     )
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, use_container_width=True,
+                                    config={"displayModeBar": False, "scrollZoom": False, "doubleClick": False, "showTips": False})
                     
                     # Mensaje de posición
                     if rol == "N":
