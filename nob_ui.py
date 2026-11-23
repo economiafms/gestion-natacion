@@ -355,8 +355,8 @@ def aplicar_tema():
             transform: none !important;
         }
         .st-key-btn_nombre_perfil button p {
-            font-size: 21px !important; font-weight: 800 !important; color: #fff; text-align: center;
-            line-height: 1.2;
+            font-size: 26px !important; font-weight: 900 !important; color: #fff; text-align: center;
+            line-height: 1.15; letter-spacing: -0.4px;
         }
         .st-key-btn_nombre_perfil button p::after {
             content: "  →"; color: #FF4D57; font-weight: 700; opacity: .0; transition: opacity .15s;

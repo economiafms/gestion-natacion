@@ -514,12 +514,10 @@ if db and st.session_state.user_id:
     mi_total = mis_oros + mis_platas + mis_bronces
 
     # 1. TARJETA PERFIL
-    iniciales = html.escape((str(me['nombre'])[:1] + str(me['apellido'])[:1]).upper())
     genero_txt = {"F": "Femenino", "M": "Masculino"}.get(str(me['codgenero']).strip().upper(), str(me['codgenero']))
 
-    # Tarjeta centrada estilo carnet: iniciales, nombre (→ ficha) y fila Categoría | Edad | Género
+    # Tarjeta centrada: nombre como protagonista (→ ficha) y fila Categoría | Edad | Género
     with st.container(key="nob_profile"):
-        st.markdown(f'<div class="nob-avatar">{iniciales}</div>', unsafe_allow_html=True)
         if st.button(f"{me['nombre']} {me['apellido']}", key="btn_nombre_perfil", help="Ver mi ficha completa"):
             ir_a_mi_ficha()
         st.markdown(f"""<div class="nob-id-row">
