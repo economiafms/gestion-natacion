@@ -692,6 +692,11 @@ if db and st.session_state.user_id:
         if not es_entrenador:
             tarjeta_resumen_anual(me)
 
+    # Nadador: acceso a su ficha justo debajo del medallero, antes de las tarjetas de sesiones y torneo
+    if st.session_state.role == "N" and not es_entrenador:
+        if st.button("Ver Mi Ficha Completa ➝", type="primary", use_container_width=True, key="btn_ficha_inicio"):
+            ir_a_mi_ficha()
+
     # RESUMEN: OBJETIVO DEL MES + PRÓXIMO TORNEO (solo nadadores)
     if st.session_state.role == "N":
         tarjetas = []
@@ -811,8 +816,6 @@ if db and st.session_state.user_id:
                         st.markdown(_limpio(_t), unsafe_allow_html=True)
 
     if st.session_state.role == "N":
-        if not es_entrenador and st.button("Ver Mi Ficha Completa ➝", type="primary", use_container_width=True, key="btn_ficha_inicio"):
-            ir_a_mi_ficha()
         if not inactivo and not es_entrenador:
             tarjeta_resumen_anual(me)
 
