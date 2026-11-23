@@ -93,6 +93,34 @@ def hero(titulo: str, icono: str | None = None, subtitulo: str | None = None,
     )
 
 
+def barra_movil(items):
+    """Barra de navegación fija abajo, SOLO en el celular (en computadora no se muestra).
+
+    `items`: 5 tuplas (icono, etiqueta). El del medio (índice 2) es el botón central elevado;
+    si su icono es "escudo", muestra el escudo del club.
+    Devuelve el índice del botón tocado, o None.
+    """
+    css = []
+    for i, (icono, etiqueta) in enumerate(items):
+        css.append(f'.st-key-bn_{i} button::after {{ content: "{etiqueta.replace(chr(34), "")}"; }}')
+    if items[2][0] == "escudo":
+        css.append(
+            f'.st-key-bn_2 button .nob-bn-ico, .st-key-bn_2 button p {{ visibility: hidden; }}'
+            f'.st-key-bn_2 button {{ background-image: url("{ESCUDO_URL}") !important; '
+            'background-size: 44px 44px !important; background-position: center 6px !important; '
+            'background-repeat: no-repeat !important; }'
+        )
+    tocado = None
+    with st.container(key="nob_bottom_nav"):
+        # Los estilos van dentro de la barra fija para no sumar espacio arriba de la página
+        st.html(f"<style>{''.join(css)}</style>")
+        for i, (col, (icono, _)) in enumerate(zip(st.columns(5, gap="small"), items)):
+            with col:
+                if st.button("·" if icono == "escudo" else icono, key=f"bn_{i}", use_container_width=True):
+                    tocado = i
+    return tocado
+
+
 def seccion(texto: str):
     st.markdown(f'<div class="nob-section">{html.escape(texto)}</div>', unsafe_allow_html=True)
 
@@ -424,6 +452,43 @@ def aplicar_tema():
         .nob-medrow .silver { background: rgba(200,200,200,0.06); border-color: rgba(200,200,200,0.30); }
         .nob-medrow .bronze { background: rgba(205,127,50,0.07);  border-color: rgba(205,127,50,0.35); }
         .nob-medrow .total  { background: rgba(227,6,19,0.10);    border-color: rgba(227,6,19,0.40); }
+        /* ---------- Barra de navegación inferior: SOLO celular ---------- */
+        .st-key-nob_bottom_nav { display: none !important; }
+        /* El envoltorio de Streamlit alrededor de la barra no debe ocupar lugar ni sumar separación */
+        :has(> .st-key-nob_bottom_nav) { display: contents !important; }
+        .st-key-nob_bottom_nav > [data-testid="stElementContainer"]:has(style) { display: none; }
+        @media (max-width: 640px) {
+            .st-key-nob_bottom_nav {
+                display: flex !important; position: fixed; left: 0; right: 0; bottom: 0; z-index: 999990;
+                padding: 4px 6px calc(6px + env(safe-area-inset-bottom));
+                background: rgba(10,11,14,0.97); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+                border-top: 1px solid rgba(255,255,255,0.08);
+            }
+            .st-key-nob_bottom_nav [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; gap: 2px !important; align-items: flex-end; }
+            .st-key-nob_bottom_nav [data-testid="stColumn"] { min-width: 0 !important; }
+            .st-key-nob_bottom_nav button {
+                flex-direction: column !important; gap: 0; min-height: 54px !important; padding: 4px 0 !important;
+                background: transparent !important; border: none !important; box-shadow: none !important; transform: none !important;
+            }
+            .st-key-nob_bottom_nav button p { font-size: 21px !important; line-height: 1.1; }
+            .st-key-nob_bottom_nav button::after {
+                font-size: 9.5px; font-weight: 600; color: rgba(255,255,255,0.6); white-space: nowrap;
+                letter-spacing: -0.1px;
+            }
+            /* Botón central elevado */
+            .st-key-bn_2 button {
+                position: relative; min-height: 64px !important; margin-top: -18px;
+                border-radius: 20px !important;
+                background-color: #1A0204 !important;
+                border: 2px solid #E30613 !important;
+                box-shadow: 0 6px 18px rgba(227,6,19,0.45) !important;
+                padding-top: 50px !important;
+            }
+            .st-key-bn_2 button p { position: absolute; top: 10px; left: 0; right: 0; }
+            .st-key-bn_2 button::after { color: #FF6A72; font-weight: 800; }
+            .block-container { padding-bottom: 96px !important; }
+        }
+
         /* Ficha superior de la ventana de podios: medallas tocables para cambiar de medalla */
         .st-key-dlg_med_head {
             text-align: center; gap: 4px !important;

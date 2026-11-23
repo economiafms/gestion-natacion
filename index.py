@@ -2,7 +2,7 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 import time
-from nob_ui import aplicar_tema
+from nob_ui import aplicar_tema, barra_movil
 
 # --- 1. CONFIGURACIÓN DEL ÍCONO (ENLACE GITHUB RAW) ---
 # Usamos el enlace RAW directo de GitHub. Esto es lo más compatible que existe.
@@ -90,6 +90,18 @@ def validar_socio():
                 st.error("Socio válido pero sin ficha de nadador activa.")
         else:
             st.error("Número de socio no registrado.")
+
+def ir_a_mi_ficha_nav():
+    """Abre el Fichero directo en la ficha del usuario (nadador: Mi Ficha; manager: Ficha Técnica)."""
+    st.session_state.ver_nadador_especifico = st.session_state.user_name
+    st.session_state.fichero_tab_inicial = "ficha"
+    db = cargar_tablas_login()
+    if db:
+        me = db['nadadores'][db['nadadores']['codnadador'] == st.session_state.user_id]
+        if not me.empty:
+            st.session_state.nadador_seleccionado = f"{str(me.iloc[0]['apellido']).upper()}, {me.iloc[0]['nombre']}"
+    st.switch_page("pages/2_visualizar_datos.py")
+
 
 def cerrar_sesion():
     for key in list(st.session_state.keys()):
@@ -289,6 +301,28 @@ else:
 
     pg = st.navigation(menu_pages)
     aplicar_tema()
+
+    # --- BARRA INFERIOR (SOLO CELULAR) ---
+    # [Rutinas][Entrenamientos][ CENTRO ][Mi Categoría][Agenda]
+    # Centro: Inicio (escudo); estando en Inicio, el centro es Mi Ficha.
+    # Si estoy en una de las laterales, ese lugar pasa a ser Mi Ficha.
+    FICHA = ("👤", "Mi Ficha", "ficha")
+    actual = pg.url_path
+    laterales = [("📝", "Rutinas", pg_rutinas), ("⏱️", "Entrenamientos", pg_entrenamientos),
+                 ("🏅", "Mi Categoría", pg_categoria), ("📅", "Agenda", pg_agenda)]
+    slots = []
+    for icono, etiqueta, destino in laterales:
+        slots.append(FICHA if destino.url_path == actual else (icono, etiqueta, destino))
+    centro = FICHA if actual == pg_inicio.url_path else ("escudo", "Inicio", pg_inicio)
+    slots.insert(2, centro)
+
+    tocado = barra_movil([(s[0], s[1]) for s in slots])
+    if tocado is not None:
+        destino = slots[tocado][2]
+        if destino == "ficha":
+            ir_a_mi_ficha_nav()
+        else:
+            st.switch_page(destino)
 
     with st.sidebar:
         st.write("") 
