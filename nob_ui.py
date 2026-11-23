@@ -424,12 +424,34 @@ def aplicar_tema():
         .nob-medrow .silver { background: rgba(200,200,200,0.06); border-color: rgba(200,200,200,0.30); }
         .nob-medrow .bronze { background: rgba(205,127,50,0.07);  border-color: rgba(205,127,50,0.35); }
         .nob-medrow .total  { background: rgba(227,6,19,0.10);    border-color: rgba(227,6,19,0.40); }
-        /* Botón Volver en las ventanas emergentes */
-        [class*="st-key-volver_"] button {
-            min-height: 34px !important; padding: 4px 14px !important; border-radius: 999px !important;
-            background: rgba(255,255,255,0.06) !important; border: 1px solid rgba(255,255,255,0.14) !important;
+        /* Ficha superior de la ventana de podios: medallas tocables para cambiar de medalla */
+        .st-key-dlg_med_head {
+            text-align: center; gap: 4px !important;
+            padding: 18px 16px 16px; border-radius: 16px; margin-bottom: 6px;
+            background: linear-gradient(135deg, rgba(227,6,19,0.16), rgba(227,6,19,0.03));
+            border: 1px solid rgba(227,6,19,0.30);
         }
-        [class*="st-key-volver_"] button p { font-size: 14px !important; font-weight: 700 !important; }
+        .st-key-dlg_med_head [data-testid="stElementContainer"],
+        .st-key-dlg_med_head [data-testid="stMarkdown"],
+        .st-key-dlg_med_head [data-testid="stMarkdownContainer"] { width: 100% !important; text-align: center; }
+        .st-key-dlg_med_head [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; margin-top: 10px; }
+        .st-key-dlg_med_head [data-testid="stColumn"] { min-width: 0 !important; }
+        .st-key-dlg_med_head button {
+            flex-direction: column !important; gap: 0; min-height: 62px !important; border-radius: 14px !important;
+            padding: 6px 4px !important;
+        }
+        .st-key-dlg_med_head button p { font-size: 20px !important; font-weight: 900 !important; color: #fff; }
+        .st-key-dlg_med_head button::after {
+            font-size: 10px; letter-spacing: 1.2px; font-weight: 700; color: rgba(255,255,255,0.5);
+        }
+        .st-key-dmed_1 button { background: rgba(255,215,0,0.07) !important;  border-color: rgba(255,215,0,0.35) !important; }
+        .st-key-dmed_2 button { background: rgba(200,200,200,0.06) !important; border-color: rgba(200,200,200,0.30) !important; }
+        .st-key-dmed_3 button { background: rgba(205,127,50,0.07) !important; border-color: rgba(205,127,50,0.35) !important; }
+        .st-key-dmed_1 button::after { content: "OROS"; }
+        .st-key-dmed_2 button::after { content: "PLATAS"; }
+        .st-key-dmed_3 button::after { content: "BRONCES"; }
+        .nob-med-info.dlg { min-height: 62px; border-style: solid; opacity: .5; }
+        .nob-med-info.dlg .v { font-size: 20px; }
         [class*="st-key-pie_"] [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; }
         [class*="st-key-pie_"] [data-testid="stColumn"] { min-width: 0 !important; }
         .nob-medrow .off { opacity: .45; }

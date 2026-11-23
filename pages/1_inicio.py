@@ -337,13 +337,6 @@ def mejores_marcas(ind):
     return ind.sort_values('_s').drop_duplicates(['Estilo', 'Distancia']).sort_values(['Estilo', '_d'])
 
 
-def boton_volver(key):
-    """Cierra la ventana emergente (más cómodo que la ✕ en el celular)."""
-    with st.container(key=f"volver_{key}"):
-        if st.button("← Volver", key=key):
-            st.rerun()
-
-
 def pie_dialogo(key):
     """Botones al final de cada ventana: Volver y Ver ficha completa."""
     with st.container(key=f"pie_{key}"):
@@ -369,8 +362,19 @@ def html_medrow(n1, n2, n3, activa=None):
             f'<div class="{total_cls}"><div class="v">★ {n1 + n2 + n3}</div><div class="l">Podios</div></div></div>')
 
 
+def _elegir_medalla(pos):
+    st.session_state.dlg_med_sel = pos
+
+
+def abrir_podios(pos):
+    """Abre la ventana de podios en la medalla tocada en Inicio."""
+    st.session_state.dlg_med_sel = pos
+    dialogo_medallas()
+
+
 @st.dialog("Mis podios", width="large")
-def dialogo_medallas(pos_sel):
+def dialogo_medallas():
+    pos_sel = st.session_state.get("dlg_med_sel", 1)
     _, todos = mis_resultados(st.session_state.user_id)
     cuenta = todos['posicion'].value_counts()
     n1, n2, n3 = (int(cuenta.get(k, 0)) for k in (1, 2, 3))
@@ -378,13 +382,27 @@ def dialogo_medallas(pos_sel):
     nombre = {1: "Oro", 2: "Plata", 3: "Bronce"}[pos_sel]
     n_sel = len(podios)
 
-    boton_volver("dlg_med_volver_top")
-    # Ficha superior: medalla elegida + descripción, y debajo las medallas (solo informativas)
-    st.markdown(f"""<div class="nob-est-head">
-<div class="nob-est-name">{MEDALLAS[pos_sel]} {nombre}</div>
-<div class="nob-est-desc">{n_sel} {"podio" if n_sel == 1 else "podios"} de {nombre.lower()} (individuales y relevos)</div>
-{html_medrow(n1, n2, n3, activa=pos_sel)}
-</div>""", unsafe_allow_html=True)
+    # Ficha superior: medalla elegida + descripción, y debajo las medallas.
+    # Oro / Plata / Bronce se pueden tocar para cambiar de medalla sin salir; Podios es informativo.
+    otras = [k for k in (1, 2, 3) if k != pos_sel]
+    estilo_sel = (
+        "<style>"
+        + f".st-key-dmed_{pos_sel} button {{ border-width: 2px !important; box-shadow: 0 0 0 3px rgba(255,255,255,0.06) !important; }}"
+        + "".join(f".st-key-dmed_{k} button {{ opacity: .5; }}" for k in otras)
+        + "</style>"
+    )
+    with st.container(key="dlg_med_head"):
+        st.markdown(f"""{estilo_sel}<div class="nob-est-name">{MEDALLAS[pos_sel]} {nombre}</div>
+<div class="nob-est-desc">{n_sel} {"podio" if n_sel == 1 else "podios"} de {nombre.lower()} (individuales y relevos)</div>""",
+                    unsafe_allow_html=True)
+        cols = st.columns(4, gap="small")
+        for col, (pos, emo, n) in zip(cols, [(1, "🥇", n1), (2, "🥈", n2), (3, "🥉", n3)]):
+            with col:
+                st.button(f"{emo} {n}", key=f"dmed_{pos}", use_container_width=True,
+                          on_click=_elegir_medalla, args=(pos,))
+        with cols[3]:
+            st.markdown(f'<div class="nob-med-info dlg"><div class="v">★ {n1 + n2 + n3}</div><div class="l">Podios</div></div>',
+                        unsafe_allow_html=True)
 
     # Después, solo los registros de esa medalla
     seccion(f"Registros · {n_sel}")
@@ -407,7 +425,6 @@ def dialogo_estilo(estilo):
     n1, n2, n3 = (int(cuenta.get(k, 0)) for k in (1, 2, 3))
     n_reg = len(ind_e)
 
-    boton_volver("dlg_est_volver_top")
     # Ficha superior: estilo + descripción, y debajo las medallas (solo informativas)
     st.markdown(f"""<div class="nob-est-head">
 <div class="nob-est-name">{html.escape(str(estilo))}</div>
@@ -557,7 +574,7 @@ if db and st.session_state.user_id:
         for col, (label, key, pos) in zip(cols_med, medallas_ui):
             with col:
                 if st.button(label, key=key, use_container_width=True, help="Ver mis podios y mejores marcas"):
-                    dialogo_medallas(pos)
+                    abrir_podios(pos)
         with cols_med[3]:  # total de podios: solo informativo
             st.markdown(f'<div class="nob-med-info"><div class="v">★ {mi_total}</div><div class="l">Podios</div></div>',
                         unsafe_allow_html=True)
