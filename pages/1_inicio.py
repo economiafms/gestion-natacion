@@ -1120,24 +1120,49 @@ if db and st.session_state.user_id:
             st.session_state["cat_gen"] = gen
             st.switch_page("pages/6_mi_categoria.py")
 
-        _hay = False
-        for _i, _c in enumerate(_dc.itertuples()):
+        _tarjetas = []
+        for _c in _dc.itertuples():
             _g = _dn[(_dn['_edad'] >= _c.edad_min) & (_dn['_edad'] <= _c.edad_max)]
-            if _g.empty:
-                continue
-            if not _hay:
-                st.markdown('<div class="nob-top-tit" style="margin-top:14px;">Nadadores por categoría</div>',
-                            unsafe_allow_html=True)
-                _hay = True
-            with st.container(key=f"ent_cat_{_i}", horizontal=True, vertical_alignment="center", gap="small"):
-                st.markdown(f"**{html.escape(str(_c.nombre_cat))}** · {len(_g)} "
-                            f"<span style='color:#aaa;font-size:13px'>({int(_g['_act'].sum())} activos)</span>",
-                            unsafe_allow_html=True)
-                for _gen, _ico in (("M", "♂"), ("F", "♀")):
-                    _n = int((_g['_gen'].str.upper() == _gen).sum())
-                    if st.button(f"{_ico} {_n}", key=f"ent_cat_{_i}_{_gen}", disabled=_n == 0,
-                                 help=f"Ver {_c.nombre_cat} {'masculino' if _gen == 'M' else 'femenino'} en Categorías"):
-                        _ir_categoria(_c.nombre_cat, _g.loc[_g['_gen'].str.upper() == _gen, '_gen'].iloc[0])
+            if not _g.empty:
+                _tarjetas.append((_c.nombre_cat, _g))
+
+        if _tarjetas:
+            # Tarjetas cuadradas, 3 por fila también en el celular. Hombres en rojo y mujeres en
+            # blanco, los mismos colores del gráfico de "Ver más estadísticas".
+            st.markdown("""<style>
+.st-key-ent_cats [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; gap: 8px !important; }
+.st-key-ent_cats [data-testid="stColumn"] { min-width: 0 !important; flex: 1 1 0 !important; width: auto !important; }
+[class*="st-key-ent_card_"] {
+  aspect-ratio: 1 / 1; justify-content: center; align-items: center; gap: 6px !important;
+  padding: 8px 6px; border-radius: 16px; text-align: center;
+  background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.07);
+}
+.ent-cat-n { font-size: 17px; font-weight: 900; color: #fff; line-height: 1.1; }
+.ent-cat-s { font-size: 11px; color: rgba(255,255,255,0.55); margin-top: 2px; }
+[class*="st-key-ent_card_"] [data-testid="stMarkdownContainer"] p { margin: 0; }
+[class*="st-key-ent_btns_"] { justify-content: center; gap: 6px !important; }
+[class*="st-key-ent_m_"] button, [class*="st-key-ent_f_"] button {
+  min-height: 30px; padding: 2px 8px; border-radius: 999px; font-weight: 800; font-size: 13px;
+}
+[class*="st-key-ent_m_"] button { background: #E30613 !important; border-color: #E30613 !important; color: #fff !important; }
+[class*="st-key-ent_f_"] button { background: #E6E6E6 !important; border-color: #E6E6E6 !important; color: #111 !important; }
+[class*="st-key-ent_m_"] button:disabled, [class*="st-key-ent_f_"] button:disabled { opacity: .35; }
+</style><div class="nob-top-tit" style="margin-top:14px;">Nadadores por categoría</div>""",
+                        unsafe_allow_html=True)
+            with st.container(key="ent_cats"):
+                for _f in range(0, len(_tarjetas), 3):
+                    for _col, (_k, (_nom, _g)) in zip(st.columns(3), enumerate(_tarjetas[_f:_f + 3], start=_f)):
+                        with _col, st.container(key=f"ent_card_{_k}"):
+                            st.markdown(f'<div class="ent-cat-n">{html.escape(str(_nom))}</div>'
+                                        f'<div class="ent-cat-s">{len(_g)} · {int(_g["_act"].sum())} activos</div>',
+                                        unsafe_allow_html=True)
+                            with st.container(key=f"ent_btns_{_k}", horizontal=True):
+                                for _gen, _ico in (("M", "♂"), ("F", "♀")):
+                                    _sel = _g['_gen'].str.upper() == _gen
+                                    _n = int(_sel.sum())
+                                    if st.button(f"{_ico} {_n}", key=f"ent_{_gen.lower()}_{_k}", disabled=_n == 0,
+                                                 help=f"Ver {_nom} {'masculino' if _gen == 'M' else 'femenino'} en Categorías"):
+                                        _ir_categoria(_nom, _g.loc[_sel, '_gen'].iloc[0])
 
     # --- 6. GESTIÓN (Perfil M) ---
     if st.session_state.role == "M":
