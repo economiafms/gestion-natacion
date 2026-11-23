@@ -302,7 +302,9 @@ pg_datos = st.Page("pages/2_visualizar_datos.py", title="Fichero", icon="🗃️
 pg_ranking = st.Page("pages/4_ranking.py", title="Ranking", icon="🏆")
 pg_simulador = st.Page("pages/3_simulador.py", title="Simulador", icon="⏱️")
 pg_entrenamientos = st.Page("pages/5_entrenamientos.py", title="Test", icon="🏋️")
-pg_categoria = st.Page("pages/6_mi_categoria.py", title="Mi Categoría", icon="🏅")
+# Para el manager la sección se llama "Categorías" (puede ver cualquier categoría)
+TITULO_CATEGORIA = "Categorías" if st.session_state.get("role") in ["M", "P"] else "Mi Categoría"
+pg_categoria = st.Page("pages/6_mi_categoria.py", title=TITULO_CATEGORIA, icon="🏅")
 pg_agenda = st.Page("pages/7_agenda.py", title="Agenda", icon="📅")
 pg_rutinas = st.Page("pages/8_rutinas.py", title="Rutinas", icon="📝")
 pg_carga = st.Page("pages/1_cargar_datos.py", title="Carga de Datos", icon="⚙️")
@@ -334,7 +336,7 @@ else:
     # y botón fijo de cerrar sesión, ubicado para que no lo tape el sello de Streamlit.
     principales = [("📝", "Rutinas", pg_rutinas), ("⏱️", "Test", pg_entrenamientos),
                    ("escudo", "Inicio", pg_inicio),
-                   ("🏅", "Mi Categoría", pg_categoria), ("📅", "Agenda", pg_agenda)]
+                   ("🏅", TITULO_CATEGORIA, pg_categoria), ("📅", "Agenda", pg_agenda)]
     activo = next((i for i, (_, _, p) in enumerate(principales) if p.url_path == pg.url_path), None)
 
     # Manager en Inicio: el botón central (escudo) dice "Padrón" y lleva al padrón de nadadores

@@ -347,6 +347,8 @@ AYUDA_PAGINAS = {
 - **Cargar Test:** registrá un test nuevo con sus parciales (50 = 1x50 · 100 = 4x25 · 200 = 4x50 · 400 = 4x100)."""},
     "Mi Categoría": {"comun": """
 - Los nadadores de tu categoría y los tiempos promedio por estilo y distancia, para comparar tu rendimiento."""},
+    "Categorías": {"comun": """
+- Elegí una categoría y un género para ver sus nadadores (ordenados por edad, con quién está en su primer o último año) y los tiempos promedio por estilo y distancia."""},
     "Agenda": {"comun": """
 - Las próximas competencias: inscribite eligiendo tus pruebas antes de la fecha límite, o date de baja si no vas a participar."""},
     "Ranking": {"comun": """

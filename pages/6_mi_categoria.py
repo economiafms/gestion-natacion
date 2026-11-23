@@ -17,7 +17,7 @@ mi_id = st.session_state.user_id
 mi_nombre = st.session_state.user_name
 
 from nob_ui import hero
-hero("Mi Categoría", "🏅")
+hero("Categorías" if rol in ["M", "P"] else "Mi Categoría", "🏅")
 
 # --- CSS PERSONALIZADO ---
 st.markdown("""
