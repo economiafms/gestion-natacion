@@ -1104,20 +1104,21 @@ if db and st.session_state.user_id:
         # Entrenador y managers: el top se ve igual que siempre; encima de cada fila hay un botón invisible
         # (todas las filas miden lo mismo) que abre la ficha del nadador en el Fichero.
         st.markdown("""<style>
-.st-key-ent_tops { gap: 0 !important; }
-.st-key-ent_rows { position: relative; gap: 0 !important; }
-.st-key-ent_topbtns { position: absolute !important; left: 0; right: 0; top: 0; bottom: 6px; z-index: 2;
-  display: flex; flex-direction: column; gap: 6px !important; }
+.st-key-ent_tops { position: relative; }
+.st-key-ent_topbtns { position: absolute !important; left: 0; right: 0; bottom: 6px; z-index: 2;
+  height: var(--ent-top-h); display: flex; flex-direction: column; gap: 6px !important; }
 .st-key-ent_topbtns > div { flex: 1 1 0 !important; min-height: 0 !important; }
 .st-key-ent_topbtns button { width: 100% !important; height: 100% !important; min-height: 0 !important;
   padding: 0 !important; opacity: 0; cursor: pointer; }
 </style>""", unsafe_allow_html=True)
         _filas_nad = db['nadadores'].assign(_cod=pd.to_numeric(db['nadadores']['codnadador'], errors='coerce'))
+        # Título y filas en un solo bloque (como siempre); los botones se anclan abajo y cubren
+        # solo las filas: cada fila mide ~42px y entre filas hay 6px.
+        _alto = len(filas_top) * 42.4 + (len(filas_top) - 1) * 6
+        st.markdown(f"<style>.st-key-ent_tops {{ --ent-top-h: {_alto:.1f}px; }}</style>", unsafe_allow_html=True)
         with st.container(key="ent_tops"):
-            st.markdown(f'<div class="nob-top-tit">Top medallistas {anio}</div>', unsafe_allow_html=True)
-            _rows = st.container(key="ent_rows")
-        with _rows:
-            st.markdown("".join(filas_top), unsafe_allow_html=True)
+            st.markdown(f'<div class="nob-top-tit">Top medallistas {anio}</div>{"".join(filas_top)}',
+                        unsafe_allow_html=True)
             with st.container(key="ent_topbtns"):
                 for _k, _cod in enumerate(cods_top):
                     if st.button("Ver ficha", key=f"ent_topbtn_{_k}"):
@@ -1234,21 +1235,19 @@ if db and st.session_state.user_id:
                         & (_dn['codgenero'].astype(str).str.strip() == str(me['codgenero']).strip())]
             _act = int(pd.to_numeric(_mios['codnadador'], errors='coerce').isin(_ids_act).sum())
             st.markdown("""<style>
-.st-key-mi_cat_box { gap: 0 !important; }
-.st-key-mi_cat_chip { position: relative; gap: 0 !important; }
-.st-key-mi_cat_chip .st-key-mi_cat_btn { position: absolute !important; left: 0; right: 0; top: 0; bottom: 6px; z-index: 2; }
+.st-key-mi_cat_chip { position: relative; }
+.st-key-mi_cat_chip .st-key-mi_cat_btn { position: absolute !important; left: 0; right: 0; bottom: 6px; height: 42px; z-index: 2; }
 .st-key-mi_cat_chip .st-key-mi_cat_btn button { width: 100% !important; height: 100% !important; min-height: 0 !important;
   padding: 0 !important; opacity: 0; cursor: pointer; }
 </style>""", unsafe_allow_html=True)
-            with st.container(key="mi_cat_box"):
-                st.markdown('<div class="nob-top-tit" style="margin-top:10px;">Mi categoría</div>', unsafe_allow_html=True)
-                with st.container(key="mi_cat_chip"):
-                    st.markdown(f'<div class="nob-top"><span class="p">🏅</span>'
-                                f'<span class="n">{html.escape(str(cat))} · {html.escape(genero_txt)}</span>'
-                                f'<span class="m">{_act} activos</span><span class="t">{len(_mios)} ›</span></div>',
-                                unsafe_allow_html=True)
-                    if st.button("Ver mi categoría", key="mi_cat_btn"):
-                        st.switch_page("pages/6_mi_categoria.py")
+            with st.container(key="mi_cat_chip"):
+                st.markdown(f'<div class="nob-top-tit" style="margin-top:10px;">Mi categoría</div>'
+                            f'<div class="nob-top"><span class="p">🏅</span>'
+                            f'<span class="n">{html.escape(str(cat))} · {html.escape(genero_txt)}</span>'
+                            f'<span class="m">{_act} activos</span><span class="t">{len(_mios)} ›</span></div>',
+                            unsafe_allow_html=True)
+                if st.button("Ver mi categoría", key="mi_cat_btn"):
+                    st.switch_page("pages/6_mi_categoria.py")
 
     # --- 6. GESTIÓN (Perfil M) ---
     if st.session_state.role == "M":
