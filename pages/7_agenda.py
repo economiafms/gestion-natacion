@@ -63,6 +63,9 @@ def leer_dataset_fresco(worksheet, max_retries=5):
     for i in range(max_retries):
         try: 
             return conn.read(worksheet=worksheet, ttl=0).copy()
+        except pd.errors.EmptyDataError:
+            # La hoja existe pero está totalmente vacía (ni siquiera títulos): no hay datos que proteger
+            return pd.DataFrame()
         except Exception as e: 
             if "429" in str(e) or "quota" in str(e):
                 import time
@@ -229,14 +232,19 @@ def eliminar_competencia(id_comp):
     if df_comp is None or df_ins is None: 
         return False, "⚠️ Error al leer historial. Operación cancelada."
     
+    if df_comp.empty or 'id_competencia' not in df_comp.columns or not (df_comp['id_competencia'] == id_comp).any():
+        return False, "El evento ya no existe en la planilla (recargá la página)."
     df_comp = df_comp[df_comp['id_competencia'] != id_comp]
-    if not df_ins.empty:
+    # Solo se reescribe Inscripciones si el evento tenía inscriptos (cada escritura evitada es un riesgo menos)
+    if not df_ins.empty and 'id_competencia' in df_ins.columns and (df_ins['id_competencia'] == id_comp).any():
         df_ins = df_ins[df_ins['id_competencia'] != id_comp]
-        actualizar_con_retry("Inscripciones", df_ins)
+        ok_ins, err_ins = actualizar_con_retry("Inscripciones", df_ins)
+        if not ok_ins:
+            return False, f"No se pudieron borrar las inscripciones del evento: {err_ins}. El evento no se eliminó."
     
-    exito, _ = actualizar_con_retry("Competencias", df_comp)
+    exito, err = actualizar_con_retry("Competencias", df_comp)
     if exito: datos.invalidar("Competencias", "Inscripciones"); return True, "Eliminado."
-    return False, "Error."
+    return False, f"No se pudo eliminar el evento: {err}"
 
 def gestionar_inscripcion(id_comp, id_nadador, lista_pruebas):
     df_ins = leer_dataset_fresco("Inscripciones")
@@ -277,9 +285,9 @@ def eliminar_inscripcion(id_comp, id_nadador):
         df_ins['codnadador'] = pd.to_numeric(df_ins['codnadador'], errors='coerce').fillna(0).astype(int)
     
     df_ins = df_ins[~((df_ins['id_competencia'] == id_comp) & (df_ins['codnadador'] == id_nadador))]
-    exito, _ = actualizar_con_retry("Inscripciones", df_ins)
+    exito, err = actualizar_con_retry("Inscripciones", df_ins)
     if exito: datos.invalidar("Inscripciones"); return True, "Baja exitosa."
-    return False, "Error."
+    return False, f"No se pudo eliminar la inscripción: {err}"
 
 # --- LOGICA DE CALLBACKS PARA ESTABILIDAD DE PANTALLA ---
 def cb_crear_evento():
@@ -312,12 +320,12 @@ def cb_guardar_usr(c_id):
 def cb_baja_usr(c_id):
     st.session_state.active_usr_tab = c_id
     ok, m = eliminar_inscripcion(c_id, mi_id)
-    if ok: set_flash_message("Inscripción cancelada.", "warning")
+    set_flash_message("Inscripción cancelada." if ok else m, "warning" if ok else "error")
 
 def cb_baja_grid(c_id, n_id, nom):
     st.session_state.active_coach_tab = c_id
     ok, m = eliminar_inscripcion(c_id, n_id)
-    if ok: set_flash_message(f"Inscripción de {nom} eliminada.", "warning")
+    set_flash_message(f"Inscripción de {nom} eliminada." if ok else m, "warning" if ok else "error")
 
 def cb_alta_adm(c_id, k_nad, k_pru):
     st.session_state.active_coach_tab = c_id
@@ -346,7 +354,7 @@ def cb_editar_evento(c_id, h_in, p_in):
 def cb_elim_evento(c_id):
     st.session_state.active_coach_tab = None
     ok, m = eliminar_competencia(c_id)
-    if ok: set_flash_message("Evento eliminado.", "warning")
+    set_flash_message("Evento eliminado." if ok else m, "warning" if ok else "error")
 
 def cb_nadador_change(c_id):
     """Mantiene la pestaña de entrenador abierta al seleccionar a otro nadador"""

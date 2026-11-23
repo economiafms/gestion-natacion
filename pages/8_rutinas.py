@@ -218,6 +218,9 @@ def leer_dataset_fresco(worksheet):
     try:
         df = conn.read(worksheet=worksheet, ttl=0).copy()
         return df
+    except pd.errors.EmptyDataError:
+        # La hoja existe pero está totalmente vacía (ni siquiera títulos): no hay datos que proteger
+        return pd.DataFrame()
     except Exception as e:
         st.error(f"Error de conexión fresca con {worksheet}: {e}")
         return None
