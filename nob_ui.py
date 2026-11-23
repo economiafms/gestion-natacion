@@ -273,9 +273,13 @@ def aplicar_tema():
             color: #fff; letter-spacing: -0.6px; text-align: center;
         }
         .nob-hero-sub {
-            margin-top: 8px; padding-left: 12px;
-            border-left: 2px solid rgba(227,6,19,0.7);
+            margin-top: 8px; text-align: center;
             font-size: 14px; font-style: italic; line-height: 1.4; color: rgba(255,255,255,0.75);
+        }
+        /* Línea roja corta y centrada entre el título y la frase */
+        .nob-hero-sub::before {
+            content: ""; display: block; width: 36px; height: 2px; margin: 0 auto 8px;
+            border-radius: 2px; background: rgba(227,6,19,0.8);
         }
 
         .nob-section {
