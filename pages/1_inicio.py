@@ -248,6 +248,110 @@ def buscar_mejor_tiempo(prueba, df_t_nadador):
         return ""
     return ""
 
+# --- NAVEGACIÓN A LA FICHA Y VISTA RÁPIDA DE PODIOS / RÉCORDS ---
+def ir_a_mi_ficha():
+    """Abre el Fichero directamente en la ficha del usuario (en ambos roles)."""
+    me_row = db['nadadores'][db['nadadores']['codnadador'] == st.session_state.user_id].iloc[0]
+    st.session_state.ver_nadador_especifico = st.session_state.user_name
+    st.session_state.nadador_seleccionado = f"{str(me_row['apellido']).upper()}, {me_row['nombre']}"
+    st.session_state.fichero_tab_inicial = "ficha"
+    st.switch_page("pages/2_visualizar_datos.py")
+
+
+def mis_resultados(id_nadador):
+    """Devuelve (individuales, todos) con Estilo/Distancia legibles. 'todos' incluye relevos."""
+    est = db['estilos'].rename(columns={'descripcion': 'Estilo'})[['codestilo', 'Estilo']]
+    dis = db['distancias'].rename(columns={'descripcion': 'Distancia'})[['coddistancia', 'Distancia']]
+    cols = ['tipo', 'Estilo', 'Distancia', 'marca', 'posicion', 'fecha', 'codpileta']
+
+    ind = db['tiempos'][db['tiempos']['codnadador'] == id_nadador].copy()
+    ind = ind.merge(est, on='codestilo', how='left').merge(dis, on='coddistancia', how='left')
+    ind['tipo'] = 'Individual'
+    ind['marca'] = ind['tiempo']
+
+    rel = db['relevos'].copy()
+    mask = False
+    for k in range(1, 5):
+        if f'nadador_{k}' in rel.columns:
+            mask = mask | (rel[f'nadador_{k}'] == id_nadador)
+    rel = rel[mask] if not isinstance(mask, bool) else rel.iloc[0:0]
+    if not rel.empty and 'codestilo' in rel.columns and 'coddistancia' in rel.columns:
+        rel = rel.merge(est, on='codestilo', how='left').merge(dis, on='coddistancia', how='left')
+    rel['tipo'] = 'Relevo'
+    rel['marca'] = rel['tiempo_final'] if 'tiempo_final' in rel.columns else '-'
+
+    todos = pd.concat([ind.reindex(columns=cols), rel.reindex(columns=cols)], ignore_index=True)
+    todos['posicion'] = pd.to_numeric(todos['posicion'], errors='coerce').fillna(0).astype(int)
+    return ind, todos
+
+
+@st.dialog("Mis podios y mejores marcas", width="large")
+def dialogo_medallas(pos_inicial):
+    medallas = {1: "🥇", 2: "🥈", 3: "🥉"}
+    ind, todos = mis_resultados(st.session_state.user_id)
+
+    # Filtro con la cantidad de cada medalla (etiquetas cortas para que entren en el celular)
+    cuenta = todos['posicion'].value_counts()
+    n1, n2, n3 = (int(cuenta.get(k, 0)) for k in (1, 2, 3))
+    opciones = [f"Todos {n1 + n2 + n3}", f"🥇 {n1}", f"🥈 {n2}", f"🥉 {n3}"]
+    sel = st.segmented_control("Filtrar podios", opciones, default=opciones[pos_inicial],
+                               label_visibility="collapsed")
+    pos_sel = opciones.index(sel) if sel else 0
+
+    # Nombre de sede (pileta)
+    sedes = {}
+    try:
+        _, _, df_pil = cargar_datos_inscripcion_inicio()
+        if df_pil is not None and not df_pil.empty:
+            for _, p in df_pil.iterrows():
+                med = f" ({p.get('medida')})" if pd.notna(p.get('medida')) and p.get('medida') else ""
+                sedes[p.get('codpileta')] = f"{p.get('club', '-')}{med}"
+    except Exception:
+        pass
+
+    podios = todos[todos['posicion'].isin([1, 2, 3])]
+    if pos_sel:
+        podios = podios[podios['posicion'] == pos_sel]
+    podios = podios.assign(_f=pd.to_datetime(podios['fecha'], errors='coerce')).sort_values('_f', ascending=False)
+
+    seccion(f"Podios · {len(podios)}")
+    if podios.empty:
+        st.info("Todavía no hay podios en esta categoría. ¡El próximo puede ser tuyo! 💪")
+    else:
+        filas = []
+        for _, r in podios.iterrows():
+            fecha = r['_f'].strftime('%d/%m/%Y') if pd.notnull(r['_f']) else "-"
+            sede = html.escape(str(sedes.get(r['codpileta'], r['codpileta'] if pd.notna(r['codpileta']) else '-')))
+            tag = '<span class="nob-rec-tag">RELEVO</span>' if r['tipo'] == 'Relevo' else ''
+            filas.append(
+                f'<div class="nob-rec m{r["posicion"]}">'
+                f'<div class="nob-rec-med">{medallas[r["posicion"]]}</div>'
+                f'<div class="nob-rec-body"><div class="nob-rec-t">{html.escape(str(r["Distancia"]))} {html.escape(str(r["Estilo"]))} {tag}</div>'
+                f'<div class="nob-rec-m">{fecha} · {sede}</div></div>'
+                f'<div class="nob-rec-time">{html.escape(str(r["marca"]))}</div></div>'
+            )
+        st.markdown("".join(filas), unsafe_allow_html=True)
+
+    # Mejores marcas personales (individuales)
+    seccion("Mejores marcas personales")
+    if ind.empty:
+        st.caption("Aún no hay tiempos individuales registrados.")
+    else:
+        ind = ind.assign(_s=ind['tiempo'].apply(tiempo_a_seg),
+                         _d=pd.to_numeric(ind['Distancia'].astype(str).str.extract(r'(\d+)')[0], errors='coerce'))
+        pb = ind.sort_values('_s').drop_duplicates(['Estilo', 'Distancia']).sort_values(['Estilo', '_d'])
+        tarjetas = "".join(
+            f'<div class="nob-pb"><div class="k">{html.escape(str(r["Distancia"]))} · {html.escape(str(r["Estilo"]))}</div>'
+            f'<div class="v">{html.escape(str(r["tiempo"]))}</div></div>'
+            for _, r in pb.iterrows()
+        )
+        st.markdown(f'<div class="nob-pb-grid">{tarjetas}</div>', unsafe_allow_html=True)
+
+    st.write("")
+    if st.button("Ver ficha completa →", type="primary", use_container_width=True, key="dlg_ficha"):
+        ir_a_mi_ficha()
+
+
 # --- VISUALIZACIÓN ---
 
 # ENCABEZADO PERSONALIZADO
@@ -358,22 +462,32 @@ if db and st.session_state.user_id:
     iniciales = html.escape((str(me['nombre'])[:1] + str(me['apellido'])[:1]).upper())
     mis_carreras = len(df_t[df_t['codnadador'] == user_id])
 
-    st.markdown(f"""
-    <div class="nob-profile">
-        <div class="nob-avatar">{iniciales}</div>
-        <div>
-            <div class="nob-p-name">{nom_full}</div>
-            <div class="nob-p-meta">{edad} años · {me['codgenero']} · {mis_carreras} carreras registradas</div>
-        </div>
-        <div class="nob-cat-badge"><small>Categoría</small><b>{cat}</b></div>
-    </div>
-    <div class="nob-stats">
-        <div class="nob-stat gold"><div class="v">🥇 {mis_oros}</div><div class="l">Oros</div></div>
-        <div class="nob-stat silver"><div class="v">🥈 {mis_platas}</div><div class="l">Platas</div></div>
-        <div class="nob-stat bronze"><div class="v">🥉 {mis_bronces}</div><div class="l">Bronces</div></div>
-        <div class="nob-stat total"><div class="v">★ {mi_total}</div><div class="l">Podios</div></div>
-    </div>
-    """, unsafe_allow_html=True)
+    with st.container(key="nob_profile"):
+        c_av, c_info, c_cat = st.columns([0.9, 5, 1.6], vertical_alignment="center", gap="small")
+        with c_av:
+            st.markdown(f'<div class="nob-avatar">{iniciales}</div>', unsafe_allow_html=True)
+        with c_info:
+            if st.button(f"{me['nombre']} {me['apellido']}", key="btn_nombre_perfil", help="Ver mi ficha completa"):
+                ir_a_mi_ficha()
+            st.markdown(f'<div class="nob-p-meta">{edad} años · {me["codgenero"]} · {mis_carreras} carreras registradas</div>',
+                        unsafe_allow_html=True)
+        with c_cat:
+            st.markdown(f'<div class="nob-cat-badge"><small>Categoría</small><b>{cat}</b></div>', unsafe_allow_html=True)
+
+    # Medallero personal: cada medalla abre la vista rápida de podios y marcas
+    with st.container(key="nob_medals"):
+        medallas_ui = [
+            (f"🥇 {mis_oros}", "med_oro", 1),
+            (f"🥈 {mis_platas}", "med_plata", 2),
+            (f"🥉 {mis_bronces}", "med_bronce", 3),
+            (f"★ {mi_total}", "med_total", 0),
+        ]
+        for col, (label, key, pos) in zip(st.columns(4, gap="small"), medallas_ui):
+            with col:
+                if st.button(label, key=key, use_container_width=True, help="Ver mis podios y mejores marcas"):
+                    dialogo_medallas(pos)
+    st.markdown('<div class="nob-hint">Tocá una medalla para ver tus podios y mejores marcas · Tocá tu nombre para ir a tu ficha</div>',
+                unsafe_allow_html=True)
 
     # RESUMEN: OBJETIVO DEL MES + PRÓXIMO TORNEO (solo nadadores)
     if st.session_state.role == "N":
@@ -441,8 +555,7 @@ if db and st.session_state.user_id:
     
     if st.session_state.role == "N":
         if st.button("Ver Mi Ficha Completa ➝", type="primary", use_container_width=True, key="btn_ficha_inicio"):
-            st.session_state.ver_nadador_especifico = st.session_state.user_name
-            st.switch_page("pages/2_visualizar_datos.py")
+            ir_a_mi_ficha()
     
     st.write("") 
 
@@ -637,7 +750,7 @@ if db and st.session_state.user_id:
                             # FORMULARIO DE INSCRIPCIÓN SIN BLOCKING SLEEP
                             with st.form(f"f_idx_{comp_id}"):
                                 st.caption(f"Permitido hasta {max_permitidas} pruebas.")
-                                sel = st.multiselect("Seleccionar Pruebas", p_hab, default=[], max_selections=max_permitidas, label_visibility="collapsed")
+                                sel = st.multiselect("Seleccionar Pruebas", p_hab, default=[], max_selections=max_permitidas, label_visibility="collapsed", placeholder="Elegí tus pruebas")
                                 sub = st.form_submit_button("Guardar Inscripción", type="primary")
                                 
                                 if sub:
@@ -728,15 +841,26 @@ if db and st.session_state.user_id:
     df_n = db['nadadores'].copy()
     df_n['Anio'] = pd.to_datetime(df_n['fechanac'], errors='coerce').dt.year
     df_n['Categoria'] = df_n['Anio'].apply(calcular_categoria_grafico)
-    colors = alt.Scale(domain=['M', 'F'], range=['#1f77b4', '#FF69B4'])
-    
+    colors = alt.Scale(domain=['M', 'F'], range=['#E30613', '#E6E6E6'])
+    leyenda = alt.Legend(title=None, orient="bottom", labelColor="#BBBBBB",
+                         labelExpr="datum.label == 'M' ? 'Masculino' : 'Femenino'")
+
     t_c, t_g = st.tabs(["Categorías Master", "Género"])
     with t_c:
         orden = ["Juvenil", "PRE", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K+"]
-        st.altair_chart(alt.Chart(df_n).mark_bar(cornerRadius=3).encode(x=alt.X('Categoria', sort=orden, title=None), y=alt.Y('count()', title=None), color=alt.Color('codgenero', legend=None, scale=colors)).properties(height=200), use_container_width=True)
+        graf_cat = alt.Chart(df_n).mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4).encode(
+            x=alt.X('Categoria', sort=orden, title=None, axis=alt.Axis(labelAngle=0)),
+            y=alt.Y('count()', title=None, axis=alt.Axis(format='d', tickMinStep=1)),
+            color=alt.Color('codgenero', legend=leyenda, scale=colors),
+            tooltip=[alt.Tooltip('Categoria', title='Categoría'), alt.Tooltip('count()', title='Nadadores')],
+        ).properties(height=220).configure(background='transparent').configure_view(stroke=None)
+        st.altair_chart(graf_cat, use_container_width=True)
     with t_g:
         base = alt.Chart(df_n).encode(theta=alt.Theta("count()", stack=True))
-        st.altair_chart((base.mark_arc(outerRadius=80, innerRadius=50).encode(color=alt.Color("codgenero", scale=colors, legend=None)) + base.mark_text(radius=100).encode(text="count()", order=alt.Order("codgenero"), color=alt.value("white"))), use_container_width=True)
+        graf_gen = (base.mark_arc(outerRadius=80, innerRadius=50).encode(color=alt.Color("codgenero", scale=colors, legend=leyenda))
+                    + base.mark_text(radius=100).encode(text="count()", order=alt.Order("codgenero"), color=alt.value("white"))
+                    ).configure(background='transparent').configure_view(stroke=None)
+        st.altair_chart(graf_gen, use_container_width=True)
 
     # --- 6. GESTIÓN (Perfil M) ---
     if st.session_state.role == "M":
