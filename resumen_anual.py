@@ -137,6 +137,16 @@ def _fondo(W, H):
     return img
 
 
+def _marca_agua(img, x, y, tam, opacidad=0.16):
+    try:
+        e = Image.open(BASE / "escudo.png").convert("RGBA")
+        e = e.resize((tam, tam), Image.LANCZOS)
+        e.putalpha(e.getchannel("A").point(lambda v: int(v * opacidad)))
+        img.paste(e, (int(x), int(y)), e)
+    except Exception:
+        pass
+
+
 def _escudo(img, x, y, tam):
     try:
         e = Image.open(BASE / "escudo.png").convert("RGBA")
@@ -160,19 +170,20 @@ def _medalla(d, cx, cy, rad, color, n, etiqueta):
 
 
 def _tarjeta(d, x, y, w, h, titulo, valor, sub=""):
-    d.rounded_rectangle((x, y, x + w, y + h), radius=34, fill=(255, 255, 255, 20), outline=(255, 255, 255, 38), width=2)
-    d.text((x + 34, y + 26), titulo.upper(), font=_f("Bold", 25), fill=(255, 120, 128))
-    fv = _ajustar(d, valor, "Black", 54, w - 68)
-    d.text((x + 34, y + 60), valor, font=fv, fill=(255, 255, 255))
+    d.rounded_rectangle((x, y, x + w, y + h), radius=34, fill=(255, 255, 255, 22), outline=(255, 255, 255, 45), width=2)
+    d.text((x + 32, y + 22), titulo.upper(), font=_f("Bold", 24), fill=(255, 130, 138))
+    tam = 72 if h >= 190 else 60
+    fv = _ajustar(d, valor, "Black", tam, w - 64)
+    d.text((x + 32, y + 48), valor, font=fv, fill=(255, 255, 255))
     if sub:
-        d.text((x + 34, y + h - 50), sub, font=_ajustar(d, sub, "Regular", 26, w - 68), fill=(200, 200, 200))
+        d.text((x + 32, y + h - 46), sub, font=_ajustar(d, sub, "Regular", 25, w - 64), fill=(215, 205, 207))
 
 
 def generar_imagen(r, nombre, formato="Historia (1080×1920)"):
     """PNG (bytes) estilo resumen anual, en formato historia o posteo de Instagram."""
     W, H = FORMATOS.get(formato, (1080, 1920))
     historia = H > 1500
-    img = _fondo(W, H).convert("RGBA")
+    img = _fondo(W, H)                      # RGB: los rellenos semitransparentes se mezclan con el fondo
     d = ImageDraw.Draw(img, "RGBA")
     M = 70
     y = 80 if historia else 56
@@ -183,7 +194,9 @@ def generar_imagen(r, nombre, formato="Historia (1080×1920)"):
     d.text((M + 112, y + 42), "Newell's Old Boys", font=_f("SemiBold", 34), fill=(255, 255, 255))
     y += 150 if historia else 120
 
-    # Título grande
+    # Título grande (con el escudo como marca de agua a la derecha)
+    tam_ma = 560 if historia else 430
+    _marca_agua(img, W - tam_ma * 0.72, y - (10 if historia else 20), tam_ma)
     d.text((M, y), "MI", font=_f("Black", 120 if historia else 96), fill=(255, 255, 255))
     d.text((M, y + (112 if historia else 90)), str(r["anio"]), font=_f("Black", 230 if historia else 170), fill=ROJO)
     y += 360 if historia else 270
@@ -223,11 +236,11 @@ def generar_imagen(r, nombre, formato="Historia (1080×1920)"):
     if r.get("mejor_mejora"):
         destacados.append(("Mayor mejora", r["mejor_mejora"]))
     if r.get("puesto_club"):
-        destacados.append(("Medallero del club", f"puesto {r['puesto_club']}° con {r['podios']} podios"))
+        destacados.append(("Medallero del club", f"{r['puesto_club']}° del club · {r['podios']} podios"))
     if not historia:
         destacados = destacados[:1]   # el posteo es más bajo: solo el destacado principal
     for t, v in destacados:
-        d.rounded_rectangle((M, y, W - M, y + 96), radius=28, fill=(0, 0, 0, 70))
+        d.rounded_rectangle((M, y, W - M, y + 96), radius=28, fill=(0, 0, 0, 90))
         d.rectangle((M, y + 18, M + 8, y + 78), fill=ROJO)
         d.text((M + 32, y + 12), t.upper(), font=_f("Bold", 23), fill=(255, 140, 146))
         d.text((M + 32, y + 40), v, font=_ajustar(d, v, "Bold", 38, W - 2 * M - 64), fill=(255, 255, 255))
