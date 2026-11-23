@@ -347,7 +347,11 @@ def mis_resultados(id_nadador):
     dis = db['distancias'].rename(columns={'descripcion': 'Distancia'})[['coddistancia', 'Distancia']]
     cols = ['tipo', 'Estilo', 'Distancia', 'marca', 'posicion', 'fecha', 'codpileta']
 
-    ind = db['tiempos'][db['tiempos']['codnadador'] == id_nadador].copy()
+    # Los códigos se comparan como número: '123', 123 y 123.0 son el mismo nadador
+    _id = pd.to_numeric(pd.Series([id_nadador]), errors='coerce').iloc[0]
+    _es_yo = lambda serie: pd.to_numeric(serie, errors='coerce') == _id
+
+    ind = db['tiempos'][_es_yo(db['tiempos']['codnadador'])].copy()
     ind = ind.merge(est, on='codestilo', how='left').merge(dis, on='coddistancia', how='left')
     ind['tipo'] = 'Individual'
     ind['marca'] = ind['tiempo']
@@ -356,7 +360,7 @@ def mis_resultados(id_nadador):
     mask = False
     for k in range(1, 5):
         if f'nadador_{k}' in rel.columns:
-            mask = mask | (rel[f'nadador_{k}'] == id_nadador)
+            mask = mask | _es_yo(rel[f'nadador_{k}'])
     rel = rel[mask] if not isinstance(mask, bool) else rel.iloc[0:0]
     if not rel.empty and 'codestilo' in rel.columns and 'coddistancia' in rel.columns:
         rel = rel.merge(est, on='codestilo', how='left').merge(dis, on='coddistancia', how='left')
