@@ -114,44 +114,140 @@ def pwa_install_button():
 
 # --- 5. PANTALLA DE LOGIN ---
 def login_screen():
-    st.markdown("""<style>[data-testid="stSidebar"] {display: none;}</style>""", unsafe_allow_html=True)
-    st.markdown("""
+    st.markdown(f"""
         <style>
-            .login-container {
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800;900&display=swap');
+
+            /* Ocultar sidebar, header y footer de Streamlit en el login */
+            [data-testid="stSidebar"], [data-testid="stSidebarCollapsedControl"],
+            header[data-testid="stHeader"], footer {{ display: none !important; }}
+
+            /* Fondo: negro profundo con resplandores rojos y textura de agua */
+            [data-testid="stAppViewContainer"] {{
+                background:
+                    radial-gradient(900px 500px at 15% -10%, rgba(227,6,19,0.28), transparent 60%),
+                    radial-gradient(700px 450px at 110% 110%, rgba(227,6,19,0.18), transparent 60%),
+                    repeating-linear-gradient(170deg, rgba(255,255,255,0.015) 0 2px, transparent 2px 14px),
+                    #07080B;
+            }}
+            .block-container {{ max-width: 440px; padding-top: 3.5rem; padding-bottom: 2rem; }}
+            .block-container, .block-container * {{ font-family: 'Inter', sans-serif; }}
+
+            /* Tarjeta de marca */
+            .nob-card {{
+                position: relative;
                 text-align: center;
-                padding: 30px;
-                border-radius: 20px;
-                background: linear-gradient(180deg, #121212 0%, #000000 100%);
-                border: 2px solid #333;
-                margin-bottom: 20px;
-                box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-            }
-            .nob-title {
-                font-size: 32px;
-                font-weight: 900;
+                padding: 38px 28px 26px;
+                border-radius: 24px;
+                background: linear-gradient(160deg, rgba(255,255,255,0.06), rgba(255,255,255,0.015));
+                border: 1px solid rgba(255,255,255,0.08);
+                backdrop-filter: blur(14px);
+                -webkit-backdrop-filter: blur(14px);
+                box-shadow: 0 24px 60px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.06);
+                overflow: hidden;
+                animation: nobFadeUp .6s ease-out both;
+            }}
+            .nob-card::before {{
+                content: "";
+                position: absolute; inset: 0 0 auto 0; height: 4px;
+                background: linear-gradient(90deg, #E30613 0 50%, #111 50% 100%);
+            }}
+            .nob-crest {{
+                width: 96px; height: 96px; object-fit: contain;
+                filter: drop-shadow(0 10px 22px rgba(227,6,19,0.45));
+                animation: nobFloat 4s ease-in-out infinite;
+            }}
+            .nob-eyebrow {{
+                margin-top: 18px;
+                font-size: 11px; font-weight: 600;
+                letter-spacing: 3px; text-transform: uppercase;
                 color: #E30613;
-                text-transform: uppercase;
-                margin: 10px 0 5px 0;
-                line-height: 1;
-                text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
-            }
-            .nob-quote {
-                font-size: 18px;
-                font-style: italic;
-                color: #ffffff;
-                margin-bottom: 20px;
-                font-family: serif;
+            }}
+            .nob-title {{
+                margin: 6px 0 8px;
+                font-size: 28px; font-weight: 900; line-height: 1.05;
+                letter-spacing: -0.5px; text-transform: uppercase;
+                color: #FFFFFF;
+            }}
+            .nob-quote {{
+                font-size: 15px; font-style: italic;
+                color: rgba(255,255,255,0.6);
+            }}
+            .nob-divider {{
+                height: 1px; margin: 24px 0 0;
+                background: linear-gradient(90deg, transparent, rgba(255,255,255,0.12), transparent);
+            }}
+            .nob-label {{
+                margin: 22px 0 8px 2px;
+                font-size: 12px; font-weight: 600;
+                letter-spacing: 1.5px; text-transform: uppercase;
+                color: rgba(255,255,255,0.55);
+            }}
+
+            /* Input */
+            [data-testid="stTextInput"] div[data-baseweb="input"] {{
+                background: rgba(255,255,255,0.04) !important;
+                border: 1px solid rgba(255,255,255,0.12) !important;
+                border-radius: 14px !important;
+                transition: border-color .2s, box-shadow .2s;
+            }}
+            [data-testid="stTextInput"] div[data-baseweb="input"]:focus-within {{
+                border-color: #E30613 !important;
+                box-shadow: 0 0 0 4px rgba(227,6,19,0.18) !important;
+            }}
+            [data-testid="stTextInput"] input {{
+                background: transparent !important;
+                color: #fff !important;
+                font-size: 17px !important; font-weight: 500;
                 letter-spacing: 1px;
-                opacity: 0.9;
-            }
+                padding: 14px 16px !important;
+            }}
+            [data-testid="stTextInput"] input::placeholder {{ color: rgba(255,255,255,0.3); }}
+
+            /* Botón principal */
+            .stButton > button[kind="primary"] {{
+                margin-top: 6px;
+                height: 52px;
+                border: none; border-radius: 14px;
+                background: linear-gradient(135deg, #FF1F2D 0%, #E30613 55%, #A8040E 100%);
+                font-weight: 800; font-size: 15px; letter-spacing: 2px;
+                box-shadow: 0 10px 24px rgba(227,6,19,0.35);
+                transition: transform .15s ease, box-shadow .15s ease, filter .15s ease;
+            }}
+            .stButton > button[kind="primary"]:hover {{
+                transform: translateY(-1px);
+                filter: brightness(1.08);
+                box-shadow: 0 14px 30px rgba(227,6,19,0.45);
+            }}
+            .stButton > button[kind="primary"]:active {{ transform: translateY(1px); }}
+
+            /* Expander de instalación */
+            [data-testid="stExpander"] details {{
+                border-radius: 14px !important;
+                border: 1px solid rgba(255,255,255,0.08) !important;
+                background: rgba(255,255,255,0.025);
+            }}
+            hr {{ border-color: rgba(255,255,255,0.06) !important; }}
+
+            .nob-foot {{
+                text-align: center; margin-top: 18px;
+                font-size: 12px; color: rgba(255,255,255,0.3);
+            }}
+
+            @keyframes nobFadeUp {{ from {{ opacity: 0; transform: translateY(14px); }} to {{ opacity: 1; transform: none; }} }}
+            @keyframes nobFloat {{ 0%,100% {{ transform: translateY(0); }} 50% {{ transform: translateY(-6px); }} }}
         </style>
-        <div class="login-container">
-            <div style="font-size: 40px; margin-bottom: 10px;">🔴⚫ 🏊 ⚫🔴</div>
-            <div class="nob-title">NEWELL'S OLD BOYS</div>
+
+        <div class="nob-card">
+            <img class="nob-crest" src="{ICON_URL}" alt="Escudo NOB">
+            <div class="nob-eyebrow">Natación · Gestión deportiva</div>
+            <div class="nob-title">Newell's Old Boys</div>
             <div class="nob-quote">"Del deporte sos la gloria"</div>
+            <div class="nob-divider"></div>
         </div>
+        <div class="nob-label">Número de socio</div>
     """, unsafe_allow_html=True)
-    st.markdown("<div style='text-align:center; color:#aaa; font-size:14px; margin-bottom:5px;'>ACCESO SOCIOS</div>", unsafe_allow_html=True)
+
     st.text_input("Ingrese Nro de Socio", key="input_socio", placeholder="Ej: 123456-01", label_visibility="collapsed")
     if st.button("INGRESAR", type="primary", use_container_width=True):
         validar_socio()
