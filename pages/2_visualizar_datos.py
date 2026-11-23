@@ -340,9 +340,10 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
             st.caption("Todavía no hay tiempos registrados.")
         else:
             pbs = pbs.assign(_d=_dist_num(pbs['Distancia'])).sort_values(['Estilo', '_d'])
+            # Una tarjeta por estilo; adentro, una fila por distancia (toda la fila es tocable)
             for ie, estilo in enumerate(pbs['Estilo'].unique()):
-                st.markdown(f'<div class="nob-pb-est">{html.escape(str(estilo))}</div>', unsafe_allow_html=True)
-                with st.container(key=f"pbgrid_{sfx}_{ie}", horizontal=True, wrap=True, gap="small"):
+                with st.container(key=f"pbcard_{sfx}_{ie}"):
+                    st.markdown(f'<div class="nob-pbc-tit">{html.escape(str(estilo))}</div>', unsafe_allow_html=True)
                     for idist, (_, r) in enumerate(pbs[pbs['Estilo'] == estilo].iterrows()):
                         # Mejora respecto de la mejor marca anterior a esta
                         prev = validas[(validas['Estilo'] == estilo) & (validas['Distancia'] == r['Distancia'])
@@ -355,16 +356,15 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
                         # Comparación con el promedio de su categoría
                         prom = _promedio_categoria(target_id, estilo, r['Distancia'])
                         if prom is None:
-                            comp = '<span class="cmp" title="Sin datos de su categoría">⚪ sin ref.</span>'
+                            comp = '<span class="cmp">⚪ sin ref.</span>'
                         else:
                             dc = r['segundos'] - prom
-                            comp = (f'<span class="cmp">{"🟢" if dc <= 0 else "🔴"} '
-                                    f'{"-" if dc <= 0 else "+"}{abs(dc):.2f}s vs cat.</span>')
-                        with st.container(key=f"pbt_{sfx}_{ie}_{idist}"):
+                            comp = f'<span class="cmp">{"🟢" if dc <= 0 else "🔴"} {"-" if dc <= 0 else "+"}{abs(dc):.2f}s cat.</span>'
+                        with st.container(key=f"pbr_{sfx}_{ie}_{idist}"):
                             st.markdown(
-                                f'<div class="nob-pb nob-pb-x"><div class="k">{html.escape(str(r["Distancia"]))}</div>'
-                                f'<div class="v">{html.escape(str(r["tiempo"]))}</div>'
-                                f'<div class="f">{_fecha_txt(r["fecha"])} {mejora}</div>{comp}</div>',
+                                f'<div class="nob-pbr"><div class="d">{html.escape(str(r["Distancia"]))}</div>'
+                                f'<div class="t"><b>{html.escape(str(r["tiempo"]))}</b><small>{_fecha_txt(r["fecha"])}</small></div>'
+                                f'<div class="x">{mejora}{comp}</div><div class="ir">›</div></div>',
                                 unsafe_allow_html=True)
                             if st.button(f"Detalle {estilo} {r['Distancia']}", key=f"pbb_{sfx}_{ie}_{idist}"):
                                 dialogo_estilo_ficha(target_id, estilo, str(r['Distancia']))
@@ -506,7 +506,7 @@ def _sin_tildes(texto):
 def _abrir_ficha_desde_padron(nombre_completo):
     """Selecciona al nadador y cambia a la pestaña Ficha Técnica (sin pasos intermedios)."""
     st.session_state.nadador_seleccionado = nombre_completo
-    st.session_state["fichero_tabs_m"] = "👤 Ficha Técnica"
+    st.session_state["fichero_tabs_m"] = "Ficha"
 
 
 def render_tab_padron():
@@ -611,7 +611,7 @@ def render_tab_relevos_general():
 
 if rol == "N":
     st.session_state.pop("fichero_tab_inicial", None)
-    tab_yo, tab_otro = st.tabs(["👤 Mi Ficha", "🔍 Consultar Compañero"])
+    tab_yo, tab_otro = st.tabs(["Mi Ficha", "Compañero"])
     with tab_yo: render_tab_ficha(mi_id, unique_key_suffix="_me")
     with tab_otro:
         st.markdown("##### Consulta por DNI")
@@ -626,10 +626,10 @@ else:
     # Si se llega desde Inicio (nombre o medallas), abrir directo en la Ficha Técnica
     _tab_ini = st.session_state.pop("fichero_tab_inicial", None)
     if _tab_ini == "ficha":
-        st.session_state["fichero_tabs_m"] = "👤 Ficha Técnica"
+        st.session_state["fichero_tabs_m"] = "Ficha"
     elif _tab_ini == "padron":
-        st.session_state["fichero_tabs_m"] = "👥 Padrón"
-    tab1, tab2, tab3 = st.tabs(["👥 Padrón", "👤 Ficha Técnica", "🏊‍♂️ Relevos"], key="fichero_tabs_m", on_change="rerun")
+        st.session_state["fichero_tabs_m"] = "Padrón"
+    tab1, tab2, tab3 = st.tabs(["Padrón", "Ficha", "Relevos"], key="fichero_tabs_m", on_change="rerun")
     
     with tab1: render_tab_padron()
     

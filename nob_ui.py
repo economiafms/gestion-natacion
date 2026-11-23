@@ -700,25 +700,43 @@ def aplicar_tema():
                       text-transform: uppercase; color: #FF4D57; }
         .nob-pad { margin-bottom: 0 !important; flex: 1; min-width: 0; }
         /* ---------- Ficha técnica ---------- */
-        /* Mejores marcas: tarjetas tocables (botón invisible encima) con mejora y comparación con su categoría */
-        [class*="st-key-pbgrid_"] { gap: 8px !important; margin-bottom: 4px; }
-        [class*="st-key-pbt_"] { position: relative; width: 168px !important; flex: 0 0 168px !important; gap: 0 !important; }
-        [class*="st-key-pbt_"] > [data-testid="stElementContainer"]:has(button) {
+        /* Mejores marcas: una tarjeta por estilo con una fila por distancia (fila tocable) */
+        [class*="st-key-pbcard_"] {
+            gap: 0 !important; margin-bottom: 10px; border-radius: 16px; overflow: hidden;
+            background: linear-gradient(160deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015));
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+        .nob-pbc-tit {
+            padding: 10px 14px 8px; font-size: 12px; font-weight: 800; letter-spacing: 1.2px;
+            text-transform: uppercase; color: #FF4D57;
+        }
+        [class*="st-key-pbr_"] { position: relative; gap: 0 !important; }
+        .nob-pbr { border-top: 1px solid rgba(255,255,255,0.06); }
+        [class*="st-key-pbr_"] > [data-testid="stElementContainer"]:has(button) {
             position: absolute !important; inset: 0; width: 100% !important; z-index: 2; margin: 0 !important;
         }
-        [class*="st-key-pbt_"] [data-testid="stButton"], [class*="st-key-pbt_"] button {
+        [class*="st-key-pbr_"] [data-testid="stButton"], [class*="st-key-pbr_"] button {
             width: 100% !important; height: 100% !important; min-height: 100% !important;
         }
-        [class*="st-key-pbt_"] button { opacity: 0 !important; cursor: pointer; }
-        [class*="st-key-pbt_"]:hover .nob-pb { border-color: rgba(227,6,19,0.6); }
-        .nob-pb-x { height: 100%; }
-        .nob-pb-x .f { margin-top: 4px; font-size: 11px; color: rgba(255,255,255,0.55); }
-        .nob-pb-x .f .up { color: #6FDB74; font-weight: 700; margin-left: 4px; }
-        .nob-pb-x .f .eq { color: rgba(255,255,255,0.45); margin-left: 4px; }
-        .nob-pb-x .cmp { display: block; margin-top: 4px; font-size: 11px; color: rgba(255,255,255,0.7); }
+        [class*="st-key-pbr_"] button { opacity: 0 !important; cursor: pointer; }
+        [class*="st-key-pbr_"]:hover .nob-pbr { background: rgba(227,6,19,0.08); }
+        .nob-pbr { display: flex; align-items: center; gap: 12px; padding: 10px 14px; }
+        .nob-pbr .d { flex: 0 0 52px; font-size: 14px; font-weight: 800; color: rgba(255,255,255,0.75); }
+        .nob-pbr .t { flex: 1 1 auto; min-width: 0; }
+        .nob-pbr .t b { display: block; font-family: ui-monospace, 'JetBrains Mono', monospace; font-size: 18px; font-weight: 800; color: #fff; }
+        .nob-pbr .t small { font-size: 11px; color: rgba(255,255,255,0.45); }
+        .nob-pbr .x { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; font-size: 11px; white-space: nowrap; }
+        .nob-pbr .x .up { color: #6FDB74; font-weight: 700; }
+        .nob-pbr .x .eq { color: rgba(255,255,255,0.45); }
+        .nob-pbr .x .cmp { color: rgba(255,255,255,0.75); }
+        .nob-pbr .ir { font-size: 20px; color: rgba(255,255,255,0.3); }
         .nob-kpis b.up { color: #6FDB74; }
-        @media (max-width: 520px) {
-            [class*="st-key-pbt_"] { width: calc(50% - 4px) !important; flex: 0 0 calc(50% - 4px) !important; }
+
+        /* Pestañas en el celular: siempre todas visibles en una fila (sin tener que deslizar) */
+        @media (max-width: 640px) {
+            [role="tablist"] { flex-wrap: nowrap !important; overflow: hidden !important; gap: 4px !important; }
+            [data-testid="stTab"] { flex: 1 1 0 !important; min-width: 0 !important; padding: 6px 4px !important; justify-content: center; }
+            [data-testid="stTab"] p { font-size: 12.5px !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         }
         /* Selector de nadador del manager: ← lista →, en una fila */
         .st-key-ficha_selector { flex-wrap: nowrap !important; margin-bottom: 8px; }
