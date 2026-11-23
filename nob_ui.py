@@ -688,6 +688,25 @@ def aplicar_tema():
         .nob-top-pos { font-size: 12px; color: rgba(255,255,255,0.6); text-align: right; margin-top: 2px; }
         @media (max-width: 520px) { .nob-kpis { grid-template-columns: repeat(2, 1fr); } }
 
+        /* ---------- Fichero: cabecera de la ficha y padrón, con el estilo de Inicio ---------- */
+        .nob-fh {
+            text-align: center; padding: 20px 16px 16px; border-radius: 20px; margin-bottom: 6px;
+            background: linear-gradient(160deg, rgba(255,255,255,0.06), rgba(255,255,255,0.015));
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+        .nob-fh-name { font-size: 26px; font-weight: 900; color: #fff; line-height: 1.15; letter-spacing: -0.4px; }
+        .nob-fh-sub { margin-top: 4px; font-size: 12px; color: rgba(255,255,255,0.5); }
+        .nob-pb-est { margin: 10px 0 6px; font-size: 12px; font-weight: 800; letter-spacing: 1px;
+                      text-transform: uppercase; color: #FF4D57; }
+        .nob-pad { margin-bottom: 0; flex: 1; min-width: 0; }
+        .nob-pad .n small { display: block; font-size: 11px; font-weight: 500; color: rgba(255,255,255,0.5); margin-top: 1px; }
+        [class*="st-key-pad_"] { gap: 6px !important; margin-bottom: 6px; flex-wrap: nowrap !important; }
+        [class*="st-key-pad_"] > [data-testid="stElementContainer"]:first-child { flex: 1 1 auto; min-width: 0; }
+        [class*="st-key-pad_"] button {
+            min-height: 44px !important; min-width: 44px; padding: 0 10px !important; border-radius: 12px !important;
+        }
+        @media (max-width: 520px) { .nob-pad .m { display: none; } }
+
         /* Filtro por distancia en el detalle por estilo: centrado arriba de la ficha */
         .st-key-dlg_est_filtro { align-items: center; margin-bottom: 4px; }
 

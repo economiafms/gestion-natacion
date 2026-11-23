@@ -4,6 +4,8 @@ import pandas as pd
 from datetime import datetime
 import plotly.express as px
 import plotly.graph_objects as go
+import html
+import unicodedata
 
 # --- 1. CONFIGURACIÓN ---
 st.set_page_config(page_title="Base de Datos", layout="centered")
@@ -17,7 +19,7 @@ rol = st.session_state.role
 mi_id = st.session_state.user_id
 mi_nombre = st.session_state.user_name
 
-from nob_ui import hero
+from nob_ui import hero, seccion
 hero("Fichero del Club", "🗃️")
 
 # --- CSS PERSONALIZADO ---
@@ -203,45 +205,49 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
         o, pl, br = int(row_m.iloc[0]['Oro']), int(row_m.iloc[0]['Plata']), int(row_m.iloc[0]['Bronce'])
     else: o, pl, br = 0, 0, 0
 
-    st.markdown(f"""
-    <div class="ficha-header">
-        <div class="ficha-name">{info['nombre']} {info['apellido']}</div>
-        <div class="ficha-grid">
-            <div>📅 Nacimiento: <b>{nac_str}</b></div>
-            <div>🎂 Edad (al 31/12): <b>{edad_actual} años</b></div>
-            <div>🏷️ Categoría: <b>{cat_actual}</b></div>
-            <div>⚧️ Género: <b>{info['codgenero']}</b></div>
-        </div>
-        <div class="ficha-medals">
-            🥇 {o} &nbsp; | &nbsp; 🥈 {pl} &nbsp; | &nbsp; 🥉 {br}
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    genero_txt = {"F": "Femenino", "M": "Masculino"}.get(str(info['codgenero']).strip().upper(), str(info['codgenero']))
+    # Cabecera con el mismo estilo que la tarjeta de Inicio
+    st.markdown(f"""<div class="nob-fh">
+<div class="nob-fh-name">{html.escape(f"{info['nombre']} {info['apellido']}")}</div>
+<div class="nob-fh-sub">Nacimiento {nac_str}</div>
+<div class="nob-id-row">
+<div><small>Categoría</small><b class="cat">{html.escape(str(cat_actual))}</b></div>
+<div><small>Edad</small><b>{edad_actual}</b></div>
+<div><small>Género</small><b>{html.escape(genero_txt)}</b></div>
+</div>
+<div class="nob-medrow" style="margin-top:14px;">
+<div class="gold"><div class="v">🥇 {o}</div><div class="l">Oro</div></div>
+<div class="silver"><div class="v">🥈 {pl}</div><div class="l">Plata</div></div>
+<div class="bronze"><div class="v">🥉 {br}</div><div class="l">Bronce</div></div>
+<div class="total"><div class="v">★ {o + pl + br}</div><div class="l">Podios</div></div>
+</div>
+</div>""", unsafe_allow_html=True)
 
     mis_t = df_full[df_full['codnadador'] == target_id].copy()
 
-    # --- MEJORES MARCAS ---
+    # --- MEJORES MARCAS: tarjetas por estilo, como en Inicio ---
     if not mis_t.empty:
-        st.subheader("✨ Mejores Marcas (PB)")
+        seccion("Mejores marcas")
         mis_t['segundos'] = mis_t['tiempo'].apply(tiempo_a_segundos)
-        pbs = mis_t.loc[mis_t.groupby(['Estilo', 'Distancia'])['segundos'].idxmin()].sort_values(['Estilo', 'segundos'])
-        
+        pbs = mis_t.loc[mis_t.groupby(['Estilo', 'Distancia'])['segundos'].idxmin()].copy()
+        pbs['_d'] = pd.to_numeric(pbs['Distancia'].astype(str).str.extract(r'(\d+)')[0], errors='coerce')
+        pbs = pbs.sort_values(['Estilo', '_d'])
+
+        bloques = []
         for estilo in pbs['Estilo'].unique():
-            st.markdown(f"<div class='pb-style-header'>{estilo}</div>", unsafe_allow_html=True)
-            for _, r in pbs[pbs['Estilo'] == estilo].iterrows():
-                st.markdown(f"""
-                <div class="pb-row">
-                    <span class="pb-dist">{r['Distancia']}</span>
-                    <span class="pb-time">{r['tiempo']}</span>
-                </div>""", unsafe_allow_html=True)
-        st.divider()
+            tarjetas = "".join(
+                f'<div class="nob-pb"><div class="k">{html.escape(str(r["Distancia"]))}</div>'
+                f'<div class="v">{html.escape(str(r["tiempo"]))}</div></div>'
+                for _, r in pbs[pbs['Estilo'] == estilo].iterrows())
+            bloques.append(f'<div class="nob-pb-est">{html.escape(str(estilo))}</div><div class="nob-pb-grid">{tarjetas}</div>')
+        st.markdown("".join(bloques), unsafe_allow_html=True)
 
         # --- GRÁFICO (MODIFICADO: Sin Media Móvil, con Promedio en Subtítulo) ---
         conteo = mis_t.groupby(['Estilo', 'Distancia']).size().reset_index(name='count')
         validos = conteo[conteo['count'] >= 2]
         
         if not validos.empty:
-            st.subheader(f"📈 Evolución de Tiempos - {info['nombre']} {info['apellido']}")
+            seccion("Evolución de tiempos")
             
             c1, c2 = st.columns(2)
             estilos_ok = sorted(validos['Estilo'].unique())
@@ -280,11 +286,10 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
             fig.update_layout(height=350, margin=dict(t=20, b=20, l=40, r=20), hovermode="x unified")
             st.plotly_chart(fig, use_container_width=True)
         else:
-            st.info("Necesitas al menos 2 carreras en la misma prueba para ver la evolución.")
-        st.divider()
+            st.caption("Se necesitan al menos 2 carreras en la misma prueba para ver la evolución.")
 
     # --- HISTORIAL COMPLETO ---
-    st.subheader("📜 Historial Completo")
+    seccion("Historial completo")
     with st.expander("Filtrar Historial"):
         h1, h2 = st.columns(2)
         hf_est = h1.selectbox("Estilo", ["Todos"] + sorted(mis_t['Estilo'].unique().tolist()), key=f"h_est{unique_key_suffix}")
@@ -295,45 +300,36 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
     if hf_dis != "Todos": df_hist = df_hist[df_hist['Distancia'] == hf_dis]
     df_hist = df_hist.sort_values('fecha', ascending=False)
     
+    filas = []
     for _, r in df_hist.head(20).iterrows():
-        try: 
-            pos_val = int(r['posicion'])
-            if pos_val == 1: medal_str = "🥇 1º"
-            elif pos_val == 2: medal_str = "🥈 2º"
-            elif pos_val == 3: medal_str = "🥉 3º"
-            elif pos_val > 0: medal_str = f"Pos: {pos_val}"
-            else: medal_str = "-"
-        except: medal_str = "-"
+        try: pos_val = int(r['posicion'])
+        except: pos_val = 0
+        icono = {1: "🥇", 2: "🥈", 3: "🥉"}.get(pos_val, f'<span class="nob-rec-pos">{pos_val}°</span>' if pos_val > 0 else '<span class="nob-rec-pos">–</span>')
 
         sede_txt = r.get('sede', '-')
         medida_txt = r.get('medida', '-')
-        
-        # Calcular categoría en esa fecha
+
+        # Categoría en la fecha de la carrera
         try:
-            anio_carrera = pd.to_datetime(r['fecha']).year
-            edad_en_carrera = anio_carrera - anio_nacimiento_nadador
-            cat_torneo = asignar_cat(edad_en_carrera)
+            cat_torneo = asignar_cat(pd.to_datetime(r['fecha']).year - anio_nacimiento_nadador)
         except: cat_torneo = "-"
 
-        # MODIFICADO: Fuente 14px en fecha/sede y 13px en categoría
-        st.markdown(f"""
-        <div class="mobile-card" style="padding:10px;">
-            <div style="display:flex; justify-content:space-between; align-items: flex-start;">
-                <div style="flex:1;">
-                    <div style="font-weight:bold; color:white; font-size:15px;">{r['Distancia']} {r['Estilo']}</div>
-                    <div style="font-size:14px; color:#aaa; margin-top:2px;">📅 {r['fecha']} • {sede_txt} ({medida_txt})</div>
-                </div>
-                <div style="text-align: right; min-width: 100px;">
-                    <div style="font-family:monospace; font-weight:bold; color:#4CAF50; font-size:18px;">{r['tiempo']}</div>
-                    <div style="font-size:14px; color:#ddd; font-weight:bold; margin-top:2px;">
-                        {medal_str} <span style="font-size:13px; color:#999; font-weight:normal;">({cat_torneo})</span>
-                    </div>
-                </div>
-            </div>
-        </div>""", unsafe_allow_html=True)
+        try: fecha_txt = pd.to_datetime(r['fecha']).strftime('%d/%m/%Y')
+        except: fecha_txt = str(r['fecha'])
 
-    # 5. MIS RELEVOS
-    st.subheader("🏊‍♂️ Mis Relevos")
+        filas.append(
+            f'<div class="nob-rec m{pos_val if pos_val in (1, 2, 3) else 0}">'
+            f'<div class="nob-rec-med">{icono}</div>'
+            f'<div class="nob-rec-body"><div class="nob-rec-t">{html.escape(f"{r["Distancia"]} {r["Estilo"]}")}</div>'
+            f'<div class="nob-rec-m">{fecha_txt} · {html.escape(str(sede_txt))} ({html.escape(str(medida_txt))}) · Cat. {html.escape(str(cat_torneo))}</div></div>'
+            f'<div class="nob-rec-time">{html.escape(str(r["tiempo"]))}</div></div>')
+    if filas:
+        st.markdown("".join(filas), unsafe_allow_html=True)
+    else:
+        st.caption("Sin carreras para este filtro.")
+
+    # 5. RELEVOS
+    seccion("Relevos")
     mr_base = data['relevos'].copy()
     cond_rel = (mr_base['nadador_1'] == target_id) | (mr_base['nadador_2'] == target_id) | (mr_base['nadador_3'] == target_id) | (mr_base['nadador_4'] == target_id)
     mis_relevos = mr_base[cond_rel].copy()
@@ -393,39 +389,49 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
                 </div>
                 <div class="swimmer-grid">{html_grid}</div>
             </div>""", unsafe_allow_html=True)
-    else: st.info("Sin relevos.")
+    else: st.caption("Sin relevos.")
+
+def _sin_tildes(texto):
+    return "".join(c for c in unicodedata.normalize("NFD", str(texto).lower()) if unicodedata.category(c) != "Mn")
+
+
+def _abrir_ficha_desde_padron(nombre_completo):
+    """Selecciona al nadador y cambia a la pestaña Ficha Técnica (sin pasos intermedios)."""
+    st.session_state.nadador_seleccionado = nombre_completo
+    st.session_state["fichero_tabs_m"] = "👤 Ficha Técnica"
+
 
 def render_tab_padron():
-    st.markdown("### 🏆 Padrón y Medallero")
-    filtro = st.text_input("Buscar Nadador:", placeholder="Nombre...")
-    df_show = df_view.sort_values('Total', ascending=False)
-    if filtro: df_show = df_show[df_show['Nombre Completo'].str.contains(filtro.upper())]
+    seccion("Padrón y medallero")
+    filtro = st.text_input("Buscar nadador", placeholder="Buscar por nombre o apellido...", label_visibility="collapsed")
+    df_show = df_view.copy()
+    df_show['_orden_nombre'] = df_show['Nombre Completo'].map(_sin_tildes)
+    df_show = df_show.sort_values(['Total', 'Oro', 'Plata', '_orden_nombre'], ascending=[False, False, False, True])
+    if filtro.strip():
+        busca = _sin_tildes(filtro.strip())
+        df_show = df_show[(df_show['nombre'].map(_sin_tildes) + " " + df_show['apellido'].map(_sin_tildes)).str.contains(busca, regex=False)
+                          | df_show['_orden_nombre'].str.contains(busca, regex=False)]
+    st.caption(f"{len(df_show)} de {len(df_view)} nadadores")
 
-    for _, row in df_show.head(25).iterrows():
+    # Todos los nadadores (sin límite), con el estilo de las filas del top de Inicio
+    for pos, (_, row) in enumerate(df_show.iterrows(), start=1):
         try: edad = datetime.now().year - pd.to_datetime(row['fechanac']).year
         except: edad = 0
         cat = asignar_cat(edad)
-        o, p, b, t = int(row.get('Oro',0)), int(row.get('Plata',0)), int(row.get('Bronce',0)), int(row.get('Total',0))
-        
-        st.markdown(f"""
-        <div class="padron-card">
-            <div class="p-col-left">
-                <div class="p-name">{row['Nombre Completo']}</div>
-                <div class="p-meta">{edad} años (al 31/12) • {row['codgenero']}</div>
-            </div>
-            <div class="p-col-center">
-                <div class="p-medals"><span>🥇{o}</span> <span>🥈{p}</span> <span>🥉{b}</span></div>
-            </div>
-            <div class="p-col-right"><div class="p-total">★ {t}</div><div class="p-cat">{cat}</div></div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        if st.button(f"Ver Ficha {row['nombre']} ➝", key=f"btn_p_{row['codnadador']}", use_container_width=True):
-            st.session_state.nadador_seleccionado = row['Nombre Completo']
-            st.toast("Para visualizar los datos, presioná FICHA TÉCNICA", icon="ℹ️")
-            import time
-            time.sleep(0.8)
-            st.rerun()
+        o, p, b, t = int(row.get('Oro', 0)), int(row.get('Plata', 0)), int(row.get('Bronce', 0)), int(row.get('Total', 0))
+        meds = " ".join(f"{e}{n}" for e, n in (("🥇", o), ("🥈", p), ("🥉", b)) if n) or "—"
+        es_yo = row['codnadador'] == mi_id
+
+        with st.container(key=f"pad_{row['codnadador']}", horizontal=True, vertical_alignment="center"):
+            st.markdown(
+                f'<div class="nob-top nob-pad{" yo" if es_yo else ""}">'
+                f'<span class="p">{pos}</span>'
+                f'<span class="n">{html.escape(f"{row["nombre"]} {row["apellido"]}")}'
+                f'<small>{edad} años · {html.escape(str(row["codgenero"]))} · Cat. {html.escape(str(cat))}</small></span>'
+                f'<span class="m">{meds}</span><span class="t">★ {t}</span></div>',
+                unsafe_allow_html=True)
+            st.button("", key=f"btn_p_{row['codnadador']}", icon=":material/arrow_forward:", help="Ver ficha",
+                      on_click=_abrir_ficha_desde_padron, args=(row['Nombre Completo'],))
 
 def render_tab_relevos_general():
     st.markdown("### Historial de Postas")
