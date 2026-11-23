@@ -414,7 +414,6 @@ def aplicar_tema():
         .nob-est-info { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 6px; font-size: 13px; color: rgba(255,255,255,0.65); }
         .nob-est-info b { color: #fff; }
         .st-key-nob_medals button:hover { transform: translateY(-2px); box-shadow: 0 10px 22px rgba(0,0,0,0.35); }
-        .nob-hint { font-size: 11px; color: rgba(255,255,255,0.38); text-align: center; margin: -4px 0 14px; }
 
         /* Vista rápida: podios y mejores marcas */
         .nob-rec {

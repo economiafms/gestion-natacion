@@ -541,8 +541,6 @@ if db and st.session_state.user_id:
         with cols_med[3]:  # total de podios: solo informativo
             st.markdown(f'<div class="nob-med-info"><div class="v">★ {mi_total}</div><div class="l">Podios</div></div>',
                         unsafe_allow_html=True)
-    st.markdown('<div class="nob-hint">Tocá una medalla para ver tus podios y mejores marcas · Tocá tu nombre para ir a tu ficha</div>',
-                unsafe_allow_html=True)
 
     # RESUMEN: OBJETIVO DEL MES + PRÓXIMO TORNEO (solo nadadores)
     if st.session_state.role == "N":
