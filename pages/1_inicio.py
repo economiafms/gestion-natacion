@@ -6,6 +6,8 @@ from datetime import datetime, timedelta, timezone, date
 import time
 import uuid
 import random
+import html
+from nob_ui import hero, seccion
 
 # --- CONFIGURACIÓN ---
 st.set_page_config(page_title="Inicio", layout="centered")
@@ -248,36 +250,8 @@ def buscar_mejor_tiempo(prueba, df_t_nadador):
 
 # --- VISUALIZACIÓN ---
 
-# BANNER TÍTULO
-st.markdown("""
-    <style>
-        .banner-box {
-            background-color: #262730;
-            padding: 20px;
-            border-radius: 12px;
-            border: 1px solid #444;
-            text-align: center;
-            margin-bottom: 25px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-        }
-        .banner-sub {
-            color: white !important;
-            font-size: 20px;
-            margin: 0;
-            font-weight: normal;
-        }
-        .banner-main {
-            color: #E30613 !important;
-            font-size: 32px;
-            margin: 0;
-            font-weight: 800;
-        }
-    </style>
-    <div class='banner-box'>
-        <h3 class='banner-sub'>BIENVENIDOS AL COMPLEJO ACUÁTICO</h3>
-        <h1 class='banner-main'>NEWELL'S OLD BOYS</h1>
-    </div>
-""", unsafe_allow_html=True)
+# ENCABEZADO PERSONALIZADO
+hero("Complejo Acuático NOB", "🏊")
 
 # =====================================================================
 # SISTEMA DE MENSAJES FLASH (PARA EVITAR ERRORES DE WEBSOCKET)
@@ -381,28 +355,54 @@ if db and st.session_state.user_id:
     mi_total = mis_oros + mis_platas + mis_bronces
 
     # 1. TARJETA PERFIL
-    st.write("### 👤 Mi Perfil")
+    nom_full = html.escape(f"{me['nombre']} {me['apellido']}")
+    iniciales = html.escape((str(me['nombre'])[:1] + str(me['apellido'])[:1]).upper())
+    mis_carreras = len(df_t[df_t['codnadador'] == user_id])
+
+    seccion("Mi perfil")
     st.markdown(f"""
-    <style>
-        .padron-card {{ background-color: #262730; border: 1px solid #444; border-radius: 12px; padding: 15px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 6px rgba(0,0,0,0.3); margin-bottom: 20px; }}
-        .p-total {{ font-size: 26px; color: #FFD700; font-weight: bold; }}
-    </style>
-    <div class="padron-card">
-        <div style="flex: 2; border-right: 1px solid #555;">
-            <div style="font-weight: bold; font-size: 18px; color: white;">{me['nombre']} {me['apellido']}</div>
-            <div style="font-size: 13px; color: #ccc;">{edad} años • {me['codgenero']}</div>
+    <div class="nob-profile">
+        <div class="nob-avatar">{iniciales}</div>
+        <div>
+            <div class="nob-p-name">{nom_full}</div>
+            <div class="nob-p-meta">{edad} años · {me['codgenero']} · {mis_carreras} carreras registradas</div>
         </div>
-        <div style="flex: 2; text-align: center;">
-            <div style="display: flex; justify-content: center; gap: 8px; font-size: 16px;">
-                <span>🥇{mis_oros}</span> <span>🥈{mis_platas}</span> <span>🥉{mis_bronces}</span>
-            </div>
-        </div>
-        <div style="flex: 1; text-align: right; border-left: 1px solid #555; padding-left: 10px;">
-            <div class="p-total">★ {mi_total}</div>
-            <div style="font-size: 16px; color: #4CAF50; font-weight: bold;">{cat}</div>
-        </div>
+        <div class="nob-cat-badge"><small>Categoría</small><b>{cat}</b></div>
+    </div>
+    <div class="nob-stats">
+        <div class="nob-stat gold"><div class="v">🥇 {mis_oros}</div><div class="l">Oros</div></div>
+        <div class="nob-stat silver"><div class="v">🥈 {mis_platas}</div><div class="l">Platas</div></div>
+        <div class="nob-stat bronze"><div class="v">🥉 {mis_bronces}</div><div class="l">Bronces</div></div>
+        <div class="nob-stat total"><div class="v">★ {mi_total}</div><div class="l">Podios</div></div>
     </div>
     """, unsafe_allow_html=True)
+
+    # PROGRESO DEL MES (motivacional, solo nadadores)
+    if st.session_state.role == "N":
+        try:
+            _hoy = datetime.now(timezone.utc) - timedelta(hours=3)
+            _rut = db.get('rutinas'); _seg = db.get('seguimiento')
+            if _rut is not None and _seg is not None:
+                _mes = _rut[(_rut['anio_rutina'] == _hoy.year) & (_rut['mes_rutina'] == _hoy.month)]
+                _total = len(_mes)
+                if _total > 0:
+                    _hechas = 0
+                    if not _seg.empty:
+                        _hechas = _seg[(_seg['codnadador'] == user_id) & (_seg['id_rutina'].isin(_mes['id_rutina']))]['id_rutina'].nunique()
+                    _pct = int(round(_hechas / _total * 100))
+                    if _hechas == 0: _msg = "¡Arrancá el mes con todo! La primera sesión es la más importante. 💪"
+                    elif _pct < 50: _msg = f"Buen comienzo. Te faltan {_total - _hechas} sesiones, ¡seguí sumando! 🔥"
+                    elif _pct < 100: _msg = f"¡Ya pasaste la mitad! Solo {_total - _hechas} más para completar el mes. 🚀"
+                    else: _msg = "¡Mes completo! Constancia de campeón. 🏆"
+                    st.markdown(f"""
+                    <div class="nob-goal">
+                        <div class="nob-goal-top"><b>🎯 Objetivo del mes</b><span>{_hechas} / {_total} sesiones · {_pct}%</span></div>
+                        <div class="nob-bar"><div style="width:{_pct}%"></div></div>
+                        <div class="nob-goal-msg">{_msg}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+        except Exception:
+            pass
     
     if st.session_state.role == "N":
         if st.button("Ver Mi Ficha Completa ➝", type="primary", use_container_width=True, key="btn_ficha_inicio"):
@@ -524,7 +524,7 @@ if db and st.session_state.user_id:
                             df_t_nadador = df_t_nadador.merge(df_dist.rename(columns={'descripcion': 'dist_desc'}), on='coddistancia', how='left')
                         df_t_nadador['segundos'] = df_t_nadador['tiempo'].apply(lambda x: tiempo_a_seg(x) if pd.notnull(x) else 999999.0)
 
-                st.markdown("<h5 style='text-align: center; color: #E30613; margin-bottom: 15px;'>🏆 MIS TORNEOS E INSCRIPCIONES</h5>", unsafe_allow_html=True)
+                seccion("🏆 Mis torneos e inscripciones")
                 
                 for row, esta, ins_user in vista_eventos:
                     comp_id = row['id_competencia']
@@ -555,7 +555,7 @@ if db and st.session_state.user_id:
                         
                         # --- INFO BÁSICA DEL TORNEO (ESTILO AGENDA) ---
                         st.markdown(f"""
-                        <div style="background-color: #1e1e24; border: 1px solid #444; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+                        <div class="nob-card2" style="padding: 14px; margin-bottom: 12px;">
                             <div style="color:#4CAF50; font-weight:bold; font-size:13px; margin-bottom:8px;">📅 {fecha_ev_str} | ⏰ {hora_inicio}</div>
                             <div style="display:flex; gap:15px; color:#ddd; font-size:12px; margin-bottom:6px;">
                                 <div>📍 {nom_pil}</div>
@@ -614,22 +614,17 @@ if db and st.session_state.user_id:
     # 2. MIS REGISTROS (FRECUENCIA DE ESTILOS)
     mis_regs = db['tiempos'][db['tiempos']['codnadador'] == user_id].copy()
     if not mis_regs.empty:
-        st.markdown("<h5 style='text-align: center; color: #aaa; margin-bottom: 15px;'>MIS ESTILOS FRECUENTES</h5>", unsafe_allow_html=True)
+        seccion("Mis estilos frecuentes")
         mis_regs = mis_regs.merge(db['estilos'], on='codestilo', how='left')
         col_desc = 'descripcion' if 'descripcion' in mis_regs.columns and 'descripcion_x' in mis_regs.columns else 'descripcion_x'
-        if col_desc not in mis_regs.columns: col_desc = 'descripcion' 
-        
+        if col_desc not in mis_regs.columns: col_desc = 'descripcion'
+
         conteo = mis_regs[col_desc].value_counts()
-        cols = st.columns(len(conteo))
-        
-        for (estilo, cantidad), col in zip(conteo.items(), cols):
-            with col:
-                st.markdown(f"""
-                <div style="background-color: #262730; border: 1px solid #444; border-radius: 8px; padding: 10px; text-align: center; height: 100%;">
-                    <div style="font-size: 11px; color: #aaa; text-transform: uppercase; margin-bottom: 5px;">{estilo}</div>
-                    <div style="font-size: 24px; font-weight: bold; color: white; line-height: 1;">{cantidad}</div>
-                    <div style="font-size: 10px; color: #666;">carreras</div>
-                </div>""", unsafe_allow_html=True)
+        chips = "".join(
+            f'<div class="nob-chip"><div class="v">{cantidad}</div><div class="l">{html.escape(str(estilo))}</div></div>'
+            for estilo, cantidad in conteo.items()
+        )
+        st.markdown(f'<div class="nob-chip-row">{chips}</div>', unsafe_allow_html=True)
     
     st.divider()
 
@@ -688,38 +683,29 @@ if db and st.session_state.user_id:
     st.write("")
 
     # // 2️⃣ Estadísticas del club
-    st.markdown("<h5 style='text-align: center; color: #888; margin-top: 20px;'>ESTADÍSTICAS DEL CLUB</h5>", unsafe_allow_html=True)
-    
+    seccion("Estadísticas del club")
+
     total_nadadores = len(db['nadadores'])
     total_pruebas_reg = len(df_t) + len(df_r)
 
     st.markdown(f"""
-    <div style="display: flex; gap: 10px; margin-bottom: 20px;">
-        <div style="flex: 1; background-color: #262730; border-top: 3px solid #E30613; padding: 15px; border-radius: 8px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
-            <div style="font-size: 11px; color: #aaa; text-transform: uppercase;">Nadadores</div>
-            <div style="font-size: 28px; font-weight: 800; color: white;">{total_nadadores}</div>
-        </div>
-        <div style="flex: 1; background-color: #262730; border-top: 3px solid #E30613; padding: 15px; border-radius: 8px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
-            <div style="font-size: 11px; color: #aaa; text-transform: uppercase;">Pruebas Registradas</div>
-            <div style="font-size: 28px; font-weight: 800; color: white;">{total_pruebas_reg}</div>
-        </div>
+    <div class="nob-chip-row" style="margin-bottom: 10px;">
+        <div class="nob-chip"><div class="v">{total_nadadores}</div><div class="l">Nadadores</div></div>
+        <div class="nob-chip"><div class="v">{total_pruebas_reg}</div><div class="l">Pruebas registradas</div></div>
     </div>
     """, unsafe_allow_html=True)
-    
+
     t_oro = len(df_t[df_t['posicion']==1]) + len(df_r[df_r['posicion']==1])
     t_plata = len(df_t[df_t['posicion']==2]) + len(df_r[df_r['posicion']==2])
     t_bronce = len(df_t[df_t['posicion']==3]) + len(df_r[df_r['posicion']==3])
     total_med = t_oro + t_plata + t_bronce
 
     st.markdown(f"""
-    <div style="background-color: #1E1E1E; border: 1px solid #333; border-radius: 10px; padding: 12px; margin-bottom: 25px;">
-        <div style="text-align:center; font-size:11px; color:#aaa; margin-bottom:8px; font-weight:bold;">MEDALLERO HISTÓRICO</div>
-        <div style="display: flex; justify-content: space-between; gap: 2px;">
-            <div style="flex:1; text-align:center;"><div style="font-size:22px; color:#FFD700;">🥇 {t_oro}</div></div>
-            <div style="flex:1; text-align:center; border-left:1px solid #333;"><div style="font-size:22px; color:#C0C0C0;">🥈 {t_plata}</div></div>
-            <div style="flex:1; text-align:center; border-left:1px solid #333;"><div style="font-size:22px; color:#CD7F32;">🥉 {t_bronce}</div></div>
-            <div style="flex:1; text-align:center; border-left:1px solid #333;"><div style="font-size:22px; color:#fff;">★ {total_med}</div></div>
-        </div>
+    <div class="nob-stats" style="margin-bottom: 22px;">
+        <div class="nob-stat gold"><div class="v">🥇 {t_oro}</div><div class="l">Oros</div></div>
+        <div class="nob-stat silver"><div class="v">🥈 {t_plata}</div><div class="l">Platas</div></div>
+        <div class="nob-stat bronze"><div class="v">🥉 {t_bronce}</div><div class="l">Bronces</div></div>
+        <div class="nob-stat total"><div class="v">★ {total_med}</div><div class="l">Medallero</div></div>
     </div>
     """, unsafe_allow_html=True)
     
