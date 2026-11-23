@@ -809,6 +809,11 @@ def aplicar_tema():
         }
         [class*="st-key-pbo_"] button { opacity: 0 !important; cursor: pointer; }
         [class*="st-key-pbo_"]:hover .pb-row { background: rgba(227,6,19,0.10) !important; }
+        /* Separación entre las mejores marcas y las pestañas Evolución / Historial / Mis relevos */
+        .nob-sep-ficha {
+            height: 1px; margin: 22px 0 14px;
+            background: linear-gradient(90deg, transparent, rgba(227,6,19,0.55), transparent);
+        }
         /* Ventana "Detalle de la mejor marca" */
         .nob-mm-time { margin-top: 6px; font-family: ui-monospace, 'JetBrains Mono', monospace; font-size: 30px; font-weight: 900; color: #fff; }
         .nob-mm-frases { display: flex; flex-direction: column; gap: 8px; margin: 12px 0 4px; }

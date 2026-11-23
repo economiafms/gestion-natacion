@@ -331,6 +331,9 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
                     if st.button(f"Detalle {r['Distancia']} {estilo}", key=f"pbo_btn_{unique_key_suffix}_{target_id}_{ie}_{idist}"):
                         dialogo_marca(target_id, estilo, r['Distancia'])
 
+    # Separación entre las mejores marcas y las pestañas de abajo
+    st.markdown('<div class="nob-sep-ficha"></div>', unsafe_allow_html=True)
+
     tab_evo, tab_his, tab_rel = st.tabs(["📈 Evolución", "📜 Historial", "🏊‍♂️ Mis relevos"])
 
     # --- EVOLUCIÓN ---
@@ -675,7 +678,24 @@ else:
         if not pre_seleccion and mi_nombre in lista_nombres: pre_seleccion = mi_nombre
         if pre_seleccion in lista_nombres: idx_defecto = lista_nombres.index(pre_seleccion)
 
-        f_nad = st.selectbox("Seleccionar Atleta:", lista_nombres, index=idx_defecto)
+        # Orden del padrón del medallero (total, oros, platas y nombre): lo usan las flechas
+        _ord = df_view.copy()
+        _ord['_n'] = _ord['Nombre Completo'].map(_sin_tildes)
+        orden_padron = _ord.sort_values(['Total', 'Oro', 'Plata', '_n'],
+                                        ascending=[False, False, False, True])['Nombre Completo'].tolist()
+
+        def _mover_nadador(paso):
+            actual = st.session_state.get("nadador_seleccionado") or lista_nombres[idx_defecto]
+            i = orden_padron.index(actual) if actual in orden_padron else 0
+            st.session_state.nadador_seleccionado = orden_padron[(i + paso) % len(orden_padron)]
+
+        # ← lista de atletas →
+        with st.container(key="ficha_selector", horizontal=True, vertical_alignment="bottom", gap="small"):
+            st.button("", key="ficha_prev", icon=":material/chevron_left:", help="Nadador anterior del padrón",
+                      on_click=_mover_nadador, args=(-1,))
+            f_nad = st.selectbox("Seleccionar Atleta:", lista_nombres, index=idx_defecto)
+            st.button("", key="ficha_next", icon=":material/chevron_right:", help="Nadador siguiente del padrón",
+                      on_click=_mover_nadador, args=(1,))
         if f_nad:
             st.session_state.nadador_seleccionado = f_nad
             id_actual = df_nad[df_nad['Nombre Completo'] == f_nad].iloc[0]['codnadador']
