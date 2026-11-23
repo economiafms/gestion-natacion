@@ -131,7 +131,9 @@ def login_screen():
                     #07080B;
             }}
             .block-container {{ max-width: 440px; padding-top: 3.5rem; padding-bottom: 2rem; }}
-            .block-container, .block-container * {{ font-family: 'Inter', sans-serif; }}
+            .block-container {{ font-family: 'Inter', sans-serif; }}
+            .block-container p, .block-container input, .block-container button,
+            .block-container summary span:not([data-testid="stIconMaterial"]) {{ font-family: 'Inter', sans-serif; }}
 
             /* Tarjeta de marca */
             .nob-card {{
