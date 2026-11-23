@@ -305,10 +305,18 @@ def dialogo_resumen_anual(id_nadador, nombre, anio):
   background:linear-gradient(90deg,#833AB4,#E1306C,#F77737);color:#fff;font-weight:800;font-size:15px;cursor:pointer">
   📲 Compartir (Instagram y otras apps)</button>
 <div id="ra-share-msg" style="font-size:12px;color:#bbb;margin-top:6px"></div>
+<button id="ra-story" style="width:100%;margin-top:8px;padding:10px 14px;border-radius:12px;cursor:pointer;
+  border:1px solid rgba(225,48,108,0.6);color:#fff;font-weight:800;font-size:15px;background:rgba(225,48,108,0.12)">
+  ➕ Abrir historias de Instagram</button>
 <script>
 (function() {{
   const btn = document.getElementById("ra-share"), msg = document.getElementById("ra-share-msg");
   if (!btn || btn.dataset.ok) return; btn.dataset.ok = "1";
+  const story = document.getElementById("ra-story");
+  if (story) story.addEventListener("click", () => {{
+    window.location.href = "instagram://story-camera";
+    setTimeout(() => {{ msg.textContent = "Si no se abrió Instagram, abrilo vos y creá una historia eligiendo la imagen guardada."; }}, 1500);
+  }});
   btn.addEventListener("click", async () => {{
     try {{
       const blob = await (await fetch("data:image/png;base64,{b64}")).blob();
@@ -324,8 +332,11 @@ def dialogo_resumen_anual(id_nadador, nombre, anio):
   }});
 }})();
 </script>""", unsafe_allow_javascript=True)
-    st.caption("En el celular, *Compartir* abre el menú del teléfono: elegí Instagram (historia o publicación). "
-               "En la computadora, descargá la imagen.")
+    st.markdown("""**Para subirla a tu historia:**
+1. Guardá la imagen: *Descargar imagen*, o *Compartir* → **Guardar imagen**.
+2. Tocá **Abrir historias de Instagram** y elegila desde tu galería (deslizá hacia arriba).
+
+Para una publicación o un mensaje, usá *Compartir* → Instagram. En la computadora, descargá la imagen.""")
 
 
 def tarjeta_resumen_anual(me):
