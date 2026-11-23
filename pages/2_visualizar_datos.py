@@ -1,4 +1,5 @@
 import streamlit as st
+import datos
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime
@@ -73,18 +74,17 @@ st.markdown("""
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 # --- 2. CARGA DE DATOS ---
-@st.cache_data(ttl="15m")
 def cargar_visualizacion():
     try:
         return {
-            "nadadores": conn.read(worksheet="Nadadores"),
-            "tiempos": conn.read(worksheet="Tiempos"),
-            "relevos": conn.read(worksheet="Relevos"),
-            "estilos": conn.read(worksheet="Estilos"),
-            "distancias": conn.read(worksheet="Distancias"),
-            "piletas": conn.read(worksheet="Piletas"),
-            "categorias": conn.read(worksheet="Categorias"),
-            "cat_relevos": conn.read(worksheet="Categorias_Relevos")
+            "nadadores": datos.leer("Nadadores"),
+            "tiempos": datos.leer("Tiempos"),
+            "relevos": datos.leer("Relevos"),
+            "estilos": datos.leer("Estilos"),
+            "distancias": datos.leer("Distancias"),
+            "piletas": datos.leer("Piletas"),
+            "categorias": datos.leer("Categorias"),
+            "cat_relevos": datos.leer("Categorias_Relevos")
         }
     except Exception as e: return None
 

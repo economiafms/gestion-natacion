@@ -1,4 +1,5 @@
 import streamlit as st
+import datos
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 import altair as alt
@@ -31,49 +32,46 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 # --- OPTIMIZACIÓN DE CARGA DE DATOS (FIX ERROR 429) ---
 # Separamos los datos estáticos de los dinámicos para no saturar la API
 
-@st.cache_data(ttl="1h")
 def cargar_datos_generales():
     """Carga datos pesados que no cambian frecuentemente."""
     try:
         return {
-            "nadadores": conn.read(worksheet="Nadadores"),
-            "tiempos": conn.read(worksheet="Tiempos"),
-            "relevos": conn.read(worksheet="Relevos"),
-            "categorias": conn.read(worksheet="Categorias"),
-            "estilos": conn.read(worksheet="Estilos"),
-            "distancias": conn.read(worksheet="Distancias")
+            "nadadores": datos.leer("Nadadores"),
+            "tiempos": datos.leer("Tiempos"),
+            "relevos": datos.leer("Relevos"),
+            "categorias": datos.leer("Categorias"),
+            "estilos": datos.leer("Estilos"),
+            "distancias": datos.leer("Distancias")
         }
     except: return None
 
-@st.cache_data(ttl="10m")
 def cargar_datos_rutinas():
     """Carga solo las rutinas y el seguimiento, que cambian seguido."""
     try:
         return {
-            "rutinas": conn.read(worksheet="Rutinas"),
-            "seguimiento": conn.read(worksheet="Rutinas_Seguimiento")
+            "rutinas": datos.leer("Rutinas"),
+            "seguimiento": datos.leer("Rutinas_Seguimiento")
         }
     except: return None
 
 # --- FUNCIONES DE INSCRIPCIÓN RÁPIDA ---
-@st.cache_data(ttl="5s")
 def cargar_datos_inscripcion_inicio():
     try:
         try:
-            df_comp = conn.read(worksheet="Competencias").copy()
+            df_comp = datos.leer("Competencias").copy()
             if not df_comp.empty:
                 df_comp['fecha_evento'] = pd.to_datetime(df_comp['fecha_evento'], errors='coerce')
                 df_comp['fecha_limite'] = pd.to_datetime(df_comp['fecha_limite'], errors='coerce')
         except: df_comp = pd.DataFrame()
             
         try:
-            df_ins = conn.read(worksheet="Inscripciones").copy()
+            df_ins = datos.leer("Inscripciones").copy()
             if not df_ins.empty:
                 df_ins['codnadador'] = pd.to_numeric(df_ins['codnadador'], errors='coerce').fillna(0).astype(int)
         except: df_ins = pd.DataFrame()
             
         try:
-            df_pil = conn.read(worksheet="Piletas").copy()
+            df_pil = datos.leer("Piletas").copy()
         except: df_pil = pd.DataFrame()
 
         return df_comp, df_ins, df_pil
@@ -116,7 +114,7 @@ def gestionar_inscripcion_inicio(id_comp, id_nadador, lista_pruebas):
 
     exito, _ = actualizar_con_retry_inicio("Inscripciones", df_ins)
     if exito: 
-        cargar_datos_inscripcion_inicio.clear()
+        datos.invalidar("Inscripciones")
         return True, msg
     return False, "Error."
 
@@ -128,7 +126,7 @@ def eliminar_inscripcion_inicio(id_comp, id_nadador):
     df_ins = df_ins[~((df_ins['id_competencia'] == id_comp) & (df_ins['codnadador'] == id_nadador))]
     exito, _ = actualizar_con_retry_inicio("Inscripciones", df_ins)
     if exito: 
-        cargar_datos_inscripcion_inicio.clear()
+        datos.invalidar("Inscripciones")
         return True, "Baja exitosa."
     return False, "Error."
 
@@ -202,7 +200,7 @@ def guardar_seguimiento_inicio(id_rutina, id_nadador):
         df_final = pd.concat([df_seg, nuevo_registro], ignore_index=True)
         conn.update(worksheet="Rutinas_Seguimiento", data=df_final)
         
-        cargar_datos_rutinas.clear()
+        datos.invalidar("Rutinas_Seguimiento")
         
         return True
     except Exception as e:

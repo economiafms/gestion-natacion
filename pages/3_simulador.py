@@ -1,4 +1,5 @@
 import streamlit as st
+import datos
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime
@@ -24,15 +25,14 @@ def tiempo_a_seg(t_str):
     except: return 999.0
 
 # --- 3. CARGA DE DATOS ---
-@st.cache_data(ttl="15m")
 def cargar_datos_sim():
     try:
         data = {
-            "nadadores": conn.read(worksheet="Nadadores"),
-            "tiempos": conn.read(worksheet="Tiempos"),
-            "relevos": conn.read(worksheet="Relevos"),
-            "cat_relevos": conn.read(worksheet="Categorias_Relevos"),
-            "piletas": conn.read(worksheet="Piletas")
+            "nadadores": datos.leer("Nadadores"),
+            "tiempos": datos.leer("Tiempos"),
+            "relevos": datos.leer("Relevos"),
+            "cat_relevos": datos.leer("Categorias_Relevos"),
+            "piletas": datos.leer("Piletas")
         }
         df_n = data['nadadores'].copy()
         df_n['Nombre Completo'] = df_n['apellido'].astype(str).str.upper() + ", " + df_n['nombre'].astype(str)

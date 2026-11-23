@@ -1,4 +1,5 @@
 import streamlit as st
+import datos
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime
@@ -19,17 +20,16 @@ hero("Ranking Histórico", "🏆", "Los mejores tiempos de la historia del club.
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 # --- 3. CARGA DE DATOS ---
-@st.cache_data(ttl="1h")
 def cargar_datos_ranking():
     try:
         return {
-            "nadadores": conn.read(worksheet="Nadadores"),
-            "tiempos": conn.read(worksheet="Tiempos"),
-            "estilos": conn.read(worksheet="Estilos"),
-            "distancias": conn.read(worksheet="Distancias"),
-            "piletas": conn.read(worksheet="Piletas"),
-            "relevos": conn.read(worksheet="Relevos"),
-            "cat_relevos": conn.read(worksheet="Categorias_Relevos")
+            "nadadores": datos.leer("Nadadores"),
+            "tiempos": datos.leer("Tiempos"),
+            "estilos": datos.leer("Estilos"),
+            "distancias": datos.leer("Distancias"),
+            "piletas": datos.leer("Piletas"),
+            "relevos": datos.leer("Relevos"),
+            "cat_relevos": datos.leer("Categorias_Relevos")
         }
     except: return None
 

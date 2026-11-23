@@ -1,4 +1,5 @@
 import streamlit as st
+import datos
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime, date
@@ -99,12 +100,11 @@ def tiempo_a_seg(t_str):
         return float(partes[0]) * 60 + float(partes[1]) + (float(partes[2])/100 if len(partes)>2 else 0)
     except: return 9999.0
 
-@st.cache_data(ttl="5s")
 def cargar_datos_agenda():
     """Carga todas las tablas necesarias."""
     try:
         try:
-            df_comp = conn.read(worksheet="Competencias").copy()
+            df_comp = datos.leer("Competencias").copy()
             if not df_comp.empty:
                 if 'fecha_evento' in df_comp.columns: df_comp['fecha_evento'] = pd.to_datetime(df_comp['fecha_evento']).dt.date
                 if 'fecha_limite' in df_comp.columns: df_comp['fecha_limite'] = pd.to_datetime(df_comp['fecha_limite']).dt.date
@@ -114,28 +114,28 @@ def cargar_datos_agenda():
             df_comp = pd.DataFrame(columns=["id_competencia", "nombre_evento", "fecha_evento", "hora_inicio", "cod_pileta", "fecha_limite", "costo", "descripcion", "pruebas_habilitadas", "max_pruebas"])
 
         try:
-            df_ins = conn.read(worksheet="Inscripciones").copy()
+            df_ins = datos.leer("Inscripciones").copy()
             if not df_ins.empty: df_ins['codnadador'] = pd.to_numeric(df_ins['codnadador'], errors='coerce').fillna(0).astype(int)
         except:
             df_ins = pd.DataFrame(columns=["id_inscripcion", "id_competencia", "codnadador", "pruebas", "fecha_inscripcion"])
 
         try:
-            df_nad = conn.read(worksheet="Nadadores").copy()
+            df_nad = datos.leer("Nadadores").copy()
             df_nad['codnadador'] = pd.to_numeric(df_nad['codnadador'], errors='coerce').fillna(0).astype(int)
             df_nad['fechanac'] = pd.to_datetime(df_nad['fechanac'], errors='coerce')
         except:
             df_nad = pd.DataFrame(columns=["codnadador", "nombre", "apellido", "fechanac", "codgenero"])
 
-        try: df_pil = conn.read(worksheet="Piletas").copy()
+        try: df_pil = datos.leer("Piletas").copy()
         except: df_pil = pd.DataFrame(columns=["codpileta", "club", "medida", "ubicacion"])
 
-        try: df_tiempos = conn.read(worksheet="Tiempos").copy()
+        try: df_tiempos = datos.leer("Tiempos").copy()
         except: df_tiempos = pd.DataFrame()
         
-        try: df_estilos = conn.read(worksheet="Estilos").copy()
+        try: df_estilos = datos.leer("Estilos").copy()
         except: df_estilos = pd.DataFrame()
         
-        try: df_dist = conn.read(worksheet="Distancias").copy()
+        try: df_dist = datos.leer("Distancias").copy()
         except: df_dist = pd.DataFrame()
 
         return df_comp, df_ins, df_nad, df_pil, df_tiempos, df_estilos, df_dist
@@ -218,7 +218,7 @@ def guardar_competencia(id_comp, nombre, fecha_ev, hora, cod_pil, fecha_lim, cos
         msg = "✅ Evento creado exitosamente."
 
     exito, _ = actualizar_con_retry("Competencias", df_comp)
-    if exito: st.cache_data.clear(); return True, msg
+    if exito: datos.invalidar("Competencias"); return True, msg
     return False, "Error al guardar."
 
 def eliminar_competencia(id_comp):
@@ -235,7 +235,7 @@ def eliminar_competencia(id_comp):
         actualizar_con_retry("Inscripciones", df_ins)
     
     exito, _ = actualizar_con_retry("Competencias", df_comp)
-    if exito: st.cache_data.clear(); return True, "Eliminado."
+    if exito: datos.invalidar("Competencias", "Inscripciones"); return True, "Eliminado."
     return False, "Error."
 
 def gestionar_inscripcion(id_comp, id_nadador, lista_pruebas):
@@ -263,7 +263,7 @@ def gestionar_inscripcion(id_comp, id_nadador, lista_pruebas):
         msg = "✅ Inscripción confirmada."
         
     exito, _ = actualizar_con_retry("Inscripciones", df_ins)
-    if exito: st.cache_data.clear(); return True, msg
+    if exito: datos.invalidar("Inscripciones"); return True, msg
     return False, "Error al procesar inscripción."
 
 def eliminar_inscripcion(id_comp, id_nadador):
@@ -278,7 +278,7 @@ def eliminar_inscripcion(id_comp, id_nadador):
     
     df_ins = df_ins[~((df_ins['id_competencia'] == id_comp) & (df_ins['codnadador'] == id_nadador))]
     exito, _ = actualizar_con_retry("Inscripciones", df_ins)
-    if exito: st.cache_data.clear(); return True, "Baja exitosa."
+    if exito: datos.invalidar("Inscripciones"); return True, "Baja exitosa."
     return False, "Error."
 
 # --- LOGICA DE CALLBACKS PARA ESTABILIDAD DE PANTALLA ---

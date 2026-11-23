@@ -1,4 +1,5 @@
 import streamlit as st
+import datos
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime, date, timedelta, timezone
@@ -179,21 +180,20 @@ def actualizar_con_retry(worksheet, data, max_retries=5):
     return False, "Tiempo de espera agotado (API ocupada)."
 
 # --- LECTURA DE DATOS (CON CACHÉ) ---
-@st.cache_data(ttl="5s")
 def cargar_datos_rutinas_view():
     try:
         try:
-            df_rut = conn.read(worksheet="Rutinas").copy()
+            df_rut = datos.leer("Rutinas").copy()
         except:
             df_rut = pd.DataFrame(columns=["id_rutina", "anio_rutina", "mes_rutina", "nro_sesion", "texto_rutina"])
         
         try:
-            df_seg = conn.read(worksheet="Rutinas_Seguimiento").copy()
+            df_seg = datos.leer("Rutinas_Seguimiento").copy()
         except:
             df_seg = pd.DataFrame(columns=["id_rutina", "codnadador", "fecha_realizada"])
 
         try:
-            df_nad = conn.read(worksheet="Nadadores").copy()
+            df_nad = datos.leer("Nadadores").copy()
         except:
             df_nad = pd.DataFrame(columns=["codnadador", "nombre", "apellido"])
             
@@ -252,7 +252,7 @@ def guardar_seguimiento(id_rutina, id_nadador):
         
         exito, error = actualizar_con_retry("Rutinas_Seguimiento", df_final)
         if exito:
-            st.cache_data.clear() 
+            datos.invalidar("Rutinas_Seguimiento")
             return True
         else:
             st.error(f"Error al guardar: {error}")
@@ -270,7 +270,7 @@ def borrar_seguimiento(id_rutina, id_nadador):
     
     exito, error = actualizar_con_retry("Rutinas_Seguimiento", df_final)
     if exito:
-        st.cache_data.clear()
+        datos.invalidar("Rutinas_Seguimiento")
         return True
     else:
         st.error(f"Error al borrar: {error}")
@@ -300,7 +300,7 @@ def eliminar_sesion_admin(id_rutina):
     exito, error = actualizar_con_retry("Rutinas", df_rut_final)
     
     if exito:
-        st.cache_data.clear()
+        datos.invalidar("Rutinas")
         return "🗑️ Sesión eliminada correctamente."
     else:
         return f"❌ Error al eliminar: {error}"
@@ -334,7 +334,7 @@ def guardar_sesion_admin(anio, mes, sesion, texto):
         
     exito, error = actualizar_con_retry("Rutinas", df_rut)
     if exito:
-        st.cache_data.clear()
+        datos.invalidar("Rutinas")
     return msg if exito else f"❌ Error al escribir: {error}"
 
 def activar_calculo_auto():
@@ -642,9 +642,8 @@ if rol in ["M", "P"]:
                     if "Error" in msg:
                         st.error(msg)
                     else:
-                        st.success(msg)
+                        st.toast(msg)
                         st.session_state.forzar_avance_sesion = True
-                        time.sleep(0.5)
                         st.rerun()
             
             if delete_btn:
@@ -652,9 +651,8 @@ if rol in ["M", "P"]:
                 if "Error" in msg:
                     st.error(msg)
                 else:
-                    st.warning(msg)
+                    st.toast(msg)
                     st.session_state.trigger_calculo = True
-                    time.sleep(1)
                     st.rerun()
 
     tab_explorar, tab_seguimiento = st.tabs(["📖 Explorar Sesiones", "📊 Seguimiento Alumnos"])

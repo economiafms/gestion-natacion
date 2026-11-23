@@ -1,4 +1,5 @@
 import streamlit as st
+import datos
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime, date
@@ -119,14 +120,13 @@ st.markdown("""
 
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-@st.cache_data(ttl="5m")
 def cargar_entrenamientos():
     try:
         return {
-            "nadadores": conn.read(worksheet="Nadadores"),
-            "entrenamientos": conn.read(worksheet="Entrenamientos"),
-            "estilos": conn.read(worksheet="Estilos"),
-            "distancias": conn.read(worksheet="Distancias")
+            "nadadores": datos.leer("Nadadores"),
+            "entrenamientos": datos.leer("Entrenamientos"),
+            "estilos": datos.leer("Estilos"),
+            "distancias": datos.leer("Distancias")
         }
     except: return None
 
@@ -321,7 +321,7 @@ with tab_cargar:
                                     "observaciones": ""
                                 }])
                                 conn.update(worksheet="Entrenamientos", data=pd.concat([db['entrenamientos'], row], ignore_index=True))
-                                st.success("✅ Guardado."); time.sleep(1); reset_carga(); st.cache_data.clear(); st.rerun()
+                                st.toast("✅ Guardado."); reset_carga(); datos.invalidar("Entrenamientos"); st.rerun()
                             except Exception as e: st.error(f"Error: {e}")
 
 # ==============================================================================
