@@ -34,6 +34,17 @@ def a_segundos(t_str):
         return int(m) * 60 + int(s) + int(c) / 100
     except: return None
 
+# Gráficos estáticos: no se pueden mover ni hacer zoom; tocar un punto o barra muestra su cartel
+CONFIG_FIJO = {"displayModeBar": False, "scrollZoom": False, "doubleClick": False, "showTips": False}
+
+def grafico_fijo(fig):
+    fig.update_xaxes(fixedrange=True)
+    fig.update_yaxes(fixedrange=True)
+    fig.update_layout(dragmode=False, hovermode="closest",
+                      legend=dict(itemclick=False, itemdoubleclick=False),
+                      hoverlabel=dict(bgcolor="#1A0204", bordercolor="#E30613", font_size=13))
+    st.plotly_chart(fig, use_container_width=True, config=CONFIG_FIJO)
+
 def fmt_mm_ss(seconds):
     """Genera etiquetas de eje Y en formato MM:SS.CC"""
     if seconds is None or np.isnan(seconds): return ""
@@ -435,7 +446,7 @@ with tab_ver:
                 fig_count.update_traces(
                     textposition='inside', 
                     textfont=dict(size=20, color='white'), 
-                    hovertemplate='Metros: %{customdata[0]}<br>Cantidad: %{y}<extra></extra>'
+                    hovertemplate='<b>%{x}</b> · %{customdata[0]}<br>Tests: %{y}<extra></extra>'
                 )
                 
                 fig_count.update_layout(
@@ -447,7 +458,7 @@ with tab_ver:
                     yaxis=dict(showticklabels=False, title="Cantidad", showgrid=False), 
                     xaxis_title=""
                 )
-                st.plotly_chart(fig_count, use_container_width=True)
+                grafico_fijo(fig_count)
 
             # --- GRÁFICO EVOLUCIÓN ---
             if f_est != "Todos" and f_dist != "Todos" and len(df_filt) >= 2:
@@ -459,17 +470,17 @@ with tab_ver:
                 tick_vals = np.linspace(min_val, max_val, 5) if max_val > min_val else [min_val]
                 tick_text = [fmt_mm_ss(v) for v in tick_vals]
 
-                fig = px.line(df_filt.sort_values('fecha_dt'), x='fecha_dt', y='seg', markers=True, 
+                fig = px.line(df_filt.sort_values('fecha_dt'), x='fecha_dt', y='seg', markers=True, line_shape='spline', 
                               color_discrete_sequence=['#E30613'], custom_data=['tiempo_final'])
                 
-                fig.update_traces(hovertemplate='📅 %{x|%d/%m/%Y}<br>⏱️ %{customdata[0]}<extra></extra>')
+                fig.update_traces(hovertemplate='📅 %{x|%d/%m/%Y}<br>⏱️ %{customdata[0]}<extra></extra>', marker=dict(size=10))
                 
                 fig.update_layout(
                     height=250, margin=dict(l=0, r=0, t=10, b=0), template="plotly_dark", 
                     yaxis=dict(title="Tiempo", tickmode='array', tickvals=tick_vals, ticktext=tick_text),
                     xaxis_title=""
                 )
-                st.plotly_chart(fig, use_container_width=True)
+                grafico_fijo(fig)
 
             # --- LISTADO ---
             st.markdown("<div class='section-title'>📋 Registros</div>", unsafe_allow_html=True)
@@ -509,7 +520,7 @@ with tab_ver:
                     fig_bar = px.bar(df_bar, x='Tramo', y='Segundos', text='Etiqueta',
                                      color_discrete_sequence=['#E30613'])
                     
-                    fig_bar.update_traces(textposition='auto', textfont=dict(size=18), hovertemplate='⏱️ %{text}<extra></extra>')
+                    fig_bar.update_traces(textposition='auto', textfont=dict(size=18), hovertemplate='<b>%{x}</b><br>⏱️ %{text}<extra></extra>')
                     
                     fig_bar.update_layout(
                         height=200, 
@@ -519,7 +530,7 @@ with tab_ver:
                         yaxis=dict(showticklabels=False, title=None, showgrid=False), 
                         xaxis_title="Parcial"
                     )
-                    st.plotly_chart(fig_bar, use_container_width=True)
+                    grafico_fijo(fig_bar)
         else:
             st.info("No hay registros.")
 
