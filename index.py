@@ -1,748 +1,301 @@
 import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
-import altair as alt
-from datetime import datetime, timedelta, timezone, date
 import time
-import uuid
-import random
-import html
-from nob_ui import hero, seccion
+from nob_ui import aplicar_tema
 
-# --- CONFIGURACIÓN ---
-st.set_page_config(page_title="Inicio", layout="centered")
+# --- 1. CONFIGURACIÓN DEL ÍCONO (ENLACE GITHUB RAW) ---
+# Usamos el enlace RAW directo de GitHub. Esto es lo más compatible que existe.
+# Asegúrate de que el archivo 'escudo.png' esté en la raíz de tu repo.
+ICON_URL = "https://raw.githubusercontent.com/economiafms/gestion-natacion/main/escudo.png"
 
-# --- INICIALIZACIÓN SEGURA DE VARIABLES ---
-if "role" not in st.session_state or not st.session_state.role:
-    st.switch_page("index.py")
+st.set_page_config(
+    page_title="Acceso NOB", 
+    layout="centered",
+    page_icon=ICON_URL
+)
 
-if "show_login_form" not in st.session_state: 
-    st.session_state.show_login_form = False
+# --- TRUCO PARA FORZAR ÍCONO EN ANDROID/IOS ---
+# Inyectamos código HTML para intentar engañar al navegador del celular
+# y que use nuestro escudo en lugar del logo de Streamlit.
+st.markdown(f"""
+    <style>
+        /* Esto oculta el código inyectado para que no se vea en la pantalla */
+        .app-icon-fix {{display: none;}}
+    </style>
+    <div class="app-icon-fix">
+        <link rel="apple-touch-icon" sizes="180x180" href="{ICON_URL}">
+        <link rel="icon" type="image/png" sizes="32x32" href="{ICON_URL}">
+        <link rel="icon" type="image/png" sizes="16x16" href="{ICON_URL}">
+    </div>
+""", unsafe_allow_html=True)
 
-if "admin_unlocked" not in st.session_state: 
-    st.session_state.admin_unlocked = False
+# --- 2. GESTIÓN DE ESTADO ---
+if "role" not in st.session_state: st.session_state.role = None
+if "user_name" not in st.session_state: st.session_state.user_name = None
+if "user_id" not in st.session_state: st.session_state.user_id = None
+if "nro_socio" not in st.session_state: st.session_state.nro_socio = None
+if "admin_unlocked" not in st.session_state: st.session_state.admin_unlocked = False 
+if "ver_nadador_especifico" not in st.session_state: st.session_state.ver_nadador_especifico = None
+if "show_login_form" not in st.session_state: st.session_state.show_login_form = False 
 
-# --- CONEXIÓN ---
+# --- 3. CONEXIÓN ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# --- OPTIMIZACIÓN DE CARGA DE DATOS (FIX ERROR 429) ---
-# Separamos los datos estáticos de los dinámicos para no saturar la API
-
 @st.cache_data(ttl="1h")
-def cargar_datos_generales():
-    """Carga datos pesados que no cambian frecuentemente."""
+def cargar_tablas_login():
     try:
         return {
             "nadadores": conn.read(worksheet="Nadadores"),
-            "tiempos": conn.read(worksheet="Tiempos"),
-            "relevos": conn.read(worksheet="Relevos"),
-            "categorias": conn.read(worksheet="Categorias"),
-            "estilos": conn.read(worksheet="Estilos"),
-            "distancias": conn.read(worksheet="Distancias")
+            "users": conn.read(worksheet="User")
         }
     except: return None
 
-@st.cache_data(ttl="10m")
-def cargar_datos_rutinas():
-    """Carga solo las rutinas y el seguimiento, que cambian seguido."""
-    try:
-        return {
-            "rutinas": conn.read(worksheet="Rutinas"),
-            "seguimiento": conn.read(worksheet="Rutinas_Seguimiento")
-        }
-    except: return None
+# --- 4. FUNCIONES LOGIN / LOGOUT ---
+def limpiar_socio(valor):
+    if pd.isna(valor): return ""
+    return str(valor).split('.')[0].strip()
 
-# --- FUNCIONES DE INSCRIPCIÓN RÁPIDA ---
-@st.cache_data(ttl="5s")
-def cargar_datos_inscripcion_inicio():
-    try:
-        try:
-            df_comp = conn.read(worksheet="Competencias").copy()
-            if not df_comp.empty:
-                df_comp['fecha_evento'] = pd.to_datetime(df_comp['fecha_evento'], errors='coerce')
-                df_comp['fecha_limite'] = pd.to_datetime(df_comp['fecha_limite'], errors='coerce')
-        except: df_comp = pd.DataFrame()
+def validar_socio():
+    raw_input = st.session_state.input_socio
+    socio_limpio = raw_input.split("-")[0].strip()
+    
+    if not socio_limpio:
+        st.warning("Ingrese un número.")
+        return
+
+    db = cargar_tablas_login()
+    if db:
+        df_u = db['users'].copy()
+        df_n = db['nadadores'].copy()
+        
+        df_u['nrosocio_str'] = df_u['nrosocio'].apply(limpiar_socio)
+        df_n['nrosocio_str'] = df_n['nrosocio'].apply(limpiar_socio)
+        
+        usuario = df_u[df_u['nrosocio_str'] == socio_limpio]
+        
+        if not usuario.empty:
+            perfil = usuario.iloc[0]['perfil'].upper()
+            datos = df_n[df_n['nrosocio_str'] == socio_limpio]
             
-        try:
-            df_ins = conn.read(worksheet="Inscripciones").copy()
-            if not df_ins.empty:
-                df_ins['codnadador'] = pd.to_numeric(df_ins['codnadador'], errors='coerce').fillna(0).astype(int)
-        except: df_ins = pd.DataFrame()
-            
-        try:
-            df_pil = conn.read(worksheet="Piletas").copy()
-        except: df_pil = pd.DataFrame()
-
-        return df_comp, df_ins, df_pil
-    except:
-        return None, None, None
-
-def actualizar_con_retry_inicio(worksheet, data, max_retries=5):
-    for i in range(max_retries):
-        try:
-            conn.update(worksheet=worksheet, data=data)
-            return True, None 
-        except Exception as e:
-            if "429" in str(e) or "quota" in str(e):
-                time.sleep((2 ** i) + random.uniform(0, 1))
-                continue 
-            else:
-                return False, e
-    return False, "Error de conexión."
-
-def leer_dataset_fresco_inicio(worksheet):
-    try: return conn.read(worksheet=worksheet, ttl=0).copy()
-    except: return None
-
-def gestionar_inscripcion_inicio(id_comp, id_nadador, lista_pruebas):
-    df_ins = leer_dataset_fresco_inicio("Inscripciones")
-    if df_ins is None: df_ins = pd.DataFrame(columns=["id_inscripcion", "id_competencia", "codnadador", "pruebas", "fecha_inscripcion"])
-    if not df_ins.empty: df_ins['codnadador'] = pd.to_numeric(df_ins['codnadador'], errors='coerce').fillna(0).astype(int)
-
-    pruebas_str = ", ".join(lista_pruebas)
-    mask = (df_ins['id_competencia'] == id_comp) & (df_ins['codnadador'] == id_nadador)
-    
-    if not df_ins[mask].empty:
-        df_ins.loc[mask, 'pruebas'] = pruebas_str
-        df_ins.loc[mask, 'fecha_inscripcion'] = datetime.now().strftime("%Y-%m-%d")
-        msg = "Modificado."
-    else:
-        nuevo = {"id_inscripcion": str(uuid.uuid4()), "id_competencia": id_comp, "codnadador": int(id_nadador), "pruebas": pruebas_str, "fecha_inscripcion": datetime.now().strftime("%Y-%m-%d")}
-        df_ins = pd.concat([df_ins, pd.DataFrame([nuevo])], ignore_index=True)
-        msg = "Inscripto."
-
-    exito, _ = actualizar_con_retry_inicio("Inscripciones", df_ins)
-    if exito: 
-        cargar_datos_inscripcion_inicio.clear()
-        return True, msg
-    return False, "Error."
-
-def eliminar_inscripcion_inicio(id_comp, id_nadador):
-    df_ins = leer_dataset_fresco_inicio("Inscripciones")
-    if df_ins is None: return False, "Error."
-    if not df_ins.empty: df_ins['codnadador'] = pd.to_numeric(df_ins['codnadador'], errors='coerce').fillna(0).astype(int)
-    
-    df_ins = df_ins[~((df_ins['id_competencia'] == id_comp) & (df_ins['codnadador'] == id_nadador))]
-    exito, _ = actualizar_con_retry_inicio("Inscripciones", df_ins)
-    if exito: 
-        cargar_datos_inscripcion_inicio.clear()
-        return True, "Baja exitosa."
-    return False, "Error."
-
-# Función unificadora para mantener compatibilidad con el código existente
-def get_db():
-    general = cargar_datos_generales()
-    rutinas = cargar_datos_rutinas()
-    
-    if general and rutinas:
-        return {**general, **rutinas}
-    elif general:
-        return general
-    elif rutinas:
-        return rutinas
-    return None
-
-db = get_db()
-
-# --- FUNCIONES AUXILIARES ---
-def calcular_cat_exacta(edad, df_cat):
-    try:
-        for _, r in df_cat.iterrows():
-            if r['edad_min'] <= edad <= r['edad_max']: return r['nombre_cat']
-        return "-"
-    except: return "-"
-
-def calcular_categoria_grafico(anio_nac):
-    anio_actual = datetime.now().year
-    edad = anio_actual - anio_nac
-    if edad < 20: return "Juvenil"
-    elif 20 <= edad <= 24: return "PRE"
-    elif 25 <= edad <= 29: return "A"
-    elif 30 <= edad <= 34: return "B"
-    elif 35 <= edad <= 39: return "C"
-    elif 40 <= edad <= 44: return "D"
-    elif 45 <= edad <= 49: return "E"
-    elif 50 <= edad <= 54: return "F"
-    elif 55 <= edad <= 59: return "G"
-    elif 60 <= edad <= 64: return "H"
-    elif 65 <= edad <= 69: return "I"
-    elif 70 <= edad <= 74: return "J"
-    else: return "K+"
-
-def intentar_desbloqueo():
-    try:
-        sec_user = st.secrets["admin"]["usuario"]
-        sec_pass = st.secrets["admin"]["password"]
-    except:
-        sec_user = "entrenador"; sec_pass = "nob1903"
-
-    if st.session_state.u_in == sec_user and st.session_state.p_in == sec_pass: 
-        st.session_state.admin_unlocked = True
-        st.session_state.show_login_form = False
-        st.rerun()
-    else: 
-        st.error("Credenciales incorrectas")
-
-def guardar_seguimiento_inicio(id_rutina, id_nadador):
-    try:
-        df_seg = conn.read(worksheet="Rutinas_Seguimiento", ttl=0)
-        
-        # OBTENER HORA ARGENTINA (UTC-3)
-        ahora_arg = datetime.now(timezone.utc) - timedelta(hours=3)
-        hora_str = ahora_arg.strftime("%Y-%m-%d %H:%M:%S")
-        
-        nuevo_registro = pd.DataFrame([{
-            "id_rutina": id_rutina,
-            "codnadador": int(id_nadador),
-            "fecha_realizada": hora_str
-        }])
-        df_final = pd.concat([df_seg, nuevo_registro], ignore_index=True)
-        conn.update(worksheet="Rutinas_Seguimiento", data=df_final)
-        
-        cargar_datos_rutinas.clear()
-        
-        return True
-    except Exception as e:
-        st.error(f"Error al guardar: {e}")
-        return False
-
-# FUNCIONES PARA BUSCAR TIEMPOS EN INSCRIPCIONES (COMO EN AGENDA)
-def tiempo_a_seg(t_str):
-    try:
-        partes = str(t_str).replace('.', ':').split(':')
-        return float(partes[0]) * 60 + float(partes[1]) + (float(partes[2])/100 if len(partes)>2 else 0)
-    except: return 999999.0
-
-def buscar_mejor_tiempo(prueba, df_t_nadador):
-    if df_t_nadador.empty: return ""
-    p_lower = prueba.lower()
-    
-    dist_k = ""
-    if "50m" in p_lower or " 50" in p_lower: dist_k = "50"
-    if "100m" in p_lower or " 100" in p_lower: dist_k = "100"
-    if "200m" in p_lower or " 200" in p_lower: dist_k = "200"
-    if "400m" in p_lower or " 400" in p_lower: dist_k = "400"
-    if "800m" in p_lower or " 800" in p_lower: dist_k = "800"
-    if "1500m" in p_lower or " 1500" in p_lower: dist_k = "1500"
-    if "4x50" in p_lower: dist_k = "4x50"
-    if "4x100" in p_lower: dist_k = "4x100"
-    
-    est_k = []
-    if "libre" in p_lower or "crol" in p_lower: est_k = ["libre", "crol"]
-    elif "espalda" in p_lower: est_k = ["espalda"]
-    elif "pecho" in p_lower: est_k = ["pecho"]
-    elif "mariposa" in p_lower: est_k = ["mariposa"]
-    elif "combinado" in p_lower or "medley" in p_lower: est_k = ["combinado", "medley"]
-    
-    if not dist_k or not est_k: return ""
-    
-    try:
-        mask_dist = df_t_nadador['dist_desc'].str.lower().str.contains(dist_k, na=False)
-        mask_est = df_t_nadador['estilo_desc'].str.lower().apply(lambda x: any(k in str(x) for k in est_k))
-        
-        matches = df_t_nadador[mask_dist & mask_est]
-        if not matches.empty:
-            best = matches.loc[matches['segundos'].idxmin()]
-            return best['tiempo']
-    except:
-        return ""
-    return ""
-
-# --- VISUALIZACIÓN ---
-
-# ENCABEZADO PERSONALIZADO
-hero("Complejo Acuático NOB", "🏊")
-
-# =====================================================================
-# SISTEMA DE MENSAJES FLASH (PARA EVITAR ERRORES DE WEBSOCKET)
-# =====================================================================
-if "flash_msg" in st.session_state:
-    if st.session_state.flash_type == "success":
-        st.success(st.session_state.flash_msg)
-    elif st.session_state.flash_type == "warning":
-        st.warning(st.session_state.flash_msg)
-    
-    del st.session_state.flash_msg
-    del st.session_state.flash_type
-
-
-# 1. GUÍA RÁPIDA
-if st.session_state.role == "M":
-    with st.expander("📖 Guía rápida de uso – Perfil Manager", expanded=False):
-        st.markdown("""
-        Esta guía detalla las herramientas disponibles para mi gestión, facilitando el análisis y la toma de decisiones.
-        
-        **📂 Fichero**
-        Puedo consultar la ficha técnica completa de todos mis nadadores, incluyendo historial de competencias, mejores tiempos y relevos, con filtros para facilitar mi análisis.
-        
-        **📝 Rutinas**
-        Permite crear, editar y asignar rutinas a mis nadadores, y verificar quiénes cumplen con los entrenamientos planificados.
-        
-        **🏋️ Entrenamientos**
-        Visualización de los tiempos de test de todos los nadadores para evaluar evolución y rendimiento.
-        
-        **🏅 Mi categoría**
-        Visualización de nadadores agrupados por categorías para análisis comparativo.
-        
-        **📅 Agenda**
-        Carga y edición de competencias, junto con la gestión de nadadores inscriptos.
-
-        **🏆 Ranking**
-        Visualización de los mejores tiempos por prueba para identificar a los nadadores más destacados.
-
-        **⏱️ Simulador**
-        Simulación de escenarios manuales y automáticos de relevos para estimar tiempos basados en datos reales.
-
-        **➕ Cargar competencias (Inicio)**
-        Desde el botón CARGAR COMPETENCIAS puedo cargar nuevos nadadores, asignar permisos de Manager o Nadador y cargar tiempos de competencias y relevos.
-        
-        ---
-        **Aclaración final:**
-        * La carga diaria de datos deportivos es responsabilidad del nadador.
-        * Mi rol es analizar y tomar decisiones a partir de esa información.
-        """)
-
-elif st.session_state.role == "N":
-    with st.expander("📖 Guía rápida de uso – Perfil Nadador", expanded=False):
-        st.markdown("""
-        Este sistema está diseñado para que cada nadador gestione y registre su propia información deportiva.
-        Cuantos más datos cargues, mejor vas a poder analizar tu rendimiento y evolución en el tiempo.
-        
-        **👤 Ficha**
-        Encontrás todo lo relacionado a tu perfil deportivo: competencias, mejores tiempos, historial y relevos.
-        También podés consultar la ficha de un compañero si conocés su DNI.
-        
-        **📝 Rutinas**
-        Accedés a las rutinas mensuales del entrenador, con una barra de progreso para saber en qué sesión estás y llevar un registro ordenado de tus entrenamientos.
-        
-        **🏋️ Entrenamientos**
-        Este módulo se utiliza para cargar los test de rendimiento.
-        Los test pueden incluir parciales, divididos en cuatro tramos según la distancia de la prueba. Recorda anotar los parciales según esta tabla.
-        
-        50mts = 1x50  /  100mts = 4x25   /    200mts = 4x50 /     400mts = 4x100
-        
-        **🏅 Mi categoría**
-        Visualizás los valores promedio de tu categoría y los nadadores que la integran, para comparar tus tiempos y rendimiento en competencias.
-        
-        **📅 Agenda**
-        Encontrás las próximas competencias del equipo y podés registrarte de forma simple, reemplazando el registro en Excel por un sistema más dinámico.
-        
-        ---
-        **Aclaraciones importantes**
-        * La información es autogestionada por el nadador
-        * El entrenador no carga ni corrige datos
-        * Cada registro suma para tu mejora futura
-        * Uso personal, voluntario y a libre demanda
-        """)
-
-st.divider()
-
-if db and st.session_state.user_id:
-    user_id = st.session_state.user_id
-    me = db['nadadores'][db['nadadores']['codnadador'] == user_id].iloc[0]
-    
-    try: edad = datetime.now().year - pd.to_datetime(me['fechanac']).year
-    except: edad = 0
-    cat = calcular_cat_exacta(edad, db['categorias'])
-    
-    df_t = db['tiempos'].copy(); df_r = db['relevos'].copy()
-    df_t['posicion'] = pd.to_numeric(df_t['posicion'], errors='coerce').fillna(0).astype(int)
-    df_r['posicion'] = pd.to_numeric(df_r['posicion'], errors='coerce').fillna(0).astype(int)
-    
-    mis_oros = len(df_t[(df_t['codnadador']==user_id)&(df_t['posicion']==1)]) + len(df_r[((df_r['nadador_1']==user_id)|(df_r['nadador_2']==user_id)|(df_r['nadador_3']==user_id)|(df_r['nadador_4']==user_id))&(df_r['posicion']==1)])
-    mis_platas = len(df_t[(df_t['codnadador']==user_id)&(df_t['posicion']==2)]) + len(df_r[((df_r['nadador_1']==user_id)|(df_r['nadador_2']==user_id)|(df_r['nadador_3']==user_id)|(df_r['nadador_4']==user_id))&(df_r['posicion']==2)])
-    mis_bronces = len(df_t[(df_t['codnadador']==user_id)&(df_t['posicion']==3)]) + len(df_r[((df_r['nadador_1']==user_id)|(df_r['nadador_2']==user_id)|(df_r['nadador_3']==user_id)|(df_r['nadador_4']==user_id))&(df_r['posicion']==3)])
-    mi_total = mis_oros + mis_platas + mis_bronces
-
-    # 1. TARJETA PERFIL
-    nom_full = html.escape(f"{me['nombre']} {me['apellido']}")
-    iniciales = html.escape((str(me['nombre'])[:1] + str(me['apellido'])[:1]).upper())
-    mis_carreras = len(df_t[df_t['codnadador'] == user_id])
-
-    seccion("Mi perfil")
-    st.markdown(f"""
-    <div class="nob-profile">
-        <div class="nob-avatar">{iniciales}</div>
-        <div>
-            <div class="nob-p-name">{nom_full}</div>
-            <div class="nob-p-meta">{edad} años · {me['codgenero']} · {mis_carreras} carreras registradas</div>
-        </div>
-        <div class="nob-cat-badge"><small>Categoría</small><b>{cat}</b></div>
-    </div>
-    <div class="nob-stats">
-        <div class="nob-stat gold"><div class="v">🥇 {mis_oros}</div><div class="l">Oros</div></div>
-        <div class="nob-stat silver"><div class="v">🥈 {mis_platas}</div><div class="l">Platas</div></div>
-        <div class="nob-stat bronze"><div class="v">🥉 {mis_bronces}</div><div class="l">Bronces</div></div>
-        <div class="nob-stat total"><div class="v">★ {mi_total}</div><div class="l">Podios</div></div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # PROGRESO DEL MES (motivacional, solo nadadores)
-    if st.session_state.role == "N":
-        try:
-            _hoy = datetime.now(timezone.utc) - timedelta(hours=3)
-            _rut = db.get('rutinas'); _seg = db.get('seguimiento')
-            if _rut is not None and _seg is not None:
-                _mes = _rut[(_rut['anio_rutina'] == _hoy.year) & (_rut['mes_rutina'] == _hoy.month)]
-                _total = len(_mes)
-                if _total > 0:
-                    _hechas = 0
-                    if not _seg.empty:
-                        _hechas = _seg[(_seg['codnadador'] == user_id) & (_seg['id_rutina'].isin(_mes['id_rutina']))]['id_rutina'].nunique()
-                    _pct = int(round(_hechas / _total * 100))
-                    if _hechas == 0: _msg = "¡Arrancá el mes con todo! La primera sesión es la más importante. 💪"
-                    elif _pct < 50: _msg = f"Buen comienzo. Te faltan {_total - _hechas} sesiones, ¡seguí sumando! 🔥"
-                    elif _pct < 100: _msg = f"¡Ya pasaste la mitad! Solo {_total - _hechas} más para completar el mes. 🚀"
-                    else: _msg = "¡Mes completo! Constancia de campeón. 🏆"
-                    st.markdown(f"""
-                    <div class="nob-goal">
-                        <div class="nob-goal-top"><b>🎯 Objetivo del mes</b><span>{_hechas} / {_total} sesiones · {_pct}%</span></div>
-                        <div class="nob-bar"><div style="width:{_pct}%"></div></div>
-                        <div class="nob-goal-msg">{_msg}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-        except Exception:
-            pass
-    
-    if st.session_state.role == "N":
-        if st.button("Ver Mi Ficha Completa ➝", type="primary", use_container_width=True, key="btn_ficha_inicio"):
-            st.session_state.ver_nadador_especifico = st.session_state.user_name
-            st.switch_page("pages/2_visualizar_datos.py")
-    
-    st.write("") 
-
-    # // ATAJO RUTINA DIARIA
-    if st.session_state.role == "N":
-        hoy_arg = datetime.now(timezone.utc) - timedelta(hours=3)
-        df_rut = db.get('rutinas')
-        df_seg = db.get('seguimiento')
-        
-        if df_rut is not None and df_seg is not None:
-            rutinas_mes = df_rut[(df_rut['anio_rutina'] == hoy_arg.year) & (df_rut['mes_rutina'] == hoy_arg.month)].copy()
-            if not rutinas_mes.empty:
-                with st.expander("🏊‍♂️ ¿Hice mi rutina de hoy?", expanded=False):
-                    hoy_str_corto = hoy_arg.strftime("%Y-%m-%d")
-                    rutina_hoy_completada = None
-                    
-                    if not df_seg.empty:
-                        mis_seg = df_seg[df_seg['codnadador'] == user_id].copy()
-                        mis_seg['fecha_dt'] = pd.to_datetime(mis_seg['fecha_realizada']).dt.strftime("%Y-%m-%d")
-                        hecho_hoy = mis_seg[mis_seg['fecha_dt'] == hoy_str_corto]
-                        
-                        if not hecho_hoy.empty:
-                            ultimo_id_hoy = hecho_hoy.iloc[-1]['id_rutina']
-                            rutina_hoy_completada = rutinas_mes[rutinas_mes['id_rutina'] == ultimo_id_hoy]
-                        realizadas_historicas = mis_seg['id_rutina'].unique()
-                    else:
-                        realizadas_historicas = []
-
-                    if rutina_hoy_completada is not None and not rutina_hoy_completada.empty:
-                        r_row = rutina_hoy_completada.iloc[0]
-                        pendientes_check = rutinas_mes[~rutinas_mes['id_rutina'].isin(realizadas_historicas)]
-                        
-                        if pendientes_check.empty:
-                            st.balloons()
-                            st.markdown(f"""
-                            <div style="border: 2px solid #FFD700; border-radius: 12px; background-color: #1a1a1a; padding: 20px; text-align: center; box-shadow: 0 4px 15px rgba(255, 215, 0, 0.2); margin-bottom: 20px;">
-                                <div style="font-size: 40px; margin-bottom: 10px;">🏆</div>
-                                <h3 style="margin: 0; color: #FFD700; font-weight: 800; letter-spacing: 1px;">¡MES COMPLETADO!</h3>
-                                <p style="color: #ccc; margin-top: 5px; font-size: 14px;">Sesión {int(r_row['nro_sesion'])} finalizada. ¡Completé todas las rutinas!</p>
-                                <div style="margin-top: 15px; padding: 8px; background-color: rgba(255, 215, 0, 0.1); border-radius: 8px; color: #FFD700; font-size: 12px; font-weight: bold;">
-                                    ¡Impresionante constancia! A descansar. 🔋
-                                </div>
-                            </div>
-                            """, unsafe_allow_html=True)
-                        else:
-                            st.success(f"🏆 **¡Misión Cumplida!** Completé la **Sesión {int(r_row['nro_sesion'])}** hoy.")
-                    else:
-                        rutinas_pendientes = rutinas_mes[~rutinas_mes['id_rutina'].isin(realizadas_historicas)].sort_values('nro_sesion')
-                        if not rutinas_pendientes.empty:
-                            prox_sesion = rutinas_pendientes.iloc[0]
-                            r_id = prox_sesion['id_rutina']
-                            r_nro = int(prox_sesion['nro_sesion']) 
-                            r_texto = prox_sesion['texto_rutina']
-                            
-                            st.markdown(f"#### ⚡ Mi entrenamiento de hoy: Sesión {r_nro}")
-                            st.markdown(r_texto)
-                            st.write("") 
-                            
-                            if st.button("✅ DÍA GANADO", key=f"btn_ganado_inicio_{r_id}", type="primary", use_container_width=True):
-                                # Evitamos usar progress bar con time.sleep para no romper websockets
-                                st.toast(f"¡Excelente! Sesión {r_nro} registrada con éxito.", icon='🏆')
-                                if guardar_seguimiento_inicio(r_id, user_id):
-                                    st.rerun()
-                        else:
-                            st.info("🏅 ¡Mes completo! No tengo más rutinas pendientes.")
-        st.write("") 
-
-        # // =========================================================
-        # // WIDGET INSCRIPCIÓN RÁPIDA (CON INFO DEL TORNEO Y TIEMPOS)
-        # // =========================================================
-        df_comp, df_ins, df_piletas = cargar_datos_inscripcion_inicio()
-        if df_comp is not None and not df_comp.empty:
-            hoy = date.today()
-            df_view = df_comp.copy()
-            df_view = df_view.sort_values(by='fecha_evento', ascending=True, na_position='last')
-            
-            vista_eventos = []
-            
-            for _, row in df_view.iterrows():
-                f_ev = row['fecha_evento']
-                f_lim = row['fecha_limite']
-                dias_ev = (f_ev.date() - hoy).days if pd.notnull(f_ev) else 0
-                dias_cie = (f_lim.date() - hoy).days if pd.notnull(f_lim) else 0
-                
-                # Solo filtramos eventos que no pasaron todavía
-                if dias_ev >= 0 and pd.notnull(f_ev):
-                    comp_id = row['id_competencia']
-                    
-                    ins_user = pd.DataFrame()
-                    if df_ins is not None and not df_ins.empty:
-                        ins_user = df_ins[(df_ins['id_competencia'] == comp_id) & (df_ins['codnadador'] == user_id)]
-                    
-                    esta = not ins_user.empty
-                    
-                    if esta:
-                        vista_eventos.append((row, esta, ins_user))
-                    else:
-                        if dias_cie >= 0 and pd.notnull(f_lim):
-                            vista_eventos.append((row, esta, ins_user))
-            
-            if vista_eventos:
-                # PREPARAMOS EL HISTORIAL DE TIEMPOS DEL NADADOR
-                df_t_nadador = pd.DataFrame()
-                df_t_base = db.get('tiempos')
-                df_estilos = db.get('estilos')
-                df_dist = db.get('distancias')
-                
-                if df_t_base is not None and not df_t_base.empty:
-                    df_t_nadador = df_t_base[df_t_base['codnadador'] == user_id].copy()
-                    if not df_t_nadador.empty:
-                        if df_estilos is not None and not df_estilos.empty:
-                            df_t_nadador = df_t_nadador.merge(df_estilos.rename(columns={'descripcion': 'estilo_desc'}), on='codestilo', how='left')
-                        if df_dist is not None and not df_dist.empty:
-                            df_t_nadador = df_t_nadador.merge(df_dist.rename(columns={'descripcion': 'dist_desc'}), on='coddistancia', how='left')
-                        df_t_nadador['segundos'] = df_t_nadador['tiempo'].apply(lambda x: tiempo_a_seg(x) if pd.notnull(x) else 999999.0)
-
-                seccion("🏆 Mis torneos e inscripciones")
-                
-                for row, esta, ins_user in vista_eventos:
-                    comp_id = row['id_competencia']
-                    nombre_ev = row['nombre_evento']
-                    fecha_ev_str = row['fecha_evento'].strftime('%d/%m/%Y')
-                    hora_inicio = row.get('hora_inicio', '')
-                    costo = int(row['costo']) if pd.notna(row.get('costo')) else 0
-                    desc = row.get('descripcion', '')
-                    
-                    # Info Pileta formateada
-                    nom_pil = str(row.get('cod_pileta', '-'))
-                    ubic_pil = "-"
-                    if df_piletas is not None and not df_piletas.empty and 'codpileta' in df_piletas.columns:
-                        d_pil = df_piletas[df_piletas['codpileta'] == nom_pil]
-                        if not d_pil.empty:
-                            club_val = d_pil.iloc[0].get('club', '')
-                            med_val = d_pil.iloc[0].get('medida', '')
-                            nom_pil = f"{club_val} ({med_val})" if med_val else str(club_val)
-                            ubic_pil = str(d_pil.iloc[0].get('ubicacion', '-'))
-                    
-                    is_expanded = not esta
-                    p_hab_str = str(row.get('pruebas_habilitadas', ""))
-                    p_hab = [x.strip() for x in p_hab_str.split(",")] if p_hab_str.strip() else []
-                    max_permitidas = int(row.get('max_pruebas', 10)) if pd.notna(row.get('max_pruebas')) else 10
-                    
-                    with st.expander(f"{'✅ Inscripto en' if esta else '📝 Inscribirme a'} {nombre_ev}", expanded=is_expanded):
-                        prev = [x.strip() for x in str(ins_user.iloc[0]['pruebas']).split(",")] if esta else []
-                        
-                        # --- INFO BÁSICA DEL TORNEO (ESTILO AGENDA) ---
-                        st.markdown(f"""
-                        <div class="nob-card2" style="padding: 14px; margin-bottom: 12px;">
-                            <div style="color:#4CAF50; font-weight:bold; font-size:13px; margin-bottom:8px;">📅 {fecha_ev_str} | ⏰ {hora_inicio}</div>
-                            <div style="display:flex; gap:15px; color:#ddd; font-size:12px; margin-bottom:6px;">
-                                <div>📍 {nom_pil}</div>
-                                <div>🏙️ {ubic_pil}</div>
-                                <div>💰 ${costo}</div>
-                            </div>
-                            <div style="font-size:12px; color:#aaa; font-style: italic;">{desc}</div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                        
-                        if esta:
-                            # TARJETA INFORMATIVA CON CHIPS + MEJORES TIEMPOS
-                            chips_html = ""
-                            for p in prev:
-                                mejor_tiempo = buscar_mejor_tiempo(p, df_t_nadador)
-                                tiempo_badge = f" <span style='color:#FFD700; font-family:monospace; font-weight:bold;'>({mejor_tiempo})</span>" if mejor_tiempo else ""
-                                chips_html += f"<span style='background-color:#444; color:#fff; padding:4px 10px; border-radius:15px; font-size:12px; margin-right:6px; margin-bottom:6px; display:inline-block; border:1px solid #555;'>{p}{tiempo_badge}</span>"
-                            
-                            st.markdown(f"""
-                            <div style="background-color: #2b2c36; border-left: 5px solid #4CAF50; border-radius: 8px; padding: 15px; margin-bottom: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
-                                <div style="font-size: 13px; color: #aaa; margin-bottom: 10px;">Mis pruebas seleccionadas:</div>
-                                <div>{chips_html}</div>
-                            </div>
-                            """, unsafe_allow_html=True)
-                            
-                            # BOTÓN DE BAJA SIN BLOCKING SLEEP
-                            with st.form(f"f_baja_{comp_id}"):
-                                c1, c2 = st.columns([3, 1])
-                                with c1: st.caption("Si ya no vas a participar, puedes darte de baja:")
-                                with c2: sub_baja = st.form_submit_button("🗑️ Darme de Baja")
-                                
-                                if sub_baja:
-                                    ok, m = eliminar_inscripcion_inicio(comp_id, user_id)
-                                    if ok: 
-                                        st.session_state.flash_msg = "🗑️ Te has dado de baja. ¡Te esperamos en el próximo torneo!"
-                                        st.session_state.flash_type = "warning"
-                                        st.rerun()
-
-                        else:
-                            # FORMULARIO DE INSCRIPCIÓN SIN BLOCKING SLEEP
-                            with st.form(f"f_idx_{comp_id}"):
-                                st.caption(f"Permitido hasta {max_permitidas} pruebas.")
-                                sel = st.multiselect("Seleccionar Pruebas", p_hab, default=[], max_selections=max_permitidas, label_visibility="collapsed")
-                                sub = st.form_submit_button("Guardar Inscripción", type="primary")
-                                
-                                if sub:
-                                    if not sel: st.error("Selecciona pruebas.")
-                                    else:
-                                        ok, m = gestionar_inscripcion_inicio(comp_id, user_id, sel)
-                                        if ok: 
-                                            st.session_state.flash_msg = f"🎯 **¡Inscripción guardada!** A entrenar con todo. ¡Te esperamos el {fecha_ev_str}, VAMOS NEWELL'S! 🔴⚫"
-                                            st.session_state.flash_type = "success"
-                                            st.rerun()
-                st.write("")
-
-    # 2. MIS REGISTROS (FRECUENCIA DE ESTILOS)
-    mis_regs = db['tiempos'][db['tiempos']['codnadador'] == user_id].copy()
-    if not mis_regs.empty:
-        seccion("Mis estilos frecuentes")
-        mis_regs = mis_regs.merge(db['estilos'], on='codestilo', how='left')
-        col_desc = 'descripcion' if 'descripcion' in mis_regs.columns and 'descripcion_x' in mis_regs.columns else 'descripcion_x'
-        if col_desc not in mis_regs.columns: col_desc = 'descripcion'
-
-        conteo = mis_regs[col_desc].value_counts()
-        chips = "".join(
-            f'<div class="nob-chip"><div class="v">{cantidad}</div><div class="l">{html.escape(str(estilo))}</div></div>'
-            for estilo, cantidad in conteo.items()
-        )
-        st.markdown(f'<div class="nob-chip-row">{chips}</div>', unsafe_allow_html=True)
-    
-    st.divider()
-
-    # =================================================================
-    # 3. BOTONERA PRINCIPAL (LÓGICA POR ROL)
-    # =================================================================
-    
-    # --- ROL NADADOR (N) ---
-    if st.session_state.role == "N":
-        c1, c2 = st.columns(2)
-        with c1:
-            if st.button("⏱️ Entrenamientos", type="primary", use_container_width=True, key="btn_train_N"): 
-                st.switch_page("pages/5_entrenamientos.py")
-        with c2:
-            if st.button("🏅 Mi Categoría", type="primary", use_container_width=True, key="btn_cat_N"): 
-                st.switch_page("pages/6_mi_categoria.py")
-        
-        c3, c4 = st.columns(2)
-        with c3:
-            if st.button("📝 Rutinas", type="primary", use_container_width=True, key="btn_rut_N"):
-                st.switch_page("pages/8_rutinas.py")
-        with c4:
-            if st.button("📅 Agenda", type="primary", use_container_width=True, key="btn_ag_N"):
-                st.switch_page("pages/7_agenda.py")
-
-    # --- ROL MAESTRO (M) ---
-    else:
-        c1, c2 = st.columns(2)
-        with c1: 
-            if st.button("🗃️ Fichero", use_container_width=True, key="btn_bd_M"): 
-                st.session_state.ver_nadador_especifico = None
-                st.switch_page("pages/2_visualizar_datos.py")
-        with c2: 
-            if st.button("🏆 Ver Ranking", use_container_width=True, key="btn_rk_M"): 
-                st.switch_page("pages/4_ranking.py")
-        
-        c3, c4 = st.columns(2)
-        with c3:
-            if st.button("⏱️ Entrenamientos", type="primary", use_container_width=True, key="btn_train_M"): 
-                st.switch_page("pages/5_entrenamientos.py")
-        with c4:
-            if st.button("🏅 Mi Categoría", type="primary", use_container_width=True, key="btn_cat_M"): 
-                st.switch_page("pages/6_mi_categoria.py")
-
-        c5, c6 = st.columns(2)
-        with c5:
-            if st.button("📝 Rutinas", type="primary", use_container_width=True, key="btn_rut_M"):
-                st.switch_page("pages/8_rutinas.py")
-        with c6:
-            if st.button("📅 Agenda", type="primary", use_container_width=True, key="btn_ag_M"):
-                st.switch_page("pages/7_agenda.py")
-
-        if st.button("🏊‍♂️ Simulador Postas", use_container_width=True, key="btn_sim_M"): 
-            st.switch_page("pages/3_simulador.py")
-
-    st.write("")
-
-    # // 2️⃣ Estadísticas del club
-    seccion("Estadísticas del club")
-
-    total_nadadores = len(db['nadadores'])
-    total_pruebas_reg = len(df_t) + len(df_r)
-
-    st.markdown(f"""
-    <div class="nob-chip-row" style="margin-bottom: 10px;">
-        <div class="nob-chip"><div class="v">{total_nadadores}</div><div class="l">Nadadores</div></div>
-        <div class="nob-chip"><div class="v">{total_pruebas_reg}</div><div class="l">Pruebas registradas</div></div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    t_oro = len(df_t[df_t['posicion']==1]) + len(df_r[df_r['posicion']==1])
-    t_plata = len(df_t[df_t['posicion']==2]) + len(df_r[df_r['posicion']==2])
-    t_bronce = len(df_t[df_t['posicion']==3]) + len(df_r[df_r['posicion']==3])
-    total_med = t_oro + t_plata + t_bronce
-
-    st.markdown(f"""
-    <div class="nob-stats" style="margin-bottom: 22px;">
-        <div class="nob-stat gold"><div class="v">🥇 {t_oro}</div><div class="l">Oros</div></div>
-        <div class="nob-stat silver"><div class="v">🥈 {t_plata}</div><div class="l">Platas</div></div>
-        <div class="nob-stat bronze"><div class="v">🥉 {t_bronce}</div><div class="l">Bronces</div></div>
-        <div class="nob-stat total"><div class="v">★ {total_med}</div><div class="l">Medallero</div></div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # 5. GRÁFICOS
-    df_n = db['nadadores'].copy()
-    df_n['Anio'] = pd.to_datetime(df_n['fechanac'], errors='coerce').dt.year
-    df_n['Categoria'] = df_n['Anio'].apply(calcular_categoria_grafico)
-    colors = alt.Scale(domain=['M', 'F'], range=['#1f77b4', '#FF69B4'])
-    
-    t_c, t_g = st.tabs(["Categorías Master", "Género"])
-    with t_c:
-        orden = ["Juvenil", "PRE", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K+"]
-        st.altair_chart(alt.Chart(df_n).mark_bar(cornerRadius=3).encode(x=alt.X('Categoria', sort=orden, title=None), y=alt.Y('count()', title=None), color=alt.Color('codgenero', legend=None, scale=colors)).properties(height=200), use_container_width=True)
-    with t_g:
-        base = alt.Chart(df_n).encode(theta=alt.Theta("count()", stack=True))
-        st.altair_chart((base.mark_arc(outerRadius=80, innerRadius=50).encode(color=alt.Color("codgenero", scale=colors, legend=None)) + base.mark_text(radius=100).encode(text="count()", order=alt.Order("codgenero"), color=alt.value("white"))), use_container_width=True)
-
-    # --- 6. GESTIÓN (Perfil M) ---
-    if st.session_state.role == "M":
-        st.write(""); st.write("")
-        label_btn = "⚙️ CARGAR COMPETENCIAS" if not st.session_state.admin_unlocked else "🔒 BLOQUEAR GESTIÓN"
-        
-        if st.button(label_btn, use_container_width=True, key="btn_lock_toggle_m"):
-            if not st.session_state.admin_unlocked:
-                st.session_state.show_login_form = not st.session_state.show_login_form
-            else:
-                st.session_state.admin_unlocked = False
+            if not datos.empty:
+                st.session_state.role = perfil
+                st.session_state.user_name = f"{datos.iloc[0]['nombre']} {datos.iloc[0]['apellido']}"
+                st.session_state.user_id = datos.iloc[0]['codnadador']
+                st.session_state.nro_socio = socio_limpio
+                st.success(f"¡Bienvenido {datos.iloc[0]['nombre']}!")
+                time.sleep(0.5)
                 st.rerun()
+            else:
+                st.error("Socio válido pero sin ficha de nadador activa.")
+        else:
+            st.error("Número de socio no registrado.")
 
-        if st.session_state.show_login_form and not st.session_state.admin_unlocked:
-            with st.form("admin_login_form"):
-                st.write("**Acceso Profesor**")
-                st.text_input("Usuario", key="u_in")
-                st.text_input("Contraseña", type="password", key="p_in")
-                st.form_submit_button("Desbloquear", on_click=intentar_desbloqueo)
+def cerrar_sesion():
+    for key in list(st.session_state.keys()):
+        del st.session_state[key]
+    st.rerun()
+
+# --- NUEVA FUNCIÓN: INSTRUCCIONES DE INSTALACIÓN ---
+def pwa_install_button():
+    st.write("---")
+    with st.expander("📲 INSTALAR APP EN TU CELULAR"):
+        st.markdown("""
+        Puedes agregar esta aplicación a tu pantalla de inicio para un acceso más rápido:
         
+        **🤖 Android (Chrome):**
+        1. Toca los tres puntos **(⋮)** arriba a la derecha.
+        2. Selecciona **'Instalar aplicación'** o 'Agregar a la pantalla de inicio'.
+        
+        **🍎 iPhone (Safari):**
+        1. Toca el botón **Compartir** (cuadrado con flecha arriba) en la barra inferior.
+        2. Desliza hacia abajo y toca en **'Agregar al inicio'**.
+        """)
+        st.info("Nota: Tenerla instalada te permite acceder más rápido a tus tiempos, rutinas, categoría y seguimiento personal. Es una herramienta pensada para acompañar tu evolución deportiva día a día. Tu progreso también se construye con constancia.")
+
+# --- 5. PANTALLA DE LOGIN ---
+def login_screen():
+    st.markdown(f"""
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800;900&display=swap');
+
+            /* Ocultar sidebar, header y footer de Streamlit en el login */
+            [data-testid="stSidebar"], [data-testid="stSidebarCollapsedControl"],
+            header[data-testid="stHeader"], footer {{ display: none !important; }}
+
+            /* Fondo: negro profundo con resplandores rojos y textura de agua */
+            [data-testid="stAppViewContainer"] {{
+                background:
+                    radial-gradient(900px 500px at 15% -10%, rgba(227,6,19,0.28), transparent 60%),
+                    radial-gradient(700px 450px at 110% 110%, rgba(227,6,19,0.18), transparent 60%),
+                    repeating-linear-gradient(170deg, rgba(255,255,255,0.015) 0 2px, transparent 2px 14px),
+                    #07080B;
+            }}
+            .block-container {{ max-width: 440px; padding-top: 3.5rem; padding-bottom: 2rem; }}
+            .block-container {{ font-family: 'Inter', sans-serif; }}
+            .block-container p, .block-container input, .block-container button,
+            .block-container summary span:not([data-testid="stIconMaterial"]) {{ font-family: 'Inter', sans-serif; }}
+
+            /* Tarjeta de marca */
+            .nob-card {{
+                position: relative;
+                text-align: center;
+                padding: 38px 28px 26px;
+                border-radius: 24px;
+                background: linear-gradient(160deg, rgba(255,255,255,0.06), rgba(255,255,255,0.015));
+                border: 1px solid rgba(255,255,255,0.08);
+                backdrop-filter: blur(14px);
+                -webkit-backdrop-filter: blur(14px);
+                box-shadow: 0 24px 60px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.06);
+                overflow: hidden;
+                animation: nobFadeUp .6s ease-out both;
+            }}
+            .nob-card::before {{
+                content: "";
+                position: absolute; inset: 0 0 auto 0; height: 4px;
+                background: linear-gradient(90deg, #E30613 0 50%, #111 50% 100%);
+            }}
+            .nob-crest {{
+                width: 96px; height: 96px; object-fit: contain;
+                filter: drop-shadow(0 10px 22px rgba(227,6,19,0.45));
+                animation: nobFloat 4s ease-in-out infinite;
+            }}
+            .nob-eyebrow {{
+                margin-top: 18px;
+                font-size: 11px; font-weight: 600;
+                letter-spacing: 3px; text-transform: uppercase;
+                color: #E30613;
+            }}
+            .nob-title {{
+                margin: 6px 0 8px;
+                font-size: 28px; font-weight: 900; line-height: 1.05;
+                letter-spacing: -0.5px; text-transform: uppercase;
+                color: #FFFFFF;
+            }}
+            .nob-quote {{
+                font-size: 15px; font-style: italic;
+                color: rgba(255,255,255,0.6);
+            }}
+            .nob-divider {{
+                height: 1px; margin: 24px 0 0;
+                background: linear-gradient(90deg, transparent, rgba(255,255,255,0.12), transparent);
+            }}
+            .nob-label {{
+                margin: 22px 0 8px 2px;
+                font-size: 12px; font-weight: 600;
+                letter-spacing: 1.5px; text-transform: uppercase;
+                color: rgba(255,255,255,0.55);
+            }}
+
+            /* Input */
+            [data-testid="stTextInput"] div[data-baseweb="input"] {{
+                background: rgba(255,255,255,0.04) !important;
+                border: 1px solid rgba(255,255,255,0.12) !important;
+                border-radius: 14px !important;
+                transition: border-color .2s, box-shadow .2s;
+            }}
+            [data-testid="stTextInput"] div[data-baseweb="input"]:focus-within {{
+                border-color: #E30613 !important;
+                box-shadow: 0 0 0 4px rgba(227,6,19,0.18) !important;
+            }}
+            [data-testid="stTextInput"] input {{
+                background: transparent !important;
+                color: #fff !important;
+                font-size: 17px !important; font-weight: 500;
+                letter-spacing: 1px;
+                padding: 14px 16px !important;
+            }}
+            [data-testid="stTextInput"] input::placeholder {{ color: rgba(255,255,255,0.3); }}
+
+            /* Botón principal */
+            .stButton > button[kind="primary"] {{
+                margin-top: 6px;
+                height: 52px;
+                border: none; border-radius: 14px;
+                background: linear-gradient(135deg, #FF1F2D 0%, #E30613 55%, #A8040E 100%);
+                font-weight: 800; font-size: 15px; letter-spacing: 2px;
+                box-shadow: 0 10px 24px rgba(227,6,19,0.35);
+                transition: transform .15s ease, box-shadow .15s ease, filter .15s ease;
+            }}
+            .stButton > button[kind="primary"]:hover {{
+                transform: translateY(-1px);
+                filter: brightness(1.08);
+                box-shadow: 0 14px 30px rgba(227,6,19,0.45);
+            }}
+            .stButton > button[kind="primary"]:active {{ transform: translateY(1px); }}
+
+            /* Expander de instalación */
+            [data-testid="stExpander"] details {{
+                border-radius: 14px !important;
+                border: 1px solid rgba(255,255,255,0.08) !important;
+                background: rgba(255,255,255,0.025);
+            }}
+            hr {{ border-color: rgba(255,255,255,0.06) !important; }}
+
+            .nob-foot {{
+                text-align: center; margin-top: 18px;
+                font-size: 12px; color: rgba(255,255,255,0.3);
+            }}
+
+            @keyframes nobFadeUp {{ from {{ opacity: 0; transform: translateY(14px); }} to {{ opacity: 1; transform: none; }} }}
+            @keyframes nobFloat {{ 0%,100% {{ transform: translateY(0); }} 50% {{ transform: translateY(-6px); }} }}
+        </style>
+
+        <div class="nob-card">
+            <img class="nob-crest" src="{ICON_URL}" alt="Escudo NOB">
+            <div class="nob-eyebrow">Natación · Gestión deportiva</div>
+            <div class="nob-title">Newell's Old Boys</div>
+            <div class="nob-quote">"Del deporte sos la gloria"</div>
+            <div class="nob-divider"></div>
+        </div>
+        <div class="nob-label">Número de socio</div>
+    """, unsafe_allow_html=True)
+
+    st.text_input("Ingrese Nro de Socio", key="input_socio", placeholder="Ej: 123456-01", label_visibility="collapsed")
+    if st.button("INGRESAR", type="primary", use_container_width=True):
+        validar_socio()
+    
+    # AGREGADO: Llamada a la función de instrucciones
+    pwa_install_button()
+
+# --- 6. DEFINICIÓN DE PÁGINAS ---
+pg_inicio = st.Page("pages/1_inicio.py", title="Inicio", icon="🏠")
+pg_datos = st.Page("pages/2_visualizar_datos.py", title="Fichero", icon="🗃️")
+pg_ranking = st.Page("pages/4_ranking.py", title="Ranking", icon="🏆")
+pg_simulador = st.Page("pages/3_simulador.py", title="Simulador", icon="⏱️")
+pg_entrenamientos = st.Page("pages/5_entrenamientos.py", title="Entrenamientos", icon="🏋️")
+pg_categoria = st.Page("pages/6_mi_categoria.py", title="Mi Categoría", icon="🏅")
+pg_agenda = st.Page("pages/7_agenda.py", title="Agenda", icon="📅")
+pg_rutinas = st.Page("pages/8_rutinas.py", title="Rutinas", icon="📝")
+pg_carga = st.Page("pages/1_cargar_datos.py", title="Carga de Datos", icon="⚙️")
+pg_login_obj = st.Page(login_screen, title="Acceso", icon="🔒")
+
+# --- 7. RUTEO Y MENÚ ---
+if not st.session_state.role:
+    pg = st.navigation([pg_login_obj])
+    pg.run()
+else:
+    # --- MENÚ PRINCIPAL ---
+    menu_pages = {
+        "Principal": [pg_inicio, pg_datos, pg_rutinas, pg_entrenamientos, pg_categoria, pg_agenda]
+    }
+
+    # --- MENÚ HERRAMIENTAS ---
+    if st.session_state.role in ["M", "P"]:
+        menu_pages["Herramientas"] = [pg_ranking, pg_simulador]
+
         if st.session_state.admin_unlocked:
-            st.success("🔓 Gestión Habilitada")
-            if st.button("⚙️ IR AL PANEL DE CARGA", type="primary", use_container_width=True):
-                st.switch_page("pages/1_cargar_datos.py")
+            menu_pages["Administración"] = [pg_carga]
+
+    pg = st.navigation(menu_pages)
+    aplicar_tema()
+
+    with st.sidebar:
+        st.write("") 
+        if st.button("Cerrar Sesión", type="secondary", use_container_width=True):
+            cerrar_sesion()
+
+    pg.run()
+
+
+
