@@ -1092,20 +1092,26 @@ if db and st.session_state.user_id:
             filas_top.append(_fila_top(list(tabla.index).index(_yo) + 1, _yo, tabla.loc[_yo], True))
         else:
             filas_top.append(_fila_top("–", _yo, None, True))
+    # El top es del año en curso: hasta que haya medallas en el año (p. ej. al empezar 2027) no se muestra
+    if tabla.empty:
+        filas_top = []
     if filas_top and es_entrenador:
         # Entrenador: el top se ve igual que siempre; encima de cada fila hay un botón invisible
         # (todas las filas miden lo mismo) que abre la ficha del nadador en el Fichero.
         st.markdown("""<style>
-.st-key-ent_tops { position: relative; gap: 0 !important; margin-top: -1rem; }
+.st-key-ent_tops { gap: 0 !important; }
+.st-key-ent_rows { position: relative; gap: 0 !important; }
 .st-key-ent_topbtns { position: absolute !important; left: 0; right: 0; top: 0; bottom: 6px; z-index: 2;
   display: flex; flex-direction: column; gap: 6px !important; }
 .st-key-ent_topbtns > div { flex: 1 1 0 !important; min-height: 0 !important; }
 .st-key-ent_topbtns button { width: 100% !important; height: 100% !important; min-height: 0 !important;
   padding: 0 !important; opacity: 0; cursor: pointer; }
 </style>""", unsafe_allow_html=True)
-        st.markdown(f'<div class="nob-top-tit">Top medallistas {anio}</div>', unsafe_allow_html=True)
         _filas_nad = db['nadadores'].assign(_cod=pd.to_numeric(db['nadadores']['codnadador'], errors='coerce'))
         with st.container(key="ent_tops"):
+            st.markdown(f'<div class="nob-top-tit">Top medallistas {anio}</div>', unsafe_allow_html=True)
+            _rows = st.container(key="ent_rows")
+        with _rows:
             st.markdown("".join(filas_top), unsafe_allow_html=True)
             with st.container(key="ent_topbtns"):
                 for _k, _cod in enumerate(tabla.head(10).index):
