@@ -1215,6 +1215,36 @@ if db and st.session_state.user_id:
                                              help=f"Ver {_nom} {'masculino' if _gen == 'M' else 'femenino'} en Categorías"):
                                     _ir_categoria(_nom, _g.loc[_sel, '_gen'].iloc[0])
 
+    # Nadador: chip de su categoría (mismos rivales que la página Mi Categoría: categoría y género)
+    if st.session_state.role == "N" and not es_entrenador and cat not in (None, "-"):
+        _dc = db['categorias'].copy()
+        _dc.columns = _dc.columns.str.strip().str.lower()
+        _rc = _dc[_dc['nombre_cat'] == cat]
+        _dn = db['nadadores'][db['nadadores']['codnadador'].astype(str) != '66'].copy()
+        _dn['_edad'] = date.today().year - pd.to_datetime(_dn['fechanac'], errors='coerce').dt.year
+        if not _rc.empty:
+            _emin = pd.to_numeric(_rc['edad_min'], errors='coerce').min()
+            _emax = pd.to_numeric(_rc['edad_max'], errors='coerce').max()
+            _mios = _dn[(_dn['_edad'] >= _emin) & (_dn['_edad'] <= _emax)
+                        & (_dn['codgenero'].astype(str).str.strip() == str(me['codgenero']).strip())]
+            _act = int(pd.to_numeric(_mios['codnadador'], errors='coerce').isin(_ids_act).sum())
+            st.markdown("""<style>
+.st-key-mi_cat_box { gap: 0 !important; }
+.st-key-mi_cat_chip { position: relative; gap: 0 !important; }
+.st-key-mi_cat_chip .st-key-mi_cat_btn { position: absolute !important; left: 0; right: 0; top: 0; bottom: 6px; z-index: 2; }
+.st-key-mi_cat_chip .st-key-mi_cat_btn button { width: 100% !important; height: 100% !important; min-height: 0 !important;
+  padding: 0 !important; opacity: 0; cursor: pointer; }
+</style>""", unsafe_allow_html=True)
+            with st.container(key="mi_cat_box"):
+                st.markdown('<div class="nob-top-tit" style="margin-top:10px;">Mi categoría</div>', unsafe_allow_html=True)
+                with st.container(key="mi_cat_chip"):
+                    st.markdown(f'<div class="nob-top"><span class="p">🏅</span>'
+                                f'<span class="n">{html.escape(str(cat))} · {html.escape(genero_txt)}</span>'
+                                f'<span class="m">{_act} activos</span><span class="t">{len(_mios)} ›</span></div>',
+                                unsafe_allow_html=True)
+                    if st.button("Ver mi categoría", key="mi_cat_btn"):
+                        st.switch_page("pages/6_mi_categoria.py")
+
     # --- 6. GESTIÓN (Perfil M) ---
     if st.session_state.role == "M":
         seccion("Gestión")
