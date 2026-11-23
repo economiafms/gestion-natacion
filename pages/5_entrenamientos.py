@@ -5,6 +5,7 @@ from datetime import datetime, date
 import plotly.express as px
 import time
 import numpy as np
+from nob_ui import select_flechas
 
 # --- 1. CONFIGURACIÓN ---
 st.set_page_config(page_title="Entrenamientos", layout="centered")
@@ -412,14 +413,14 @@ with tab_ver:
             
             est_opts = ["Todos"] + sorted(df_h['descripcion_x'].unique().tolist())
             c_f1, c_f2 = st.columns(2)
-            f_est = c_f1.selectbox("Estilo", est_opts)
+            f_est = select_flechas("Estilo", est_opts, "h_f_est", contenedor=c_f1)
             
             if f_est == "Todos":
                 valid_dists = sorted(df_h['descripcion_y'].unique().tolist())
             else:
                 valid_dists = sorted(df_h[df_h['descripcion_x'] == f_est]['descripcion_y'].unique().tolist())
                 
-            f_dist = c_f2.selectbox("Distancia", ["Todos"] + valid_dists)
+            f_dist = select_flechas("Distancia", ["Todos"] + valid_dists, "h_f_dist", contenedor=c_f2)
 
             df_filt = df_h.copy()
             if f_est != "Todos": df_filt = df_filt[df_filt['descripcion_x'] == f_est]
@@ -550,11 +551,11 @@ if rol == "M":
             # --- FILTROS DE LA PRUEBA ---
             c_f1_eq, c_f2_eq = st.columns(2)
             estilos_disp = sorted(df_global['descripcion_x'].dropna().unique().tolist())
-            f_est_eq = c_f1_eq.selectbox("Seleccionar Estilo", estilos_disp, key="eq_est")
+            f_est_eq = select_flechas("Seleccionar Estilo", estilos_disp, "eq_est", contenedor=c_f1_eq)
             
             if f_est_eq:
                 dist_disp = sorted(df_global[df_global['descripcion_x'] == f_est_eq]['descripcion_y'].dropna().unique().tolist())
-                f_dist_eq = c_f2_eq.selectbox("Seleccionar Distancia", dist_disp, key="eq_dist")
+                f_dist_eq = select_flechas("Seleccionar Distancia", dist_disp, "eq_dist", contenedor=c_f2_eq)
                 
                 if f_dist_eq:
                     # Filtrar por la prueba seleccionada

@@ -380,6 +380,30 @@ def chip_ayuda(pagina=None):
             dialogo_guia(pagina)
 
 
+def select_flechas(label, opciones, key, index=0, contenedor=None):
+    """Selectbox con flechas ‹ › a los costados para pasar rápido de opción (da la vuelta al llegar al final)."""
+    import streamlit as st
+    opciones = list(opciones)
+    if not opciones:
+        return None
+    if key in st.session_state and st.session_state[key] not in opciones:
+        del st.session_state[key]
+
+    def _mover(paso):
+        actual = st.session_state.get(key, opciones[index])
+        i = opciones.index(actual) if actual in opciones else 0
+        st.session_state[key] = opciones[(i + paso) % len(opciones)]
+
+    destino = contenedor if contenedor is not None else st
+    with destino.container(key=f"selflecha_{key}", horizontal=True, vertical_alignment="bottom", gap="small"):
+        st.button("", key=f"{key}_prev", icon=":material/chevron_left:", on_click=_mover, args=(-1,))
+        # Si la flecha ya fijó el valor en session_state, no se pasa index (evita el aviso de Streamlit)
+        extra = {} if key in st.session_state else {"index": index}
+        valor = st.selectbox(label, opciones, key=key, **extra)
+        st.button("", key=f"{key}_next", icon=":material/chevron_right:", on_click=_mover, args=(1,))
+    return valor
+
+
 def seccion(texto: str):
     st.markdown(f'<div class="nob-section">{html.escape(texto)}</div>', unsafe_allow_html=True)
 
@@ -837,6 +861,9 @@ def aplicar_tema():
         .nob-mm-frases b { color: #fff; }
 
         /* Selector de nadador del manager: ← lista →, en una fila */
+        [class*="st-key-selflecha_"] { flex-wrap: nowrap !important; }
+        [class*="st-key-selflecha_"] > [data-testid="stElementContainer"]:has([data-testid="stSelectbox"]) { flex: 1 1 auto; min-width: 0; }
+        [class*="st-key-selflecha_"] button { min-height: 40px !important; min-width: 40px; padding: 0 6px !important; border-radius: 12px !important; }
         .st-key-ficha_selector { flex-wrap: nowrap !important; margin-bottom: 8px; }
         .st-key-ficha_selector > [data-testid="stElementContainer"]:has([data-testid="stSelectbox"]) { flex: 1 1 auto; min-width: 0; }
         .st-key-ficha_selector button { min-height: 42px !important; min-width: 42px; padding: 0 8px !important; border-radius: 12px !important; }

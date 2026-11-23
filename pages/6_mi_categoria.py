@@ -16,7 +16,7 @@ rol = st.session_state.role
 mi_id = st.session_state.user_id 
 mi_nombre = st.session_state.user_name
 
-from nob_ui import hero
+from nob_ui import hero, select_flechas
 hero("Categorías" if rol in ["M", "P"] else "Mi Categoría", "🏅")
 
 # --- CSS PERSONALIZADO ---
@@ -166,8 +166,8 @@ elif rol in ["M", "P"]:
     opciones_gen = sorted(df_nad['codgenero'].dropna().unique().tolist())
     
     c1, c2 = st.columns(2)
-    target_categoria = c1.selectbox("Categoría", opciones_cat)
-    target_genero = c2.selectbox("Género", opciones_gen)
+    target_categoria = select_flechas("Categoría", opciones_cat, "cat_sel", contenedor=c1)
+    target_genero = select_flechas("Género", opciones_gen, "cat_gen", contenedor=c2)
 
 # --- VISUALIZACIÓN ---
 
@@ -198,13 +198,13 @@ if target_categoria and target_genero:
             c_e, c_d = st.columns(2)
             
             estilos_disp = sorted(df_tiempos['descripcion_x'].dropna().unique())
-            sel_est = c_e.selectbox("Estilo", estilos_disp)
+            sel_est = select_flechas("Estilo", estilos_disp, "cat_est", contenedor=c_e)
             
             dist_disp = sorted(df_tiempos[df_tiempos['descripcion_x'] == sel_est]['descripcion_y'].dropna().unique())
             
             sel_dist = None
             if dist_disp:
-                sel_dist = c_d.selectbox("Distancia", dist_disp)
+                sel_dist = select_flechas("Distancia", dist_disp, "cat_dist", contenedor=c_d)
             else:
                 c_d.warning("Sin distancias.")
 
