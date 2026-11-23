@@ -251,7 +251,7 @@ def buscar_mejor_tiempo(prueba, df_t_nadador):
 # --- VISUALIZACIÓN ---
 
 # ENCABEZADO PERSONALIZADO
-hero("Complejo Acuático NOB", "🏊")
+hero("Newell's Old Boys", eyebrow="Complejo Acuático · Natación")
 
 # =====================================================================
 # SISTEMA DE MENSAJES FLASH (PARA EVITAR ERRORES DE WEBSOCKET)
@@ -266,76 +266,75 @@ if "flash_msg" in st.session_state:
     del st.session_state.flash_type
 
 
-# 1. GUÍA RÁPIDA
-if st.session_state.role == "M":
-    with st.expander("📖 Guía rápida de uso – Perfil Manager", expanded=False):
-        st.markdown("""
-        Esta guía detalla las herramientas disponibles para mi gestión, facilitando el análisis y la toma de decisiones.
+# GUÍA RÁPIDA (se muestra al final de la página)
+def mostrar_guia():
+    if st.session_state.role == "M":
+        with st.expander("📖 Guía rápida de uso – Perfil Manager", expanded=False):
+            st.markdown("""
+            Esta guía detalla las herramientas disponibles para mi gestión, facilitando el análisis y la toma de decisiones.
         
-        **📂 Fichero**
-        Puedo consultar la ficha técnica completa de todos mis nadadores, incluyendo historial de competencias, mejores tiempos y relevos, con filtros para facilitar mi análisis.
+            **📂 Fichero**
+            Puedo consultar la ficha técnica completa de todos mis nadadores, incluyendo historial de competencias, mejores tiempos y relevos, con filtros para facilitar mi análisis.
         
-        **📝 Rutinas**
-        Permite crear, editar y asignar rutinas a mis nadadores, y verificar quiénes cumplen con los entrenamientos planificados.
+            **📝 Rutinas**
+            Permite crear, editar y asignar rutinas a mis nadadores, y verificar quiénes cumplen con los entrenamientos planificados.
         
-        **🏋️ Entrenamientos**
-        Visualización de los tiempos de test de todos los nadadores para evaluar evolución y rendimiento.
+            **🏋️ Entrenamientos**
+            Visualización de los tiempos de test de todos los nadadores para evaluar evolución y rendimiento.
         
-        **🏅 Mi categoría**
-        Visualización de nadadores agrupados por categorías para análisis comparativo.
+            **🏅 Mi categoría**
+            Visualización de nadadores agrupados por categorías para análisis comparativo.
         
-        **📅 Agenda**
-        Carga y edición de competencias, junto con la gestión de nadadores inscriptos.
+            **📅 Agenda**
+            Carga y edición de competencias, junto con la gestión de nadadores inscriptos.
 
-        **🏆 Ranking**
-        Visualización de los mejores tiempos por prueba para identificar a los nadadores más destacados.
+            **🏆 Ranking**
+            Visualización de los mejores tiempos por prueba para identificar a los nadadores más destacados.
 
-        **⏱️ Simulador**
-        Simulación de escenarios manuales y automáticos de relevos para estimar tiempos basados en datos reales.
+            **⏱️ Simulador**
+            Simulación de escenarios manuales y automáticos de relevos para estimar tiempos basados en datos reales.
 
-        **➕ Cargar competencias (Inicio)**
-        Desde el botón CARGAR COMPETENCIAS puedo cargar nuevos nadadores, asignar permisos de Manager o Nadador y cargar tiempos de competencias y relevos.
+            **➕ Cargar competencias (Inicio)**
+            Desde el botón CARGAR COMPETENCIAS puedo cargar nuevos nadadores, asignar permisos de Manager o Nadador y cargar tiempos de competencias y relevos.
         
-        ---
-        **Aclaración final:**
-        * La carga diaria de datos deportivos es responsabilidad del nadador.
-        * Mi rol es analizar y tomar decisiones a partir de esa información.
-        """)
+            ---
+            **Aclaración final:**
+            * La carga diaria de datos deportivos es responsabilidad del nadador.
+            * Mi rol es analizar y tomar decisiones a partir de esa información.
+            """)
 
-elif st.session_state.role == "N":
-    with st.expander("📖 Guía rápida de uso – Perfil Nadador", expanded=False):
-        st.markdown("""
-        Este sistema está diseñado para que cada nadador gestione y registre su propia información deportiva.
-        Cuantos más datos cargues, mejor vas a poder analizar tu rendimiento y evolución en el tiempo.
+    elif st.session_state.role == "N":
+        with st.expander("📖 Guía rápida de uso – Perfil Nadador", expanded=False):
+            st.markdown("""
+            Este sistema está diseñado para que cada nadador gestione y registre su propia información deportiva.
+            Cuantos más datos cargues, mejor vas a poder analizar tu rendimiento y evolución en el tiempo.
         
-        **👤 Ficha**
-        Encontrás todo lo relacionado a tu perfil deportivo: competencias, mejores tiempos, historial y relevos.
-        También podés consultar la ficha de un compañero si conocés su DNI.
+            **👤 Ficha**
+            Encontrás todo lo relacionado a tu perfil deportivo: competencias, mejores tiempos, historial y relevos.
+            También podés consultar la ficha de un compañero si conocés su DNI.
         
-        **📝 Rutinas**
-        Accedés a las rutinas mensuales del entrenador, con una barra de progreso para saber en qué sesión estás y llevar un registro ordenado de tus entrenamientos.
+            **📝 Rutinas**
+            Accedés a las rutinas mensuales del entrenador, con una barra de progreso para saber en qué sesión estás y llevar un registro ordenado de tus entrenamientos.
         
-        **🏋️ Entrenamientos**
-        Este módulo se utiliza para cargar los test de rendimiento.
-        Los test pueden incluir parciales, divididos en cuatro tramos según la distancia de la prueba. Recorda anotar los parciales según esta tabla.
+            **🏋️ Entrenamientos**
+            Este módulo se utiliza para cargar los test de rendimiento.
+            Los test pueden incluir parciales, divididos en cuatro tramos según la distancia de la prueba. Recorda anotar los parciales según esta tabla.
         
-        50mts = 1x50  /  100mts = 4x25   /    200mts = 4x50 /     400mts = 4x100
+            50mts = 1x50  /  100mts = 4x25   /    200mts = 4x50 /     400mts = 4x100
         
-        **🏅 Mi categoría**
-        Visualizás los valores promedio de tu categoría y los nadadores que la integran, para comparar tus tiempos y rendimiento en competencias.
+            **🏅 Mi categoría**
+            Visualizás los valores promedio de tu categoría y los nadadores que la integran, para comparar tus tiempos y rendimiento en competencias.
         
-        **📅 Agenda**
-        Encontrás las próximas competencias del equipo y podés registrarte de forma simple, reemplazando el registro en Excel por un sistema más dinámico.
+            **📅 Agenda**
+            Encontrás las próximas competencias del equipo y podés registrarte de forma simple, reemplazando el registro en Excel por un sistema más dinámico.
         
-        ---
-        **Aclaraciones importantes**
-        * La información es autogestionada por el nadador
-        * El entrenador no carga ni corrige datos
-        * Cada registro suma para tu mejora futura
-        * Uso personal, voluntario y a libre demanda
-        """)
-
-st.divider()
+            ---
+            **Aclaraciones importantes**
+            * La información es autogestionada por el nadador
+            * El entrenador no carga ni corrige datos
+            * Cada registro suma para tu mejora futura
+            * Uso personal, voluntario y a libre demanda
+            """)
 
 if db and st.session_state.user_id:
     user_id = st.session_state.user_id
@@ -359,7 +358,6 @@ if db and st.session_state.user_id:
     iniciales = html.escape((str(me['nombre'])[:1] + str(me['apellido'])[:1]).upper())
     mis_carreras = len(df_t[df_t['codnadador'] == user_id])
 
-    seccion("Mi perfil")
     st.markdown(f"""
     <div class="nob-profile">
         <div class="nob-avatar">{iniciales}</div>
@@ -377,8 +375,11 @@ if db and st.session_state.user_id:
     </div>
     """, unsafe_allow_html=True)
 
-    # PROGRESO DEL MES (motivacional, solo nadadores)
+    # RESUMEN: OBJETIVO DEL MES + PRÓXIMO TORNEO (solo nadadores)
     if st.session_state.role == "N":
+        tarjetas = []
+
+        # Objetivo del mes (rutinas completadas)
         try:
             _hoy = datetime.now(timezone.utc) - timedelta(hours=3)
             _rut = db.get('rutinas'); _seg = db.get('seguimiento')
@@ -390,19 +391,53 @@ if db and st.session_state.user_id:
                     if not _seg.empty:
                         _hechas = _seg[(_seg['codnadador'] == user_id) & (_seg['id_rutina'].isin(_mes['id_rutina']))]['id_rutina'].nunique()
                     _pct = int(round(_hechas / _total * 100))
-                    if _hechas == 0: _msg = "¡Arrancá el mes con todo! La primera sesión es la más importante. 💪"
-                    elif _pct < 50: _msg = f"Buen comienzo. Te faltan {_total - _hechas} sesiones, ¡seguí sumando! 🔥"
-                    elif _pct < 100: _msg = f"¡Ya pasaste la mitad! Solo {_total - _hechas} más para completar el mes. 🚀"
-                    else: _msg = "¡Mes completo! Constancia de campeón. 🏆"
-                    st.markdown(f"""
+                    if _hechas == 0: _msg = "Arrancá el mes con todo: la primera sesión es la más importante."
+                    elif _pct < 50: _msg = f"Buen comienzo. Te faltan {_total - _hechas} sesiones, seguí sumando."
+                    elif _pct < 100: _msg = f"Ya pasaste la mitad. Solo {_total - _hechas} más para completar el mes."
+                    else: _msg = "Mes completo. Constancia de campeón."
+                    tarjetas.append(f"""
                     <div class="nob-goal">
-                        <div class="nob-goal-top"><b>🎯 Objetivo del mes</b><span>{_hechas} / {_total} sesiones · {_pct}%</span></div>
+                        <div class="nob-goal-top"><b>Objetivo del mes</b><span>{_hechas} / {_total} sesiones</span></div>
+                        <div class="nob-next-days" style="margin:0 0 10px;">{_pct}<small>%</small></div>
                         <div class="nob-bar"><div style="width:{_pct}%"></div></div>
                         <div class="nob-goal-msg">{_msg}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
+                    </div>""")
         except Exception:
             pass
+
+        # Próximo torneo (cuenta regresiva)
+        try:
+            _comp, _ins, _ = cargar_datos_inscripcion_inicio()
+            if _comp is not None and not _comp.empty:
+                _fut = _comp[_comp['fecha_evento'].dt.date >= date.today()].sort_values('fecha_evento')
+                if not _fut.empty:
+                    _ev = _fut.iloc[0]
+                    _dias = (_ev['fecha_evento'].date() - date.today()).days
+                    _inscripto = _ins is not None and not _ins.empty and not _ins[
+                        (_ins['id_competencia'] == _ev['id_competencia']) & (_ins['codnadador'] == user_id)].empty
+                    if _inscripto:
+                        _tag = '<span class="nob-tag ok">INSCRIPTO</span>'
+                    elif pd.notnull(_ev['fecha_limite']) and _ev['fecha_limite'].date() >= date.today():
+                        _cierre = (_ev['fecha_limite'].date() - date.today()).days
+                        _tag = f'<span class="nob-tag warn">INSCRIPCIÓN CIERRA EN {_cierre} DÍAS</span>'
+                    else:
+                        _tag = ""
+                    _txt_dias = "¡Es hoy!" if _dias == 0 else f"{_dias}<small>{'día' if _dias == 1 else 'días'}</small>"
+                    tarjetas.append(f"""
+                    <div class="nob-next">
+                        <div class="nob-next-k">Próximo torneo</div>
+                        <div class="nob-next-days">{_txt_dias}</div>
+                        <div class="nob-next-name">{html.escape(str(_ev['nombre_evento']))}</div>
+                        <div class="nob-next-meta">{_ev['fecha_evento'].strftime('%d/%m/%Y')}</div>
+                        {_tag}
+                    </div>""")
+        except Exception:
+            pass
+
+        if tarjetas:
+            clase = "nob-duo" if len(tarjetas) == 2 else ""
+            _html = f'<div class="{clase}">{"".join(tarjetas)}</div>'
+            st.markdown("\n".join(l.strip() for l in _html.splitlines() if l.strip()), unsafe_allow_html=True)
     
     if st.session_state.role == "N":
         if st.button("Ver Mi Ficha Completa ➝", type="primary", use_container_width=True, key="btn_ficha_inicio"):
@@ -746,3 +781,7 @@ if db and st.session_state.user_id:
             st.success("🔓 Gestión Habilitada")
             if st.button("⚙️ IR AL PANEL DE CARGA", type="primary", use_container_width=True):
                 st.switch_page("pages/1_cargar_datos.py")
+
+# --- GUÍA DE USO ---
+seccion("Ayuda")
+mostrar_guia()
