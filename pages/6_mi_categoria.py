@@ -63,6 +63,7 @@ def cargar_datos():
         return {
             "nadadores": conn.read(worksheet="Nadadores"),
             "tiempos": conn.read(worksheet="Tiempos"),  # Tabla OFICIAL de Tiempos
+            "relevos": conn.read(worksheet="Relevos"),
             "estilos": conn.read(worksheet="Estilos"),
             "distancias": conn.read(worksheet="Distancias"),
             "categorias": conn.read(worksheet="Categorias")
@@ -110,6 +111,27 @@ def a_segundos(t_str):
         return None
     except: return None
 
+def _id_txt(v):
+    """Normaliza un código de nadador (66, 66.0, '66') a texto para comparar."""
+    try: return str(int(float(v)))
+    except: return str(v).strip()
+
+def ids_activos(db, anio):
+    """Nadadores con al menos una marca de competencia (individual o relevo) en el año dado."""
+    ids = set()
+    t = db['tiempos']
+    if t is not None and not t.empty and 'fecha' in t.columns:
+        t_anio = t[pd.to_datetime(t['fecha'], errors='coerce').dt.year == anio]
+        ids.update(_id_txt(x) for x in t_anio['codnadador'].dropna())
+    r = db.get('relevos')
+    if r is not None and not r.empty and 'fecha' in r.columns:
+        r_anio = r[pd.to_datetime(r['fecha'], errors='coerce').dt.year == anio]
+        for k in range(1, 5):
+            col = f'nadador_{k}'
+            if col in r_anio.columns:
+                ids.update(_id_txt(x) for x in r_anio[col].dropna())
+    return ids
+
 def fmt_mm_ss(seconds):
     if seconds is None or np.isnan(seconds): return ""
     m = int(seconds // 60)
@@ -140,6 +162,13 @@ if 'nombre_cat' in df_cat.columns:
 else:
     st.error("Error: No se encuentra la columna 'nombre_cat' en la tabla Categorias.")
     st.stop()
+
+# 3. Activos: compitieron el año anterior al actual. El resto se considera inactivo.
+ANIO_REF = date.today().year - 1
+ACTIVOS = ids_activos(db, ANIO_REF)
+df_nad['activo'] = df_nad['codnadador'].apply(lambda x: _id_txt(x) in ACTIVOS)
+COLOR_ACTIVO = "#4FC3F7"
+COLOR_INACTIVO = "#555555"
 
 # --- LÓGICA DE ROLES ---
 target_categoria = None
@@ -224,16 +253,17 @@ if target_categoria and target_genero:
                     avg_times = data_chart.groupby('codnadador')['segundos'].mean().reset_index()
                     
                     # Pegar nombres
-                    avg_times = avg_times.merge(rivales[['codnadador', 'apellido', 'nombre']], on='codnadador')
+                    avg_times = avg_times.merge(rivales[['codnadador', 'apellido', 'nombre', 'activo']], on='codnadador')
                     avg_times['Atleta'] = avg_times['apellido'].str.upper() + " " + avg_times['nombre'].str[0] + "."
                     avg_times['Etiqueta'] = avg_times['segundos'].apply(fmt_mm_ss)
                     
-                    # Colores
-                    def get_color(cod):
-                        if rol == "N" and str(cod) == str(mi_id): return "#E30613" # Rojo Usuario
-                        return "#666666" # Gris Rival
-                    
-                    avg_times['Color'] = avg_times['codnadador'].apply(get_color)
+                    # Colores: yo en rojo, activos en celeste, inactivos en gris
+                    def get_color(row):
+                        if rol == "N" and str(row['codnadador']) == str(mi_id): return "#E30613" # Rojo Usuario
+                        return COLOR_ACTIVO if row['activo'] else COLOR_INACTIVO
+
+                    avg_times['Color'] = avg_times.apply(get_color, axis=1)
+                    avg_times['Estado'] = np.where(avg_times['activo'], "Activo", "Inactivo")
                     
                     # ORDENAR DE MENOR A MAYOR TIEMPO (El mejor primero)
                     avg_times = avg_times.sort_values('segundos', ascending=True) 
@@ -256,7 +286,8 @@ if target_categoria and target_genero:
 
                     # Texto grande en las barras
                     fig.update_traces(textposition='auto', textfont=dict(size=16),
-                                      hovertemplate='<b>%{x}</b><br>Promedio: %{text}<extra></extra>')
+                                      customdata=avg_times[['Estado']],
+                                      hovertemplate='<b>%{x}</b><br>Promedio: %{text}<br>%{customdata[0]}<extra></extra>')
 
                     fig.update_layout(
                         height=320,
@@ -271,6 +302,11 @@ if target_categoria and target_genero:
                         dragmode=False, hovermode="closest",
                         hoverlabel=dict(bgcolor="#1A0204", bordercolor="#E30613", font_size=13)
                     )
+                    st.markdown(
+                        f"<div style='font-size:12px;color:#aaa;margin-bottom:-6px;'>"
+                        f"<span style='color:{COLOR_ACTIVO}'>■</span> Activos (compitieron en {ANIO_REF}) &nbsp; "
+                        f"<span style='color:{COLOR_INACTIVO}'>■</span> Inactivos</div>",
+                        unsafe_allow_html=True)
                     st.plotly_chart(fig, use_container_width=True,
                                     config={"displayModeBar": False, "scrollZoom": False, "doubleClick": False, "showTips": False})
                     
@@ -303,26 +339,39 @@ if target_categoria and target_genero:
         rivales['_nac'] = pd.to_datetime(rivales['fechanac'], errors='coerce')
         rivales = rivales.sort_values(['edad_calculada', '_nac', 'apellido'], ascending=[False, True, True])
 
-        # Una sola columna: el orden se lee de arriba hacia abajo
-        for i, (idx, row) in enumerate(rivales.iterrows()):
-            es_yo = (str(row['codnadador']) == str(mi_id)) if rol == "N" else False
-            clase = "swimmer-card is-me" if es_yo else "swimmer-card"
-            yo_lbl = " (TÚ)" if es_yo else ""
-            edad = row['edad_calculada']
-            edad_txt = int(edad) if pd.notna(edad) else "-"
-            etiqueta = ""
-            if pd.notna(edad) and edad_max is not None and pd.notna(edad_max) and int(edad) >= int(edad_max):
-                etiqueta = '<span class="cat-tag sale">Último año</span>'
-            elif pd.notna(edad) and edad_min is not None and pd.notna(edad_min) and int(edad) <= int(edad_min):
-                etiqueta = '<span class="cat-tag entra">Primer año</span>'
+        def mostrar_tarjetas(lista):
+            # Una sola columna: el orden se lee de arriba hacia abajo
+            for i, (idx, row) in enumerate(lista.iterrows()):
+                es_yo = (str(row['codnadador']) == str(mi_id)) if rol == "N" else False
+                clase = "swimmer-card is-me" if es_yo else "swimmer-card"
+                yo_lbl = " (TÚ)" if es_yo else ""
+                edad = row['edad_calculada']
+                edad_txt = int(edad) if pd.notna(edad) else "-"
+                etiqueta = ""
+                if pd.notna(edad) and edad_max is not None and pd.notna(edad_max) and int(edad) >= int(edad_max):
+                    etiqueta = '<span class="cat-tag sale">Último año</span>'
+                elif pd.notna(edad) and edad_min is not None and pd.notna(edad_min) and int(edad) <= int(edad_min):
+                    etiqueta = '<span class="cat-tag entra">Primer año</span>'
 
-            st.markdown(f"""
-            <div class="{clase}">
-                <div class="card-info">
-                    <div class="card-name">{row['apellido'].upper()}, {row['nombre']}{yo_lbl}</div>
-                    <div class="card-sub">Edad: {edad_txt} | {row['categoria_actual']} {etiqueta}</div>
+                st.markdown(f"""
+                <div class="{clase}">
+                    <div class="card-info">
+                        <div class="card-name">{row['apellido'].upper()}, {row['nombre']}{yo_lbl}</div>
+                        <div class="card-sub">Edad: {edad_txt} | {row['categoria_actual']} {etiqueta}</div>
+                    </div>
                 </div>
-            </div>
-            """, unsafe_allow_html=True)
+                """, unsafe_allow_html=True)
+
+        activos = rivales[rivales['activo']]
+        inactivos = rivales[~rivales['activo']]
+        t_act, t_inact = st.tabs([f"Activos ({len(activos)})", f"Inactivos ({len(inactivos)})"])
+        with t_act:
+            st.caption(f"Con al menos una marca de competencia en {ANIO_REF}.")
+            if activos.empty: st.info(f"Nadie de esta categoría compitió en {ANIO_REF}.")
+            else: mostrar_tarjetas(activos)
+        with t_inact:
+            st.caption(f"Sin marcas de competencia en {ANIO_REF}.")
+            if inactivos.empty: st.info("No hay nadadores inactivos en esta categoría.")
+            else: mostrar_tarjetas(inactivos)
     else:
         st.warning(f"No hay nadadores {target_genero} en {target_categoria}.")
