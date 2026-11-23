@@ -355,7 +355,7 @@ def render_tarjeta_individual(row, df_seg, key_suffix):
         bg = "#262730"
     
     with st.container():
-        st.markdown(f"""<div style="border: 2px solid {borde}; border-radius: 10px; background-color: {bg}; padding: 15px; margin-bottom: 15px;">""", unsafe_allow_html=True)
+        st.markdown(f"""<div style="height: 4px; border-radius: 4px; background: {'linear-gradient(90deg,#2E7D32,#66BB6A)' if esta_realizada else 'linear-gradient(90deg,#E30613,rgba(227,6,19,0.15))'}; margin: 6px 0 10px;"></div>""", unsafe_allow_html=True)
         
         if esta_realizada:
             c_head, c_act = st.columns([8, 1])
@@ -505,27 +505,25 @@ def render_historial_compacto(df_rut, df_seg, anio, mes, id_usuario_objetivo):
     # -------------------------------------------------------------
 
     # SCORECARD DIVIDIDO
+    _faltan = max(total_rutinas - completadas, 0)
+    if completadas == 0: _msg = "¡La primera sesión es la más importante! Hoy es el día. 💪"
+    elif porcentaje < 50: _msg = f"Buen arranque. Faltan {_faltan} sesiones, ¡a sumar! 🔥"
+    elif porcentaje < 100: _msg = f"¡Pasaste la mitad! Solo {_faltan} más para cerrar el mes. 🚀"
+    else: _msg = "¡Mes completo! Constancia de campeón. 🏆"
+    _pct_bar = max(0, min(100, porcentaje))
+
     st.markdown(f"""
-    <div style="background-color: #262730; border-radius: 8px; padding: 20px; border: 1px solid #444; margin-bottom: 20px;">
-        <div style="color: #aaa; font-size: 13px; font-weight: bold; margin-bottom: 12px; letter-spacing: 1px;">
-            ASISTENCIA {nombre_mes}
+    <div class="nob-goal">
+        <div class="nob-goal-top">
+            <b>🎯 ASISTENCIA {nombre_mes}</b>
+            <span>{completadas} de {total_rutinas} sesiones</span>
         </div>
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div>
-                <span style="font-size: 42px; font-weight: bold; color: white;">{porcentaje}%</span>
-            </div>
-            <div style="text-align: right;">
-                <div style="font-size: 24px; font-weight: bold; color: #ddd; line-height: 1;">
-                    {completadas} <span style="font-size: 16px; color: #888;">de</span> {total_rutinas}
-                </div>
-                <div style="font-size: 11px; color: #888; margin-top: 4px; letter-spacing: 0.5px;">SESIONES COMPLETADAS</div>
-            </div>
-        </div>
+        <div style="font-size: 40px; font-weight: 900; color: #fff; line-height: 1; margin-bottom: 12px;">{porcentaje}%</div>
+        <div class="nob-bar"><div style="width:{_pct_bar}%"></div></div>
+        <div class="nob-goal-msg">{_msg}</div>
     </div>
     """, unsafe_allow_html=True)
-    
-    st.progress(porcentaje / 100)
-    st.write("") 
+    st.write("")
 
     # LISTADO DE SESIONES
     st.caption(f"DETALLE DE ACTIVIDAD")
@@ -579,8 +577,8 @@ def render_historial_compacto(df_rut, df_seg, anio, mes, id_usuario_objetivo):
 df_rutinas, df_seguimiento, df_nadadores = cargar_datos_rutinas_view()
 
 # --- INTERFAZ DE USUARIO ---
-st.title("📝 Sesiones de Entrenamiento")
-st.subheader(f"{mi_nombre}")
+from nob_ui import hero
+hero("Sesiones de Entrenamiento", "📝")
 
 if df_rutinas is None:
     st.error("No se pudieron cargar los datos. Verifica tu conexión.")
