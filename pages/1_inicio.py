@@ -688,6 +688,9 @@ if db and st.session_state.user_id:
         if st.button("Ver padrón de nadadores", type="primary" if es_entrenador else "secondary",
                      use_container_width=True, key="btn_padron_inicio_m", icon=":material/groups:"):
             ir_al_padron()
+        if es_entrenador and st.button("Simulador de postas", use_container_width=True,
+                                       key="btn_simulador_ent", icon=":material/pool:"):
+            st.switch_page("pages/3_simulador.py")
         if not es_entrenador:
             tarjeta_resumen_anual(me)
 
