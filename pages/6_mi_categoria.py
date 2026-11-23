@@ -154,7 +154,7 @@ if rol == "N":
         target_genero = my_data['codgenero']
         
         edad_str = int(my_data['edad_calculada']) if pd.notna(my_data['edad_calculada']) else "-"
-        st.markdown(f"### 🏷️ Categoría: <span style='color:#E30613'>{target_categoria}</span> ({target_genero})", unsafe_allow_html=True)
+        st.markdown(f"### Categoría: <span style='color:#E30613'>{target_categoria}</span> ({target_genero})", unsafe_allow_html=True)
     else:
         st.error("Perfil no encontrado o acceso restringido.")
         st.stop()
@@ -183,7 +183,7 @@ if target_categoria and target_genero:
     
     # --- GRÁFICA COMPARATIVA (PROMEDIOS) ---
     if not rivales.empty:
-        st.markdown("<div class='section-title'>Tiempos promedios de la categoría</div>", unsafe_allow_html=True)
+        st.markdown("<div class='section-title'>📊 Tiempos promedios de la categoría</div>", unsafe_allow_html=True)
         
         # 1. Cargar Tiempos y filtrar
         df_tiempos = db['tiempos'].copy()
