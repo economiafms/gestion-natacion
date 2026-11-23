@@ -270,11 +270,10 @@ def ir_a_mi_ficha():
 # RESUMEN ANUAL ("Mi año en el agua"): solo en diciembre
 # ---------------------------------------------------------------------------
 def resumen_anual_visible():
-    """Diciembre (hora de Argentina). El manager con la gestión desbloqueada puede verlo antes como vista previa."""
+    """Visible para todos en diciembre (hora de Argentina).
+    Excepción de lanzamiento: en noviembre de 2026 también se muestra, para poder revisarlo antes."""
     ahora = datetime.now(timezone.utc) - timedelta(hours=3)
-    if ahora.month == 12:
-        return True
-    return st.session_state.get("role") in ["M", "P"] and st.session_state.get("admin_unlocked", False)
+    return ahora.month == 12 or (ahora.year == 2026 and ahora.month == 11)
 
 
 @st.cache_data(ttl="1h", show_spinner=False)
