@@ -62,6 +62,37 @@ hero("Centro de Entrenamiento", "🏋️")
 # --- ESTILOS (mismo lenguaje visual que Inicio y Rutinas) ---
 st.markdown("""
 <style>
+/* Promedios y ritmos: tarjetas con el diseño original */
+    .test-card { 
+        background-color: #262730; 
+        border: 1px solid #444; 
+        border-radius: 10px; 
+        padding: 15px; 
+        margin-bottom: 12px; 
+        box-shadow: 0 4px 6px rgba(0,0,0,0.3); 
+        border-left: 5px solid #E30613; 
+    }
+    .test-header { 
+        display: flex; 
+        justify-content: space-between; 
+        align-items: flex-start; 
+        margin-bottom: 8px; 
+        border-bottom: 1px solid #444; 
+        padding-bottom: 8px; 
+    }
+    .test-style { font-size: 18px; font-weight: bold; color: white; text-transform: uppercase; }
+    .test-dist { font-size: 14px; color: #aaa; font-weight: bold; }
+    .test-date { font-size: 12px; color: #888; margin-left: 5px; }
+    .final-time { 
+        font-family: 'Courier New', monospace; 
+        font-size: 24px; 
+        font-weight: bold; 
+        color: #E30613; 
+        text-align: right; 
+        background: rgba(0,0,0,0.2); 
+        padding: 2px 8px; 
+        border-radius: 4px; 
+    }
 /* Tarjetas de promedio por prueba */
 .tst-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-bottom: 4px; }
 .tst-tile, .tst-rec {
@@ -387,19 +418,32 @@ with tab_ver:
                 stats_grouped['ritmo_seg'] = stats_grouped['promedio_seg'] / (stats_grouped['dist_num'] / stats_grouped['dist_ritmo'])
                 stats_grouped = stats_grouped.sort_values(['descripcion_x', 'dist_num'])
 
-                # Tarjetas en grilla: prueba, tiempo medio, ritmo y cantidad de registros
-                tiles = []
-                for _, row in stats_grouped.iterrows():
-                    n_reg = int(row['veces'])
-                    tiles.append(
-                        f'<div class="tst-tile"><div class="tst-e">{html.escape(str(row["descripcion_x"]))}</div>'
-                        f'<div class="tst-d">{html.escape(str(row["descripcion_y"]))}</div>'
-                        f'<div class="tst-row"><div><span class="tst-k">Tiempo medio</span>'
-                        f'<span class="tst-time">{fmt_mm_ss(row["promedio_seg"])}</span></div>'
-                        f'<div class="tst-pace"><span class="tst-k">Ritmo c/{int(row["dist_ritmo"])} m</span>'
-                        f'<b>{fmt_mm_ss(row["ritmo_seg"])}</b></div></div>'
-                        f'<span class="tst-n">{n_reg} {"registro" if n_reg == 1 else "registros"}</span></div>')
-                st.markdown(f'<div class="tst-grid">{"".join(tiles)}</div>', unsafe_allow_html=True)
+                # Renderizar tarjetas lado a lado
+                for idx, row in stats_grouped.iterrows():
+                    label_ritmo = f"Ritmo c/{int(row['dist_ritmo'])}m:"
+                    texto_registros = f"{row['veces']} registro" if row['veces'] == 1 else f"{row['veces']} registros"
+                    
+                    st.markdown(f"""
+                    <div class="test-card">
+                        <div class="test-header" style="border-bottom: none; margin-bottom: 0; padding-bottom: 0; align-items: center;">
+                            <div>
+                                <div class="test-style">{row['descripcion_x']}</div>
+                                <div class="test-dist">{row['descripcion_y']}</div>
+                                <div class="test-date" style="margin-left: 0; margin-top: 2px;">{texto_registros}</div>
+                            </div>
+                            <div style="display: flex; gap: 20px; align-items: center; text-align: right;">
+                                <div>
+                                    <div style="font-size: 11px; color: #aaa; margin-bottom: 2px; letter-spacing: 0.5px;">TIEMPO MEDIO</div>
+                                    <div class="final-time" style="background: transparent; padding: 0; color: #eee;">{fmt_mm_ss(row['promedio_seg'])}</div>
+                                </div>
+                                <div style="border-left: 1px solid #444; padding-left: 20px;">
+                                    <div style="font-size: 11px; color: #888; margin-bottom: 2px; text-transform: uppercase;">{label_ritmo}</div>
+                                    <div style="font-family: 'Courier New', monospace; font-size: 18px; font-weight: bold; color: #E30613;">{fmt_mm_ss(row['ritmo_seg'])}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
             else:
                 st.info("Aún no hay suficientes registros de distancia (≥ 50m) para calcular promedios y ritmos.")
 
