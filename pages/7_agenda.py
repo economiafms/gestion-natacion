@@ -59,21 +59,8 @@ def actualizar_con_retry(worksheet, data, max_retries=5):
     return False, "Tiempo de espera agotado."
 
 def leer_dataset_fresco(worksheet, max_retries=5):
-    """Manejo robusto de la API con reintentos para leer."""
-    for i in range(max_retries):
-        try: 
-            return conn.read(worksheet=worksheet, ttl=0).copy()
-        except pd.errors.EmptyDataError:
-            # La hoja existe pero está totalmente vacía (ni siquiera títulos): no hay datos que proteger
-            return pd.DataFrame()
-        except Exception as e: 
-            if "429" in str(e) or "quota" in str(e):
-                import time
-                time.sleep((2 ** i) + random.uniform(0, 1))
-                continue
-            else:
-                return None
-    return None
+    """Lectura segura antes de escribir (reintenta por cuota y controla filas). None = no escribir."""
+    return datos.leer_para_escribir(worksheet)
 
 def calcular_categoria_master(anio_nac):
     """Calcula la categoría Master completa."""

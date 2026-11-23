@@ -215,15 +215,11 @@ def cargar_datos_rutinas_view():
         return None, None, None
 
 def leer_dataset_fresco(worksheet):
-    try:
-        df = conn.read(worksheet=worksheet, ttl=0).copy()
-        return df
-    except pd.errors.EmptyDataError:
-        # La hoja existe pero está totalmente vacía (ni siquiera títulos): no hay datos que proteger
-        return pd.DataFrame()
-    except Exception as e:
-        st.error(f"Error de conexión fresca con {worksheet}: {e}")
-        return None
+    """Lectura segura antes de escribir (ver datos.leer_para_escribir). None = no escribir."""
+    df = datos.leer_para_escribir(worksheet)
+    if df is None:
+        st.error("⚠️ No se pudo leer bien la planilla. No se guardó nada para proteger los datos; probá de nuevo en unos segundos.")
+    return df
 
 def calcular_proxima_sesion(df, anio, mes):
     if df is None or df.empty: return 1

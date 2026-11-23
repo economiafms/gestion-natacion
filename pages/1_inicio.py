@@ -12,6 +12,7 @@ from nob_ui import hero, seccion
 import base64
 import resumen_anual
 import actividad
+import entrenador
 
 # --- CONFIGURACIÓN ---
 st.set_page_config(page_title="Inicio", layout="centered")
@@ -20,10 +21,10 @@ st.set_page_config(page_title="Inicio", layout="centered")
 if "role" not in st.session_state or not st.session_state.role:
     st.switch_page("index.py")
 
-if "show_login_form" not in st.session_state: 
+if "show_login_form" not in st.session_state:
     st.session_state.show_login_form = False
 
-if "admin_unlocked" not in st.session_state: 
+if "admin_unlocked" not in st.session_state:
     st.session_state.admin_unlocked = False
 
 # --- CONEXIÓN ---
@@ -63,13 +64,13 @@ def cargar_datos_inscripcion_inicio():
                 df_comp['fecha_evento'] = pd.to_datetime(df_comp['fecha_evento'], errors='coerce')
                 df_comp['fecha_limite'] = pd.to_datetime(df_comp['fecha_limite'], errors='coerce')
         except: df_comp = pd.DataFrame()
-            
+
         try:
             df_ins = datos.leer("Inscripciones").copy()
             if not df_ins.empty:
                 df_ins['codnadador'] = pd.to_numeric(df_ins['codnadador'], errors='coerce').fillna(0).astype(int)
         except: df_ins = pd.DataFrame()
-            
+
         try:
             df_pil = datos.leer("Piletas").copy()
         except: df_pil = pd.DataFrame()
@@ -82,27 +83,30 @@ def actualizar_con_retry_inicio(worksheet, data, max_retries=5):
     for i in range(max_retries):
         try:
             conn.update(worksheet=worksheet, data=data)
-            return True, None 
+            time.sleep(1)  # pausa a propósito: deja que Google termine de escribir antes de releer
+            return True, None
         except Exception as e:
             if "429" in str(e) or "quota" in str(e):
                 time.sleep((2 ** i) + random.uniform(0, 1))
-                continue 
+                continue
             else:
                 return False, e
     return False, "Error de conexión."
 
 def leer_dataset_fresco_inicio(worksheet):
-    try: return conn.read(worksheet=worksheet, ttl=0).copy()
-    except: return None
+    """Lectura segura antes de escribir (ver datos.leer_para_escribir). None = no escribir."""
+    return datos.leer_para_escribir(worksheet)
 
 def gestionar_inscripcion_inicio(id_comp, id_nadador, lista_pruebas):
     df_ins = leer_dataset_fresco_inicio("Inscripciones")
-    if df_ins is None: df_ins = pd.DataFrame(columns=["id_inscripcion", "id_competencia", "codnadador", "pruebas", "fecha_inscripcion"])
-    if not df_ins.empty: df_ins['codnadador'] = pd.to_numeric(df_ins['codnadador'], errors='coerce').fillna(0).astype(int)
+    if df_ins is None:
+        return False, "⚠️ No se pudo leer bien la planilla. No se guardó nada para proteger los datos; probá de nuevo en unos segundos."
+    if df_ins.empty: df_ins = pd.DataFrame(columns=["id_inscripcion", "id_competencia", "codnadador", "pruebas", "fecha_inscripcion"])
+    df_ins['codnadador'] = pd.to_numeric(df_ins['codnadador'], errors='coerce').fillna(0).astype(int)
 
     pruebas_str = ", ".join(lista_pruebas)
     mask = (df_ins['id_competencia'] == id_comp) & (df_ins['codnadador'] == id_nadador)
-    
+
     if not df_ins[mask].empty:
         df_ins.loc[mask, 'pruebas'] = pruebas_str
         df_ins.loc[mask, 'fecha_inscripcion'] = datetime.now().strftime("%Y-%m-%d")
@@ -113,7 +117,7 @@ def gestionar_inscripcion_inicio(id_comp, id_nadador, lista_pruebas):
         msg = "Inscripto."
 
     exito, _ = actualizar_con_retry_inicio("Inscripciones", df_ins)
-    if exito: 
+    if exito:
         datos.invalidar("Inscripciones")
         return True, msg
     return False, "Error."
@@ -122,10 +126,10 @@ def eliminar_inscripcion_inicio(id_comp, id_nadador):
     df_ins = leer_dataset_fresco_inicio("Inscripciones")
     if df_ins is None: return False, "Error."
     if not df_ins.empty: df_ins['codnadador'] = pd.to_numeric(df_ins['codnadador'], errors='coerce').fillna(0).astype(int)
-    
+
     df_ins = df_ins[~((df_ins['id_competencia'] == id_comp) & (df_ins['codnadador'] == id_nadador))]
     exito, _ = actualizar_con_retry_inicio("Inscripciones", df_ins)
-    if exito: 
+    if exito:
         datos.invalidar("Inscripciones")
         return True, "Baja exitosa."
     return False, "Error."
@@ -134,7 +138,7 @@ def eliminar_inscripcion_inicio(id_comp, id_nadador):
 def get_db():
     general = cargar_datos_generales()
     rutinas = cargar_datos_rutinas()
-    
+
     if general and rutinas:
         return {**general, **rutinas}
     elif general:
@@ -186,12 +190,15 @@ def intentar_desbloqueo():
 
 def guardar_seguimiento_inicio(id_rutina, id_nadador):
     try:
-        df_seg = conn.read(worksheet="Rutinas_Seguimiento", ttl=0)
-        
+        df_seg = leer_dataset_fresco_inicio("Rutinas_Seguimiento")
+        if df_seg is None:
+            st.error("⚠️ No se pudo leer bien la planilla. No se guardó nada para proteger los datos; probá de nuevo en unos segundos.")
+            return False
+
         # OBTENER HORA ARGENTINA (UTC-3)
         ahora_arg = datetime.now(timezone.utc) - timedelta(hours=3)
         hora_str = ahora_arg.strftime("%Y-%m-%d %H:%M:%S")
-        
+
         nuevo_registro = pd.DataFrame([{
             "id_rutina": id_rutina,
             "codnadador": int(id_nadador),
@@ -199,9 +206,9 @@ def guardar_seguimiento_inicio(id_rutina, id_nadador):
         }])
         df_final = pd.concat([df_seg, nuevo_registro], ignore_index=True)
         conn.update(worksheet="Rutinas_Seguimiento", data=df_final)
-        
+        time.sleep(1)  # pausa a propósito: deja que Google termine de escribir antes de releer
         datos.invalidar("Rutinas_Seguimiento")
-        
+
         return True
     except Exception as e:
         st.error(f"Error al guardar: {e}")
@@ -217,7 +224,7 @@ def tiempo_a_seg(t_str):
 def buscar_mejor_tiempo(prueba, df_t_nadador):
     if df_t_nadador.empty: return ""
     p_lower = prueba.lower()
-    
+
     dist_k = ""
     if "50m" in p_lower or " 50" in p_lower: dist_k = "50"
     if "100m" in p_lower or " 100" in p_lower: dist_k = "100"
@@ -227,20 +234,20 @@ def buscar_mejor_tiempo(prueba, df_t_nadador):
     if "1500m" in p_lower or " 1500" in p_lower: dist_k = "1500"
     if "4x50" in p_lower: dist_k = "4x50"
     if "4x100" in p_lower: dist_k = "4x100"
-    
+
     est_k = []
     if "libre" in p_lower or "crol" in p_lower: est_k = ["libre", "crol"]
     elif "espalda" in p_lower: est_k = ["espalda"]
     elif "pecho" in p_lower: est_k = ["pecho"]
     elif "mariposa" in p_lower: est_k = ["mariposa"]
     elif "combinado" in p_lower or "medley" in p_lower: est_k = ["combinado", "medley"]
-    
+
     if not dist_k or not est_k: return ""
-    
+
     try:
         mask_dist = df_t_nadador['dist_desc'].str.lower().str.contains(dist_k, na=False)
         mask_est = df_t_nadador['estilo_desc'].str.lower().apply(lambda x: any(k in str(x) for k in est_k))
-        
+
         matches = df_t_nadador[mask_dist & mask_est]
         if not matches.empty:
             best = matches.loc[matches['segundos'].idxmin()]
@@ -606,7 +613,7 @@ if "flash_msg" in st.session_state:
         st.success(st.session_state.flash_msg)
     elif st.session_state.flash_type == "warning":
         st.warning(st.session_state.flash_msg)
-    
+
     del st.session_state.flash_msg
     del st.session_state.flash_type
 
@@ -616,21 +623,21 @@ if db and st.session_state.user_id:
     me = db['nadadores'][db['nadadores']['codnadador'] == user_id].iloc[0]
     # Nadador inactivo (sin marcas este año ni el anterior): sin rutinas ni resumen del año
     # El entrenador tiene ficha en Nadadores pero no compite: su Inicio no muestra datos de nadador
-    es_entrenador = str(st.session_state.get("nro_socio") or "").strip() == "253973"
+    es_entrenador = entrenador.es_entrenador()
     # El entrenador tampoco tiene rutinas: se trata como inactivo para esas tarjetas
     # Vista de staff (entrenador y managers): top 10 clickeable y nadadores por categoría
     vista_staff = es_entrenador or st.session_state.role in ["M", "P"]
     inactivo = es_entrenador or (st.session_state.role == "N" and actividad.id_txt(user_id) not in actividad.ids_activos(
         db.get('tiempos'), db.get('relevos')))
-    
+
     try: edad = datetime.now().year - pd.to_datetime(me['fechanac']).year
     except: edad = 0
     cat = calcular_cat_exacta(edad, db['categorias'])
-    
+
     df_t = db['tiempos'].copy(); df_r = db['relevos'].copy()
     df_t['posicion'] = pd.to_numeric(df_t['posicion'], errors='coerce').fillna(0).astype(int)
     df_r['posicion'] = pd.to_numeric(df_r['posicion'], errors='coerce').fillna(0).astype(int)
-    
+
     mis_oros = len(df_t[(df_t['codnadador']==user_id)&(df_t['posicion']==1)]) + len(df_r[((df_r['nadador_1']==user_id)|(df_r['nadador_2']==user_id)|(df_r['nadador_3']==user_id)|(df_r['nadador_4']==user_id))&(df_r['posicion']==1)])
     mis_platas = len(df_t[(df_t['codnadador']==user_id)&(df_t['posicion']==2)]) + len(df_r[((df_r['nadador_1']==user_id)|(df_r['nadador_2']==user_id)|(df_r['nadador_3']==user_id)|(df_r['nadador_4']==user_id))&(df_r['posicion']==2)])
     mis_bronces = len(df_t[(df_t['codnadador']==user_id)&(df_t['posicion']==3)]) + len(df_r[((df_r['nadador_1']==user_id)|(df_r['nadador_2']==user_id)|(df_r['nadador_3']==user_id)|(df_r['nadador_4']==user_id))&(df_r['posicion']==3)])
@@ -824,7 +831,7 @@ if db and st.session_state.user_id:
         hoy_arg = datetime.now(timezone.utc) - timedelta(hours=3)
         df_rut = None if inactivo else db.get('rutinas')  # inactivos y entrenador: sin rutina del día
         df_seg = db.get('seguimiento')
-        
+
         if df_rut is not None and df_seg is not None:
             rutinas_mes = df_rut[(df_rut['anio_rutina'] == hoy_arg.year) & (df_rut['mes_rutina'] == hoy_arg.month)].copy()
             if not rutinas_mes.empty:
@@ -832,12 +839,12 @@ if db and st.session_state.user_id:
                 with st.container(border=True):
                     hoy_str_corto = hoy_arg.strftime("%Y-%m-%d")
                     rutina_hoy_completada = None
-                    
+
                     if not df_seg.empty:
                         mis_seg = df_seg[df_seg['codnadador'] == user_id].copy()
                         mis_seg['fecha_dt'] = pd.to_datetime(mis_seg['fecha_realizada']).dt.strftime("%Y-%m-%d")
                         hecho_hoy = mis_seg[mis_seg['fecha_dt'] == hoy_str_corto]
-                        
+
                         if not hecho_hoy.empty:
                             ultimo_id_hoy = hecho_hoy.iloc[-1]['id_rutina']
                             rutina_hoy_completada = rutinas_mes[rutinas_mes['id_rutina'] == ultimo_id_hoy]
@@ -848,7 +855,7 @@ if db and st.session_state.user_id:
                     if rutina_hoy_completada is not None and not rutina_hoy_completada.empty:
                         r_row = rutina_hoy_completada.iloc[0]
                         pendientes_check = rutinas_mes[~rutinas_mes['id_rutina'].isin(realizadas_historicas)]
-                        
+
                         if pendientes_check.empty:
                             st.balloons()
                             st.markdown(f"""
@@ -868,16 +875,16 @@ if db and st.session_state.user_id:
                         if not rutinas_pendientes.empty:
                             prox_sesion = rutinas_pendientes.iloc[0]
                             r_id = prox_sesion['id_rutina']
-                            r_nro = int(prox_sesion['nro_sesion']) 
+                            r_nro = int(prox_sesion['nro_sesion'])
                             r_texto = prox_sesion['texto_rutina']
-                            
+
                             st.markdown(f"""<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
 <span class="nob-tag warn" style="margin:0;">PENDIENTE</span>
 <span style="font-size:18px;font-weight:800;color:#fff;">Sesión {r_nro} de {len(rutinas_mes)}</span>
 </div>""", unsafe_allow_html=True)
                             st.markdown(r_texto)
-                            st.write("") 
-                            
+                            st.write("")
+
                             if st.button("✅ DÍA GANADO", key=f"btn_ganado_inicio_{r_id}", type="primary", use_container_width=True):
                                 # Evitamos usar progress bar con time.sleep para no romper websockets
                                 st.toast(f"¡Excelente! Sesión {r_nro} registrada con éxito.", icon='🏆')
@@ -894,38 +901,38 @@ if db and st.session_state.user_id:
             hoy = date.today()
             df_view = df_comp.copy()
             df_view = df_view.sort_values(by='fecha_evento', ascending=True, na_position='last')
-            
+
             vista_eventos = []
-            
+
             for _, row in df_view.iterrows():
                 f_ev = row['fecha_evento']
                 f_lim = row['fecha_limite']
                 dias_ev = (f_ev.date() - hoy).days if pd.notnull(f_ev) else 0
                 dias_cie = (f_lim.date() - hoy).days if pd.notnull(f_lim) else 0
-                
+
                 # Solo filtramos eventos que no pasaron todavía
                 if dias_ev >= 0 and pd.notnull(f_ev):
                     comp_id = row['id_competencia']
-                    
+
                     ins_user = pd.DataFrame()
                     if df_ins is not None and not df_ins.empty:
                         ins_user = df_ins[(df_ins['id_competencia'] == comp_id) & (df_ins['codnadador'] == user_id)]
-                    
+
                     esta = not ins_user.empty
-                    
+
                     if esta:
                         vista_eventos.append((row, esta, ins_user))
                     else:
                         if dias_cie >= 0 and pd.notnull(f_lim):
                             vista_eventos.append((row, esta, ins_user))
-            
+
             if vista_eventos:
                 # PREPARAMOS EL HISTORIAL DE TIEMPOS DEL NADADOR
                 df_t_nadador = pd.DataFrame()
                 df_t_base = db.get('tiempos')
                 df_estilos = db.get('estilos')
                 df_dist = db.get('distancias')
-                
+
                 if df_t_base is not None and not df_t_base.empty:
                     df_t_nadador = df_t_base[df_t_base['codnadador'] == user_id].copy()
                     if not df_t_nadador.empty:
@@ -936,7 +943,7 @@ if db and st.session_state.user_id:
                         df_t_nadador['segundos'] = df_t_nadador['tiempo'].apply(lambda x: tiempo_a_seg(x) if pd.notnull(x) else 999999.0)
 
                 seccion("🏆 Mis torneos e inscripciones")
-                
+
                 for row, esta, ins_user in vista_eventos:
                     comp_id = row['id_competencia']
                     nombre_ev = row['nombre_evento']
@@ -944,7 +951,7 @@ if db and st.session_state.user_id:
                     hora_inicio = row.get('hora_inicio', '')
                     costo = int(row['costo']) if pd.notna(row.get('costo')) else 0
                     desc = row.get('descripcion', '')
-                    
+
                     # Info Pileta formateada
                     nom_pil = str(row.get('cod_pileta', '-'))
                     ubic_pil = "-"
@@ -955,15 +962,15 @@ if db and st.session_state.user_id:
                             med_val = d_pil.iloc[0].get('medida', '')
                             nom_pil = f"{club_val} ({med_val})" if med_val else str(club_val)
                             ubic_pil = str(d_pil.iloc[0].get('ubicacion', '-'))
-                    
+
                     is_expanded = not esta
                     p_hab_str = str(row.get('pruebas_habilitadas', ""))
                     p_hab = [x.strip() for x in p_hab_str.split(",")] if p_hab_str.strip() else []
                     max_permitidas = int(row.get('max_pruebas', 10)) if pd.notna(row.get('max_pruebas')) else 10
-                    
+
                     with st.expander(f"{'✅ Inscripto en' if esta else '📝 Inscribirme a'} {nombre_ev}", expanded=is_expanded):
                         prev = [x.strip() for x in str(ins_user.iloc[0]['pruebas']).split(",")] if esta else []
-                        
+
                         # --- INFO BÁSICA DEL TORNEO (ESTILO AGENDA) ---
                         st.markdown(f"""
                         <div class="nob-card2" style="padding: 14px; margin-bottom: 12px;">
@@ -976,7 +983,7 @@ if db and st.session_state.user_id:
                             <div style="font-size:12px; color:#aaa; font-style: italic;">{desc}</div>
                         </div>
                         """, unsafe_allow_html=True)
-                        
+
                         if esta:
                             # TARJETA INFORMATIVA CON CHIPS + MEJORES TIEMPOS
                             chips_html = ""
@@ -984,23 +991,24 @@ if db and st.session_state.user_id:
                                 mejor_tiempo = buscar_mejor_tiempo(p, df_t_nadador)
                                 tiempo_badge = f" <span style='color:#FFD700; font-family:monospace; font-weight:bold;'>({mejor_tiempo})</span>" if mejor_tiempo else ""
                                 chips_html += f"<span style='background-color:#444; color:#fff; padding:4px 10px; border-radius:15px; font-size:12px; margin-right:6px; margin-bottom:6px; display:inline-block; border:1px solid #555;'>{p}{tiempo_badge}</span>"
-                            
+
                             st.markdown(f"""
                             <div style="background-color: #2b2c36; border-left: 5px solid #4CAF50; border-radius: 8px; padding: 15px; margin-bottom: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
                                 <div style="font-size: 13px; color: #aaa; margin-bottom: 10px;">Mis pruebas seleccionadas:</div>
                                 <div>{chips_html}</div>
                             </div>
                             """, unsafe_allow_html=True)
-                            
+
                             # BOTÓN DE BAJA SIN BLOCKING SLEEP
                             with st.form(f"f_baja_{comp_id}"):
                                 c1, c2 = st.columns([3, 1])
                                 with c1: st.caption("Si ya no vas a participar, puedes darte de baja:")
                                 with c2: sub_baja = st.form_submit_button("🗑️ Darme de Baja")
-                                
+
                                 if sub_baja:
                                     ok, m = eliminar_inscripcion_inicio(comp_id, user_id)
-                                    if ok: 
+                                    if not ok: st.error(m)
+                                    if ok:
                                         st.session_state.flash_msg = "🗑️ Te has dado de baja. ¡Te esperamos en el próximo torneo!"
                                         st.session_state.flash_type = "warning"
                                         st.rerun()
@@ -1011,12 +1019,13 @@ if db and st.session_state.user_id:
                                 st.caption(f"Permitido hasta {max_permitidas} pruebas.")
                                 sel = st.multiselect("Seleccionar Pruebas", p_hab, default=[], max_selections=max_permitidas, label_visibility="collapsed", placeholder="Elegí tus pruebas")
                                 sub = st.form_submit_button("Guardar Inscripción", type="primary")
-                                
+
                                 if sub:
                                     if not sel: st.error("Selecciona pruebas.")
                                     else:
                                         ok, m = gestionar_inscripcion_inicio(comp_id, user_id, sel)
-                                        if ok: 
+                                        if not ok: st.error(m)
+                                        if ok:
                                             st.session_state.flash_msg = f"🎯 **¡Inscripción guardada!** A entrenar con todo. ¡Te esperamos el {fecha_ev_str}, VAMOS NEWELL'S! 🔴⚫"
                                             st.session_state.flash_type = "success"
                                             st.rerun()
@@ -1043,13 +1052,13 @@ if db and st.session_state.user_id:
                     if st.button(str(cantidad), key=f"est_{i}", use_container_width=True,
                                  help=f"Ver mejores marcas e historial de {estilo}"):
                         dialogo_estilo(estilo)
-    
+
     # Nadador y manager: chip de su categoría (mismos rivales que la página Mi Categoría: categoría y género)
     if st.session_state.role in ["N", "M", "P"] and not es_entrenador and cat not in (None, "-"):
         _dc = db['categorias'].copy()
         _dc.columns = _dc.columns.str.strip().str.lower()
         _rc = _dc[_dc['nombre_cat'] == cat]
-        _dn = db['nadadores'][db['nadadores']['codnadador'].astype(str) != '66'].copy()
+        _dn = entrenador.sin_entrenador(db['nadadores']).copy()   # el entrenador no cuenta en la categoría
         _dn['_edad'] = date.today().year - pd.to_datetime(_dn['fechanac'], errors='coerce').dt.year
         if not _rc.empty:
             _emin = pd.to_numeric(_rc['edad_min'], errors='coerce').min()
@@ -1100,10 +1109,11 @@ if db and st.session_state.user_id:
     for _k in range(1, 5):
         if f'nadador_{_k}' in _rel_act.columns:
             _ids_act.update(pd.to_numeric(_rel_act[f'nadador_{_k}'], errors='coerce').dropna())
-    _n_activos = int(pd.to_numeric(db['nadadores']['codnadador'], errors='coerce').isin(_ids_act).sum())
+    _nad_club = entrenador.sin_entrenador(db['nadadores'])   # el entrenador no cuenta como nadador
+    _n_activos = int(pd.to_numeric(_nad_club['codnadador'], errors='coerce').isin(_ids_act).sum())
 
     st.markdown(f"""<div class="nob-kpis tres">
-<div><b>{len(db['nadadores'])}</b><small>Nadadores</small></div>
+<div><b>{len(_nad_club)}</b><small>Nadadores</small></div>
 <div title="Compitieron en {anio - 1} o {anio}"><b>{_n_activos}</b><small>Activos</small></div>
 <div><b>{len(df_t) + len(df_r)}</b><small>Registros</small></div>
 </div>""", unsafe_allow_html=True)
@@ -1170,8 +1180,7 @@ if db and st.session_state.user_id:
                 f'<span class="m">{meds}</span><span class="t">★ {total}</span></div>')
 
     # El entrenador no compite: no figura en el top de medallistas
-    if es_entrenador and _yo is not None:
-        tabla = tabla.drop(index=_yo, errors="ignore")
+    tabla = tabla.drop(index=[float(c) for c in entrenador.ids_entrenador(db['nadadores'])], errors="ignore")
     _n_top = 10 if vista_staff else 3
     cods_top = list(tabla.head(_n_top).index)
     filas_top = [_fila_top(pos, cod, r, _yo is not None and cod == _yo)
@@ -1240,7 +1249,7 @@ if db and st.session_state.user_id:
         _dc['edad_max'] = pd.to_numeric(_dc['edad_max'], errors='coerce')
         _dc = _dc.dropna(subset=['edad_min', 'edad_max']).sort_values('edad_min')
         _dn = db['nadadores'].copy()
-        _dn = _dn[_dn['codnadador'].astype(str) != '66']  # igual que la página Categorías
+        _dn = entrenador.sin_entrenador(_dn)  # el entrenador no cuenta, igual que en la página Categorías
         _dn['_edad'] = date.today().year - pd.to_datetime(_dn['fechanac'], errors='coerce').dt.year
         _dn['_gen'] = _dn['codgenero'].astype(str).str.strip()
         _dn['_act'] = pd.to_numeric(_dn['codnadador'], errors='coerce').isin(_ids_act)
@@ -1320,7 +1329,7 @@ if db and st.session_state.user_id:
     if st.session_state.role == "M":
         seccion("Gestión")
         label_btn = "⚙️ CARGAR COMPETENCIAS" if not st.session_state.admin_unlocked else "🔒 BLOQUEAR GESTIÓN"
-        
+
         if st.button(label_btn, use_container_width=True, key="btn_lock_toggle_m"):
             if not st.session_state.admin_unlocked:
                 st.session_state.show_login_form = not st.session_state.show_login_form
@@ -1333,7 +1342,7 @@ if db and st.session_state.user_id:
                 st.write("**Acceso Profesor**")
                 st.text_input("Palabra clave", type="password", key="p_in")
                 st.form_submit_button("Desbloquear", on_click=intentar_desbloqueo)
-        
+
         if st.session_state.admin_unlocked:
             st.success("🔓 Gestión Habilitada")
             if st.button("⚙️ IR AL PANEL DE CARGA", type="primary", use_container_width=True):

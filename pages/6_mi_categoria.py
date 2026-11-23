@@ -6,6 +6,7 @@ from datetime import date
 import plotly.express as px
 import numpy as np
 import actividad
+import entrenador
 
 # --- 1. CONFIGURACIÓN ---
 st.set_page_config(page_title="Mi Categoría", layout="centered")
@@ -124,7 +125,7 @@ df_nad = db['nadadores'].copy()
 df_cat = db['categorias'].copy()
 
 # 1. EXCLUSIÓN DE NADADOR 66
-df_nad = df_nad[df_nad['codnadador'].astype(str) != '66']
+df_nad = entrenador.sin_entrenador(df_nad)   # el entrenador no cuenta en ninguna categoría
 
 # Normalizar columnas para evitar errores de espacios/mayúsculas
 df_nad.columns = df_nad.columns.str.strip().str.lower()

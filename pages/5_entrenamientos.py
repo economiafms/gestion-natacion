@@ -203,13 +203,8 @@ st.markdown("""
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def leer_entrenamientos_fresco():
-    """Hoja Entrenamientos recién leída (sin caché). None si falla la lectura."""
-    try:
-        return conn.read(worksheet="Entrenamientos", ttl=0).copy()
-    except pd.errors.EmptyDataError:
-        return pd.DataFrame()   # hoja totalmente vacía: no hay nada que proteger
-    except Exception:
-        return None
+    """Lectura segura antes de escribir (ver datos.leer_para_escribir). None = no escribir."""
+    return datos.leer_para_escribir("Entrenamientos")
 
 def cargar_entrenamientos():
     try:

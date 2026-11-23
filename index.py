@@ -3,6 +3,7 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 import time
 from nob_ui import aplicar_tema, barra_movil, chip_ayuda
+import entrenador
 
 # --- 1. CONFIGURACIÓN DEL ÍCONO (ENLACE GITHUB RAW) ---
 # Usamos el enlace RAW directo de GitHub. Esto es lo más compatible que existe.
@@ -327,7 +328,7 @@ else:
         if st.session_state.admin_unlocked:
             menu_pages["Administración"] = [pg_carga]
 
-    elif str(st.session_state.get("nro_socio") or "").strip() == "253973":
+    elif entrenador.es_entrenador():
         # Entrenador sin perfil de manager: igual necesita el Ranking (se abre desde Inicio)
         menu_pages["Herramientas"] = [pg_ranking]
 
