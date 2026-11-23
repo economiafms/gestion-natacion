@@ -175,7 +175,7 @@ def barra_movil(principales, nombre, extras, activo=None):
         # Los estilos van dentro de la barra fija para no sumar espacio arriba de la página
         st.html(f"<style>{''.join(css)}</style>")
 
-        if abierto and extras:
+        if abierto and len(extras) > 1:
             with st.container(key="bn_panel"):
                 for fila in range(0, len(extras), 2):
                     for col, (j, (icono, _)) in zip(st.columns(2, gap="small"),
@@ -193,8 +193,14 @@ def barra_movil(principales, nombre, extras, activo=None):
         with st.container(key="bn_strip", horizontal=True, vertical_alignment="center"):
             if st.button(nombre, key="bn_nombre"):
                 accion = ("ficha",)
-            st.button("Cerrar" if abierto else "Más", key="bn_mas", on_click=_alternar_panel_nav,
-                      icon=":material/keyboard_arrow_down:" if abierto else ":material/keyboard_arrow_up:")
+            if len(extras) == 1:
+                # Una sola opción extra (hoy, para el nadador: Cerrar sesión): botón directo, sin panel
+                if st.button("", key="bn_mas", icon=":material/logout:", help=extras[0][1]):
+                    accion = ("extra", 0)
+            elif extras:
+                st.button("", key="bn_mas", on_click=_alternar_panel_nav,
+                          icon=":material/close:" if abierto else ":material/add:",
+                          help="Cerrar" if abierto else "Más opciones")
 
     if accion is not None:
         st.session_state.nav_mas_abierto = False
@@ -574,12 +580,11 @@ def aplicar_tema():
             }
             .st-key-bn_nombre button p { font-size: 16px !important; font-weight: 800 !important; color: #fff; white-space: nowrap; }
             .st-key-bn_mas button {
-                border-radius: 999px !important; padding: 2px 14px 2px 10px !important;
-                background: #E30613 !important; border: none !important;
-                box-shadow: 0 4px 12px rgba(227,6,19,0.4) !important;
+                border-radius: 999px !important; min-width: 64px !important; padding: 2px 16px !important;
+                background: rgba(255,255,255,0.08) !important; border: 1px solid rgba(255,255,255,0.16) !important;
+                box-shadow: none !important;
             }
-            .st-key-bn_mas button p { font-size: 14px !important; font-weight: 800 !important; color: #fff; }
-            .st-key-bn_mas button [data-testid="stIconMaterial"] { font-size: 24px !important; color: #fff; }
+            .st-key-bn_mas button [data-testid="stIconMaterial"] { font-size: 26px !important; color: #fff; margin: 0 !important; }
 
             /* Panel desplegable de más opciones */
             .st-key-bn_panel {
