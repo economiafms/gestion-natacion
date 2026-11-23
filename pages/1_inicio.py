@@ -342,7 +342,10 @@ def tarjeta_resumen_anual(me):
 <div class="t">Tu {anio} en el agua</div>
 <div class="s">Medallas, fechas, récords, pruebas nuevas y más, en una imagen para compartir.</div></div>""", unsafe_allow_html=True)
     if st.button(f"✨ Ver mi {anio}", key="btn_resumen_anual", use_container_width=True):
-        dialogo_resumen_anual(me['codnadador'], f"{me['nombre']} {me['apellido']}", anio)
+        # En la imagen para redes el apellido va solo con la inicial (privacidad)
+        _ap = str(me['apellido']).strip()
+        _nombre_pub = f"{str(me['nombre']).strip()} {_ap[0].upper()}." if _ap and _ap.lower() != "nan" else str(me['nombre']).strip()
+        dialogo_resumen_anual(me['codnadador'], _nombre_pub, anio)
 
 
 def mis_resultados(id_nadador):
