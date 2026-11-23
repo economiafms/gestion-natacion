@@ -1004,7 +1004,8 @@ if db and st.session_state.user_id:
             _act = int(_mios['codnadador'].map(actividad.id_txt).isin(_ids_a).sum())
             st.markdown("""<style>
 .st-key-mi_cat_chip { position: relative; }
-.st-key-mi_cat_chip .st-key-mi_cat_btn { position: absolute !important; left: 0; right: 0; top: 0; bottom: 6px; z-index: 2; }
+.st-key-mi_cat_chip .st-key-mi_cat_btn { position: absolute !important; left: 0; top: 0; z-index: 2;
+  width: 100% !important; height: calc(100% - 6px) !important; }
 .st-key-mi_cat_chip .st-key-mi_cat_btn [data-testid="stButton"], .st-key-mi_cat_chip .st-key-mi_cat_btn .stButton {
   width: 100% !important; height: 100% !important; }
 .st-key-mi_cat_chip .st-key-mi_cat_btn button { width: 100% !important; height: 100% !important; min-height: 0 !important;
@@ -1135,9 +1136,12 @@ if db and st.session_state.user_id:
         # (todas las filas miden lo mismo) que abre la ficha del nadador en el Fichero.
         st.markdown("""<style>
 .st-key-ent_tops { position: relative; }
-.st-key-ent_topbtns { position: absolute !important; left: 0; right: 0; bottom: 6px; z-index: 2;
-  height: var(--ent-top-h); display: flex; flex-direction: column; gap: 6px !important; }
-.st-key-ent_topbtns > div { flex: 1 1 0 !important; min-height: 0 !important; width: 100% !important; }
+.st-key-ent_topbtns { position: absolute !important; left: 0; bottom: 6px; z-index: 2;
+  width: 100% !important; height: var(--ent-top-h) !important; display: flex; flex-direction: column; gap: 6px !important; }
+.st-key-ent_topbtns [data-testid="stVerticalBlock"] { display: flex !important; flex-direction: column !important;
+  gap: 6px !important; height: 100% !important; width: 100% !important; }
+.st-key-ent_topbtns [data-testid="stElementContainer"] { flex: 1 1 0 !important; min-height: 0 !important;
+  width: 100% !important; height: auto !important; }
 .st-key-ent_topbtns [data-testid="stButton"], .st-key-ent_topbtns .stButton { width: 100% !important; height: 100% !important; }
 .st-key-ent_topbtns button { width: 100% !important; height: 100% !important; min-height: 0 !important;
   padding: 0 !important; opacity: 0; cursor: pointer; }
