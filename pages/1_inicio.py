@@ -170,18 +170,18 @@ def calcular_categoria_grafico(anio_nac):
     else: return "K+"
 
 def intentar_desbloqueo():
+    # Solo se pide la palabra clave (sin usuario): secrets o clave de respaldo
     try:
-        sec_user = st.secrets["admin"]["usuario"]
-        sec_pass = st.secrets["admin"]["password"]
+        sec_pass = str(st.secrets["admin"]["password"])
     except:
-        sec_user = "entrenador"; sec_pass = "nob1903"
+        sec_pass = "nob1903"
 
-    if st.session_state.u_in == sec_user and st.session_state.p_in == sec_pass: 
+    if str(st.session_state.p_in).strip() == sec_pass:
         st.session_state.admin_unlocked = True
         st.session_state.show_login_form = False
         st.rerun()
-    else: 
-        st.error("Credenciales incorrectas")
+    else:
+        st.error("Palabra clave incorrecta")
 
 def guardar_seguimiento_inicio(id_rutina, id_nadador):
     try:
@@ -974,8 +974,7 @@ if db and st.session_state.user_id:
         if st.session_state.show_login_form and not st.session_state.admin_unlocked:
             with st.form("admin_login_form"):
                 st.write("**Acceso Profesor**")
-                st.text_input("Usuario", key="u_in")
-                st.text_input("Contraseña", type="password", key="p_in")
+                st.text_input("Palabra clave", type="password", key="p_in")
                 st.form_submit_button("Desbloquear", on_click=intentar_desbloqueo)
         
         if st.session_state.admin_unlocked:

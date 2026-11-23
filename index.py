@@ -103,20 +103,19 @@ def ir_a_mi_ficha_nav():
     st.switch_page("pages/2_visualizar_datos.py")
 
 
-def credenciales_gestion():
-    """Mismas credenciales que el desbloqueo de gestión de Inicio: secrets o clave de respaldo."""
+def palabra_clave_gestion():
+    """Misma palabra clave que el desbloqueo de gestión de Inicio: secrets o clave de respaldo."""
     try:
-        return st.secrets["admin"]["usuario"], st.secrets["admin"]["password"]
+        return str(st.secrets["admin"]["password"])
     except Exception:
-        return "entrenador", "nob1903"
+        return "nob1903"
 
 
 @st.dialog("Gestión de competencias")
 def dialogo_gestion():
-    st.markdown("Ingresá el usuario y la contraseña de gestión para cargar competencias.")
+    st.markdown("Ingresá la palabra clave de gestión para cargar competencias.")
     with st.form("form_gestion", border=False):
-        usuario = st.text_input("Usuario", key="gestion_usuario")
-        clave = st.text_input("Contraseña", type="password", key="gestion_clave")
+        clave = st.text_input("Palabra clave", type="password", key="gestion_clave")
         c1, c2 = st.columns([1, 2])
         with c1:
             cancelar = st.form_submit_button("Cancelar", use_container_width=True)
@@ -125,15 +124,14 @@ def dialogo_gestion():
     if cancelar:
         st.rerun()
     if ingresar:
-        sec_user, sec_pass = credenciales_gestion()
-        if usuario == sec_user and clave == sec_pass:
+        if clave.strip() == palabra_clave_gestion():
             # Igual que "Acceso Profesor" de Inicio: solo desbloquea la gestión.
             # La rueda del dock pasa a ser el botón "Cargar datos".
             st.session_state.admin_unlocked = True
             st.session_state.show_login_form = False
             st.rerun()
         else:
-            st.error("Usuario o contraseña incorrectos.")
+            st.error("Palabra clave incorrecta.")
 
 
 def cerrar_sesion():
