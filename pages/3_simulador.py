@@ -5,7 +5,7 @@ from datetime import datetime
 import itertools
 
 # --- 1. CONFIGURACIÓN ---
-st.set_page_config(page_title="Simulador Pro - NOB", layout="wide")
+st.set_page_config(page_title="Simulador Pro - NOB", layout="centered")
 
 # --- 2. SEGURIDAD ---
 if "role" not in st.session_state or not st.session_state.role:
@@ -117,12 +117,14 @@ if "o_reg_g" not in st.session_state:
     agenda_pool = st.session_state.get("simulador_pre_pool", [])
     st.session_state.current_pool = agenda_pool.copy()
     st.session_state.last_agenda_pool = agenda_pool.copy()
+    st.session_state.sim_abrir_grupo = bool(agenda_pool)
 else:
     agenda_pool = st.session_state.get("simulador_pre_pool", [])
     if st.session_state.last_agenda_pool != agenda_pool:
         st.session_state.equipos_borrador = []
         st.session_state.current_pool = agenda_pool.copy()
         st.session_state.last_agenda_pool = agenda_pool.copy()
+        st.session_state.sim_abrir_grupo = bool(agenda_pool)
 
 def sync_pool():
     st.session_state.current_pool = st.session_state.pool_opt_g
@@ -139,319 +141,322 @@ def eliminar_equipo_borrador(index):
             if n not in st.session_state.current_pool:
                 st.session_state.current_pool.append(n)
 
-# --- 5. POSTA MANUAL ---
-st.subheader("🧪 Posta Manual")
-with st.container(border=True):
-    c1, c2, c3 = st.columns(3)
-    
-    # Agregamos "ÚNICA" como opción manual también si corresponde
-    opciones_reg = data['cat_relevos']['tipo_reglamento'].unique().tolist()
-    if "ÚNICA" not in opciones_reg:
-        opciones_reg.append("ÚNICA")
-        
-    s_reg_m = c1.selectbox("Reglamento", opciones_reg, key="s_reg_m")
-    s_tipo_m = c2.selectbox("Prueba", ["Libre (Crol)", "Combinado (Medley)"], key="s_tipo_m")
-    s_gen_sel = c3.selectbox("Género", ["Masculino (M)", "Femenino (F)", "Mixto (2M-2F)"], key="s_gen_m")
-    s_gen = "X" if "Mixto" in s_gen_sel else ("M" if "(M)" in s_gen_sel else "F")
+# --- 5. PESTAÑAS: POSTA MANUAL / SIMULADOR POR GRUPO ---
+# Si se llega desde la Agenda con inscriptos, abrir directo en "Por grupo"
+if st.session_state.pop("sim_abrir_grupo", False):
+    st.session_state["sim_tabs"] = "🎯 Por grupo de nadadores"
+tab_manual, tab_grupo = st.tabs(["🧪 Posta manual", "🎯 Por grupo de nadadores"], key="sim_tabs", on_change="rerun")
 
-    legs = [("Espalda", "E2"), ("Pecho", "E3"), ("Mariposa", "E1"), ("Crol", "E4")] if "Medley" in s_tipo_m else [("Crol", "E4")] * 4
+# --- POSTA MANUAL ---
+with tab_manual:
+    with st.container(border=True):
+        c1, c2, c3 = st.columns(3)
     
-    n_sel = []
-    tiempos_invitados = {}
-    edades_invitados = {}
+        # Agregamos "ÚNICA" como opción manual también si corresponde
+        opciones_reg = data['cat_relevos']['tipo_reglamento'].unique().tolist()
+        if "ÚNICA" not in opciones_reg:
+            opciones_reg.append("ÚNICA")
+        
+        s_reg_m = c1.selectbox("Reglamento", opciones_reg, key="s_reg_m")
+        s_tipo_m = c2.selectbox("Prueba", ["Libre (Crol)", "Combinado (Medley)"], key="s_tipo_m")
+        s_gen_sel = c3.selectbox("Género", ["Masculino (M)", "Femenino (F)", "Mixto (2M-2F)"], key="s_gen_m")
+        s_gen = "X" if "Mixto" in s_gen_sel else ("M" if "(M)" in s_gen_sel else "F")
+
+        legs = [("Espalda", "E2"), ("Pecho", "E3"), ("Mariposa", "E1"), ("Crol", "E4")] if "Medley" in s_tipo_m else [("Crol", "E4")] * 4
     
-    for i, (nom_e, cod_e) in enumerate(legs):
-        aptos = df_nad[df_nad['codnadador'].isin(df_tiempos_50[df_tiempos_50['codestilo'] == cod_e]['codnadador'])]
-        if s_gen != "X": aptos = aptos[aptos['codgenero'] == s_gen]
+        n_sel = []
+        tiempos_invitados = {}
+        edades_invitados = {}
+    
+        for i, (nom_e, cod_e) in enumerate(legs):
+            aptos = df_nad[df_nad['codnadador'].isin(df_tiempos_50[df_tiempos_50['codestilo'] == cod_e]['codnadador'])]
+            if s_gen != "X": aptos = aptos[aptos['codgenero'] == s_gen]
         
-        opciones_nadadores = ["⭐ INVITADO MANUAL"] + sorted(aptos['Nombre Completo'].tolist())
-        sel = st.selectbox(f"{i+1}. {nom_e}", opciones_nadadores, index=None, key=f"man_sel_{i}")
+            opciones_nadadores = ["⭐ INVITADO MANUAL"] + sorted(aptos['Nombre Completo'].tolist())
+            sel = st.selectbox(f"{i+1}. {nom_e}", opciones_nadadores, index=None, key=f"man_sel_{i}")
         
-        if sel == "⭐ INVITADO MANUAL":
-            with st.container():
-                c_inv1, c_inv2, c_inv3 = st.columns([2, 1, 1])
-                nom_inv = c_inv1.text_input("Nombre / Referencia", value=f"Invitado {i+1} ({nom_e})", key=f"inv_nom_{i}")
-                t_inv = c_inv2.text_input("Tiempo", value="00:30.00", key=f"inv_t_{i}", help="Formato MM:SS.cc")
-                e_inv = c_inv3.number_input("Edad", min_value=15, max_value=99, value=30, key=f"inv_e_{i}")
+            if sel == "⭐ INVITADO MANUAL":
+                with st.container():
+                    c_inv1, c_inv2, c_inv3 = st.columns([2, 1, 1])
+                    nom_inv = c_inv1.text_input("Nombre / Referencia", value=f"Invitado {i+1} ({nom_e})", key=f"inv_nom_{i}")
+                    t_inv = c_inv2.text_input("Tiempo", value="00:30.00", key=f"inv_t_{i}", help="Formato MM:SS.cc")
+                    e_inv = c_inv3.number_input("Edad", min_value=15, max_value=99, value=30, key=f"inv_e_{i}")
                 
-                n_sel.append(nom_inv)
-                tiempos_invitados[nom_inv] = tiempo_a_seg(t_inv)
-                edades_invitados[nom_inv] = e_inv
+                    n_sel.append(nom_inv)
+                    tiempos_invitados[nom_inv] = tiempo_a_seg(t_inv)
+                    edades_invitados[nom_inv] = e_inv
+            else:
+                n_sel.append(sel)
+
+        btn_manual = st.button("🚀 Calcular Posta", use_container_width=True)
+
+    res_manual_container = st.container()
+
+    if btn_manual:
+        if None in n_sel:
+            st.warning("⚠️ Faltan nadadores. Selecciona los 4 integrantes.")
+        elif len(set(n_sel)) < 4:
+            st.error("⛔ **Error:** Nadador repetido. El equipo debe tener 4 integrantes distintos (Asegurate de darles nombres distintos a los invitados).")
         else:
-            n_sel.append(sel)
-
-    btn_manual = st.button("🚀 Calcular Posta", use_container_width=True)
-
-res_manual_container = st.container()
-
-if btn_manual:
-    if None in n_sel:
-        st.warning("⚠️ Faltan nadadores. Selecciona los 4 integrantes.")
-    elif len(set(n_sel)) < 4:
-        st.error("⛔ **Error:** Nadador repetido. El equipo debe tener 4 integrantes distintos (Asegurate de darles nombres distintos a los invitados).")
-    else:
-        with st.spinner("Calculando..."):
-            m_loc = {}
-            for n in n_sel:
-                if n in tiempos_invitados:
-                    # Asignamos el tiempo cargado a todos los estilos para que la permutación lógica no falle
-                    m_loc[n] = {"E1": tiempos_invitados[n], "E2": tiempos_invitados[n], "E3": tiempos_invitados[n], "E4": tiempos_invitados[n]}
-                else:
-                    m_loc[n] = {r['codestilo']: r['segundos_calc'] for _, r in df_tiempos_50[df_tiempos_50['codnadador'] == df_nad[df_nad['Nombre Completo'] == n]['codnadador'].iloc[0]].iterrows()}
-            
-            tiempos_p = [m_loc[n_sel[i]].get(legs[i][1], 999.0) for i in range(4)]
-            total = sum(tiempos_p)
-            
-            se = 0
-            for n in n_sel:
-                if n in edades_invitados:
-                    se += edades_invitados[n]
-                else:
-                    se += df_nad[df_nad['Nombre Completo'] == n]['Edad_Master'].iloc[0]
-                    
-            cat_n, _ = get_cat_info(se, s_reg_m)
-
-            with res_manual_container:
-                st.write("") 
-                render_tarjeta_resumen(seg_a_tiempo(total), cat_n, se)
-
-                t_cols = st.columns(4)
-                for i in range(4):
-                    t_cols[i].metric(n_sel[i].split(',')[0], seg_a_tiempo(tiempos_p[i]), delta=legs[i][0])
-
-                obs_lista = []
-                
-                comp = analizar_competitividad(total, se, s_gen)
-                if comp: obs_lista.append(comp)
-                
-                # Búsqueda de antecedentes históricos (excluyendo a los invitados)
-                ids_a = []
+            with st.spinner("Calculando..."):
+                m_loc = {}
                 for n in n_sel:
                     if n in tiempos_invitados:
-                        ids_a.append(-1) # ID ficticio para que no cruce
+                        # Asignamos el tiempo cargado a todos los estilos para que la permutación lógica no falle
+                        m_loc[n] = {"E1": tiempos_invitados[n], "E2": tiempos_invitados[n], "E3": tiempos_invitados[n], "E4": tiempos_invitados[n]}
                     else:
-                        ids_a.append(int(df_nad[df_nad['Nombre Completo'] == n]['codnadador'].iloc[0]))
-                ids_a = sorted(ids_a)
-                
-                hist = data['relevos'][data['relevos'].apply(lambda r: sorted([int(r['nadador_1']), int(r['nadador_2']), int(r['nadador_3']), int(r['nadador_4'])]) == ids_a if pd.notnull(r['nadador_1']) else False, axis=1)]
-                if not hist.empty:
-                    ant = hist.sort_values('tiempo_final').iloc[0]
-                    ip = dict_piletas.get(ant['codpileta'], {"club": "Sede ?", "medida": "-"})
+                        m_loc[n] = {r['codestilo']: r['segundos_calc'] for _, r in df_tiempos_50[df_tiempos_50['codnadador'] == df_nad[df_nad['Nombre Completo'] == n]['codnadador'].iloc[0]].iterrows()}
+            
+                tiempos_p = [m_loc[n_sel[i]].get(legs[i][1], 999.0) for i in range(4)]
+                total = sum(tiempos_p)
+            
+                se = 0
+                for n in n_sel:
+                    if n in edades_invitados:
+                        se += edades_invitados[n]
+                    else:
+                        se += df_nad[df_nad['Nombre Completo'] == n]['Edad_Master'].iloc[0]
                     
-                    estilo_val = ant.get('estilo', ant.get('prueba', ant.get('codestilo', '')))
-                    estilo_str = str(estilo_val).strip().upper()
-                    if 'COMB' in estilo_str or 'MEDLEY' in estilo_str: estilo_texto = "Combinado (Medley)"
-                    elif 'LIBR' in estilo_str or 'CROL' in estilo_str or 'E4' in estilo_str: estilo_texto = "Libre (Crol)"
-                    elif estilo_str and estilo_str != 'NAN': estilo_texto = estilo_val
-                    else: estilo_texto = "esa formación"
-                    
-                    obs_lista.append(f"⏱️ **ANTECEDENTE:** Marcaron **{ant['tiempo_final']}** nadando **{estilo_texto}** en {ip['club']} ({ip['medida']}) el {ant['fecha']}.")
+                cat_n, _ = get_cat_info(se, s_reg_m)
+
+                with res_manual_container:
+                    st.write("") 
+                    render_tarjeta_resumen(seg_a_tiempo(total), cat_n, se)
+
+                    t_cols = st.columns(4)
+                    for i in range(4):
+                        t_cols[i].metric(n_sel[i].split(',')[0], seg_a_tiempo(tiempos_p[i]), delta=legs[i][0])
+
+                    obs_lista = []
                 
-                mejor_t, mejor_o = total, n_sel
-                for p in itertools.permutations(n_sel):
-                    tp = sum([m_loc[p[idx]].get(legs[idx][1], 999.0) for idx in range(4)])
-                    if tp < (mejor_t - 0.05): mejor_t, mejor_o = tp, p
-                if mejor_t < total:
-                    obs_lista.append(f"💡 **ORDEN:** Bajan a **{seg_a_tiempo(mejor_t)}** alternando orden de salida.")
+                    comp = analizar_competitividad(total, se, s_gen)
+                    if comp: obs_lista.append(comp)
+                
+                    # Búsqueda de antecedentes históricos (excluyendo a los invitados)
+                    ids_a = []
+                    for n in n_sel:
+                        if n in tiempos_invitados:
+                            ids_a.append(-1) # ID ficticio para que no cruce
+                        else:
+                            ids_a.append(int(df_nad[df_nad['Nombre Completo'] == n]['codnadador'].iloc[0]))
+                    ids_a = sorted(ids_a)
+                
+                    hist = data['relevos'][data['relevos'].apply(lambda r: sorted([int(r['nadador_1']), int(r['nadador_2']), int(r['nadador_3']), int(r['nadador_4'])]) == ids_a if pd.notnull(r['nadador_1']) else False, axis=1)]
+                    if not hist.empty:
+                        ant = hist.sort_values('tiempo_final').iloc[0]
+                        ip = dict_piletas.get(ant['codpileta'], {"club": "Sede ?", "medida": "-"})
+                    
+                        estilo_val = ant.get('estilo', ant.get('prueba', ant.get('codestilo', '')))
+                        estilo_str = str(estilo_val).strip().upper()
+                        if 'COMB' in estilo_str or 'MEDLEY' in estilo_str: estilo_texto = "Combinado (Medley)"
+                        elif 'LIBR' in estilo_str or 'CROL' in estilo_str or 'E4' in estilo_str: estilo_texto = "Libre (Crol)"
+                        elif estilo_str and estilo_str != 'NAN': estilo_texto = estilo_val
+                        else: estilo_texto = "esa formación"
+                    
+                        obs_lista.append(f"⏱️ **ANTECEDENTE:** Marcaron **{ant['tiempo_final']}** nadando **{estilo_texto}** en {ip['club']} ({ip['medida']}) el {ant['fecha']}.")
+                
+                    mejor_t, mejor_o = total, n_sel
+                    for p in itertools.permutations(n_sel):
+                        tp = sum([m_loc[p[idx]].get(legs[idx][1], 999.0) for idx in range(4)])
+                        if tp < (mejor_t - 0.05): mejor_t, mejor_o = tp, p
+                    if mejor_t < total:
+                        obs_lista.append(f"💡 **ORDEN:** Bajan a **{seg_a_tiempo(mejor_t)}** alternando orden de salida.")
 
-                if obs_lista:
-                    st.markdown("---")
-                    st.markdown("### 📋 Observaciones")
-                    for item in obs_lista: st.info(item)
+                    if obs_lista:
+                        st.markdown("---")
+                        st.markdown("### 📋 Observaciones")
+                        for item in obs_lista: st.info(item)
 
-# --- 6. SIMULADOR POR GRUPO ---
-st.divider()
+# --- SIMULADOR POR GRUPO (y equipos guardados en borrador) ---
+with tab_grupo:
 
-c_title, c_btn = st.columns([0.8, 0.2])
-with c_title:
-    st.subheader("🎯 Simulador por grupo de nadadores")
-with c_btn:
-    if st.button("🔄 Reiniciar Todo", use_container_width=True, help="Vacía el borrador y la selección actual"):
-        st.session_state.equipos_borrador = []
-        st.session_state.current_pool = []
-        if "simulador_pre_pool" in st.session_state:
-            st.session_state.simulador_pre_pool = []
-        st.session_state.last_agenda_pool = []
-        st.rerun()
+    with st.container(horizontal=True, horizontal_alignment="right"):
+        if st.button("🔄 Reiniciar todo", help="Vacía el borrador y la selección actual"):
+            st.session_state.equipos_borrador = []
+            st.session_state.current_pool = []
+            if "simulador_pre_pool" in st.session_state:
+                st.session_state.simulador_pre_pool = []
+            st.session_state.last_agenda_pool = []
+            st.rerun()
 
-with st.container(border=True):
-    lista_nadadores_completa = sorted(df_nad['Nombre Completo'].tolist())
+    with st.container(border=True):
+        lista_nadadores_completa = sorted(df_nad['Nombre Completo'].tolist())
     
-    nadadores_en_borrador = set()
-    for equipo in st.session_state.equipos_borrador:
-        nadadores_en_borrador.update(equipo['eq'])
+        nadadores_en_borrador = set()
+        for equipo in st.session_state.equipos_borrador:
+            nadadores_en_borrador.update(equipo['eq'])
         
-    lista_nadadores_disponibles = [n for n in lista_nadadores_completa if n not in nadadores_en_borrador]
+        lista_nadadores_disponibles = [n for n in lista_nadadores_completa if n not in nadadores_en_borrador]
     
-    valid_default = [x for x in st.session_state.current_pool if x in lista_nadadores_disponibles]
+        valid_default = [x for x in st.session_state.current_pool if x in lista_nadadores_disponibles]
     
-    st.info(f"Nadadores disponibles en el pool: **{len(lista_nadadores_disponibles)}**")
+        st.info(f"Nadadores disponibles en el pool: **{len(lista_nadadores_disponibles)}**")
     
-    pool = st.multiselect(
-        "Seleccionar nadadores (Los ya asignados en el borrador no aparecerán aquí):", 
-        options=lista_nadadores_disponibles, 
-        default=valid_default, 
-        key="pool_opt_g",
-        on_change=sync_pool
-    )
+        pool = st.multiselect(
+            "Seleccionar nadadores (Los ya asignados en el borrador no aparecerán aquí):", 
+            options=lista_nadadores_disponibles, 
+            default=valid_default, 
+            key="pool_opt_g",
+            on_change=sync_pool
+        )
 
-    c1, c2, c3 = st.columns(3)
-    o_reg = c1.selectbox("Reglamento", opciones_reg, key="o_reg_g")
-    o_tipo = c2.radio("Estilo de Prueba", ["Libre (Crol)", "Combinado (Medley)"], horizontal=True)
-    o_gen_sel = c3.radio("Género Prueba", ["Masculino (M)", "Femenino (F)", "Mixto (2M-2F)"], horizontal=True)
-    o_gen = "X" if "Mixto" in o_gen_sel else ("M" if "(M)" in o_gen_sel else "F")
+        c1, c2, c3 = st.columns(3)
+        o_reg = c1.selectbox("Reglamento", opciones_reg, key="o_reg_g")
+        o_tipo = c2.radio("Estilo de Prueba", ["Libre (Crol)", "Combinado (Medley)"], horizontal=True)
+        o_gen_sel = c3.radio("Género Prueba", ["Masculino (M)", "Femenino (F)", "Mixto (2M-2F)"], horizontal=True)
+        o_gen = "X" if "Mixto" in o_gen_sel else ("M" if "(M)" in o_gen_sel else "F")
 
-if st.button("🪄 Generar Estrategia Óptima", type="primary", use_container_width=True):
-    if len(pool) < 4: st.warning("Seleccione al menos 4 nadadores del pool disponible.")
-    else:
-        with st.spinner("Calculando..."):
-            m_map = {n: {r['codestilo']: r['segundos_calc'] for _, r in df_tiempos_50[df_tiempos_50['codnadador'] == df_nad[df_nad['Nombre Completo'] == n]['codnadador'].iloc[0]].iterrows()} for n in pool}
-            for n in pool: m_map[n].update({'gen': df_nad[df_nad['Nombre Completo'] == n]['codgenero'].iloc[0], 'edad': df_nad[df_nad['Nombre Completo'] == n]['Edad_Master'].iloc[0]})
-            legs_o = [("E2", "Espalda"), ("E3", "Pecho"), ("E1", "Mariposa"), ("E4", "Crol")] if "Medley" in o_tipo else [("E4", "Crol")]*4
+    if st.button("🪄 Generar Estrategia Óptima", type="primary", use_container_width=True):
+        if len(pool) < 4: st.warning("Seleccione al menos 4 nadadores del pool disponible.")
+        else:
+            with st.spinner("Calculando..."):
+                m_map = {n: {r['codestilo']: r['segundos_calc'] for _, r in df_tiempos_50[df_tiempos_50['codnadador'] == df_nad[df_nad['Nombre Completo'] == n]['codnadador'].iloc[0]].iterrows()} for n in pool}
+                for n in pool: m_map[n].update({'gen': df_nad[df_nad['Nombre Completo'] == n]['codgenero'].iloc[0], 'edad': df_nad[df_nad['Nombre Completo'] == n]['Edad_Master'].iloc[0]})
+                legs_o = [("E2", "Espalda"), ("E3", "Pecho"), ("E1", "Mariposa"), ("E4", "Crol")] if "Medley" in o_tipo else [("E4", "Crol")]*4
             
-            combis = [c for c in itertools.combinations(pool, 4) if (o_gen=="M" and all(m_map[n]['gen']=="M" for n in c)) or (o_gen=="F" and all(m_map[n]['gen']=="F" for n in c)) or (o_gen=="X" and [m_map[n]['gen'] for n in c].count("M")==2)]
+                combis = [c for c in itertools.combinations(pool, 4) if (o_gen=="M" and all(m_map[n]['gen']=="M" for n in c)) or (o_gen=="F" and all(m_map[n]['gen']=="F" for n in c)) or (o_gen=="X" and [m_map[n]['gen'] for n in c].count("M")==2)]
             
-            resultados = []
-            for c in combis:
-                mt, mo = 999.0, None
-                for p in itertools.permutations(c):
-                    tp = sum([m_map[p[idx]].get(legs_o[idx][0], 999.0) for idx in range(4)])
-                    if tp < mt: mt, mo = tp, p
-                if mo:
-                    se = sum([m_map[n]['edad'] for n in mo])
-                    cn, s_min = get_cat_info(se, o_reg)
-                    resultados.append({'eq': mo, 't': mt, 'cat': cn, 'se': se, 's_min': s_min})
+                resultados = []
+                for c in combis:
+                    mt, mo = 999.0, None
+                    for p in itertools.permutations(c):
+                        tp = sum([m_map[p[idx]].get(legs_o[idx][0], 999.0) for idx in range(4)])
+                        if tp < mt: mt, mo = tp, p
+                    if mo:
+                        se = sum([m_map[n]['edad'] for n in mo])
+                        cn, s_min = get_cat_info(se, o_reg)
+                        resultados.append({'eq': mo, 't': mt, 'cat': cn, 'se': se, 's_min': s_min})
 
-            if not resultados: st.info("No se encontraron combinaciones válidas.")
-            else:
-                df_res = pd.DataFrame(resultados).sort_values(by=['s_min', 't'])
-                
-                # --- NUEVA LÓGICA PARA CATEGORÍA ÚNICA ---
-                if o_reg == "ÚNICA":
-                    st.markdown("### 🥇 TOP 3 ABSOLUTO")
-                    df_res = df_res.sort_values(by='t', ascending=True).head(3)
-                    
-                    for idx, row in df_res.reset_index().iterrows():
-                        if idx == 0: label = "🏅 EQUIPO 1 (Más Rápido)"
-                        elif idx == 1: label = "🥈 EQUIPO 2"
-                        else: label = "🥉 EQUIPO 3"
-                        
-                        with st.expander(f"{label} - {seg_a_tiempo(row['t'])}", expanded=True if idx == 0 else False):
-                            render_tarjeta_resumen(seg_a_tiempo(row['t']), "ÚNICA", row['se'], dark=True)
-                            cs = st.columns(4)
-                            for j in range(4):
-                                cs[j].caption(f"**{legs_o[j][1]}**")
-                                cs[j].write(row['eq'][j].split(',')[0]) 
-                                cs[j].code(seg_a_tiempo(m_map[row['eq'][j]].get(legs_o[j][0], 999.0)))
-                            
-                            equipo_guardar = {
-                                'etiqueta': f"{label} - ÚNICA",
-                                'eq': row['eq'],
-                                't': row['t'],
-                                'cat': "ÚNICA",
-                                'se': row['se'],
-                                'estilos': [l[1] for l in legs_o]
-                            }
-                            st.button(
-                                f"💾 Guardar {label} en Borrador", 
-                                key=f"save_draft_unica_{idx}", 
-                                on_click=guardar_equipo_borrador, 
-                                args=(equipo_guardar,)
-                            )
-
-                # --- LÓGICA NORMAL POR CATEGORÍAS (FED / SIMPLE) ---
+                if not resultados: st.info("No se encontraron combinaciones válidas.")
                 else:
-                    for cat_nombre, group in df_res.groupby('cat', sort=False):
-                        st.markdown(f"### 🚩 {cat_nombre.upper()}")
-                        for idx, row in group.head(2).iterrows():
-                            label = "EQUIPO A" if idx == group.index[0] else "EQUIPO B"
-                            with st.expander(f"{label} - {seg_a_tiempo(row['t'])}", expanded=True if idx == group.index[0] else False):
-                                render_tarjeta_resumen(seg_a_tiempo(row['t']), row['cat'], row['se'], dark=True)
+                    df_res = pd.DataFrame(resultados).sort_values(by=['s_min', 't'])
+                
+                    # --- NUEVA LÓGICA PARA CATEGORÍA ÚNICA ---
+                    if o_reg == "ÚNICA":
+                        st.markdown("### 🥇 TOP 3 ABSOLUTO")
+                        df_res = df_res.sort_values(by='t', ascending=True).head(3)
+                    
+                        for idx, row in df_res.reset_index().iterrows():
+                            if idx == 0: label = "🏅 EQUIPO 1 (Más Rápido)"
+                            elif idx == 1: label = "🥈 EQUIPO 2"
+                            else: label = "🥉 EQUIPO 3"
+                        
+                            with st.expander(f"{label} - {seg_a_tiempo(row['t'])}", expanded=True if idx == 0 else False):
+                                render_tarjeta_resumen(seg_a_tiempo(row['t']), "ÚNICA", row['se'], dark=True)
                                 cs = st.columns(4)
                                 for j in range(4):
                                     cs[j].caption(f"**{legs_o[j][1]}**")
-                                    cs[j].write(row['eq'][j].split(',')[0]) # Solo apellido
+                                    cs[j].write(row['eq'][j].split(',')[0]) 
                                     cs[j].code(seg_a_tiempo(m_map[row['eq'][j]].get(legs_o[j][0], 999.0)))
-                                
-                                # --- OBSERVACIONES Y ANTECEDENTES PARA SIMULADOR GRUPO ---
-                                obs_lista_g = []
-                                
-                                # 1. Competitividad
-                                comp_g = analizar_competitividad(row['t'], row['se'], o_gen)
-                                if comp_g:
-                                    obs_lista_g.append(comp_g)
-                                    
-                                # 2. Historial de los 4 nadadores
-                                ids_eq = sorted([int(df_nad[df_nad['Nombre Completo'] == n]['codnadador'].iloc[0]) for n in row['eq']])
-                                hist_g = data['relevos'][data['relevos'].apply(lambda r: sorted([int(r['nadador_1']), int(r['nadador_2']), int(r['nadador_3']), int(r['nadador_4'])]) == ids_eq if pd.notnull(r['nadador_1']) else False, axis=1)]
-                                
-                                if not hist_g.empty:
-                                    ant_g = hist_g.sort_values('tiempo_final').iloc[0]
-                                    ip_g = dict_piletas.get(ant_g['codpileta'], {"club": "Sede ?", "medida": "-"})
-                                    
-                                    # Detectar el estilo nadado en el antecedente
-                                    estilo_val_g = ant_g.get('estilo', ant_g.get('prueba', ant_g.get('codestilo', '')))
-                                    estilo_str_g = str(estilo_val_g).strip().upper()
-                                    if 'COMB' in estilo_str_g or 'MEDLEY' in estilo_str_g: estilo_texto_g = "Combinado (Medley)"
-                                    elif 'LIBR' in estilo_str_g or 'CROL' in estilo_str_g or 'E4' in estilo_str_g: estilo_texto_g = "Libre (Crol)"
-                                    elif estilo_str_g and estilo_str_g != 'NAN': estilo_texto_g = estilo_val_g
-                                    else: estilo_texto_g = "juntos"
-                                    
-                                    obs_lista_g.append(f"⏱️ **YA NADARON JUNTOS:** Tienen un registro oficial de **{ant_g['tiempo_final']}** nadando **{estilo_texto_g}** en {ip_g['club']} ({ip_g['medida']}) el {ant_g['fecha']}.")
-                                
-                                # Renderizar observaciones si hay alguna
-                                if obs_lista_g:
-                                    st.markdown("---")
-                                    st.markdown("### 📋 Observaciones")
-                                    for obs in obs_lista_g:
-                                        if "COMPETITIVO" in obs or "PODIO" in obs:
-                                            st.success(obs)
-                                        else:
-                                            st.info(obs)
-                                
+                            
                                 equipo_guardar = {
-                                    'etiqueta': f"{label} - {cat_nombre.upper()}",
+                                    'etiqueta': f"{label} - ÚNICA",
                                     'eq': row['eq'],
                                     't': row['t'],
-                                    'cat': row['cat'],
+                                    'cat': "ÚNICA",
                                     'se': row['se'],
                                     'estilos': [l[1] for l in legs_o]
                                 }
                                 st.button(
                                     f"💾 Guardar {label} en Borrador", 
-                                    key=f"save_draft_{idx}_{cat_nombre}", 
+                                    key=f"save_draft_unica_{idx}", 
                                     on_click=guardar_equipo_borrador, 
                                     args=(equipo_guardar,)
                                 )
 
-# --- 7. GRILLA DE EQUIPOS GUARDADOS (BORRADOR) ---
-if st.session_state.equipos_borrador:
-    st.divider()
-    st.subheader("📋 Equipos Confirmados (Borrador)")
-    st.info("Los nadadores de estos equipos ya no están disponibles en el pool de arriba para generar nuevas estrategias.")
+                    # --- LÓGICA NORMAL POR CATEGORÍAS (FED / SIMPLE) ---
+                    else:
+                        for cat_nombre, group in df_res.groupby('cat', sort=False):
+                            st.markdown(f"### 🚩 {cat_nombre.upper()}")
+                            for idx, row in group.head(2).iterrows():
+                                label = "EQUIPO A" if idx == group.index[0] else "EQUIPO B"
+                                with st.expander(f"{label} - {seg_a_tiempo(row['t'])}", expanded=True if idx == group.index[0] else False):
+                                    render_tarjeta_resumen(seg_a_tiempo(row['t']), row['cat'], row['se'], dark=True)
+                                    cs = st.columns(4)
+                                    for j in range(4):
+                                        cs[j].caption(f"**{legs_o[j][1]}**")
+                                        cs[j].write(row['eq'][j].split(',')[0]) # Solo apellido
+                                        cs[j].code(seg_a_tiempo(m_map[row['eq'][j]].get(legs_o[j][0], 999.0)))
+                                
+                                    # --- OBSERVACIONES Y ANTECEDENTES PARA SIMULADOR GRUPO ---
+                                    obs_lista_g = []
+                                
+                                    # 1. Competitividad
+                                    comp_g = analizar_competitividad(row['t'], row['se'], o_gen)
+                                    if comp_g:
+                                        obs_lista_g.append(comp_g)
+                                    
+                                    # 2. Historial de los 4 nadadores
+                                    ids_eq = sorted([int(df_nad[df_nad['Nombre Completo'] == n]['codnadador'].iloc[0]) for n in row['eq']])
+                                    hist_g = data['relevos'][data['relevos'].apply(lambda r: sorted([int(r['nadador_1']), int(r['nadador_2']), int(r['nadador_3']), int(r['nadador_4'])]) == ids_eq if pd.notnull(r['nadador_1']) else False, axis=1)]
+                                
+                                    if not hist_g.empty:
+                                        ant_g = hist_g.sort_values('tiempo_final').iloc[0]
+                                        ip_g = dict_piletas.get(ant_g['codpileta'], {"club": "Sede ?", "medida": "-"})
+                                    
+                                        # Detectar el estilo nadado en el antecedente
+                                        estilo_val_g = ant_g.get('estilo', ant_g.get('prueba', ant_g.get('codestilo', '')))
+                                        estilo_str_g = str(estilo_val_g).strip().upper()
+                                        if 'COMB' in estilo_str_g or 'MEDLEY' in estilo_str_g: estilo_texto_g = "Combinado (Medley)"
+                                        elif 'LIBR' in estilo_str_g or 'CROL' in estilo_str_g or 'E4' in estilo_str_g: estilo_texto_g = "Libre (Crol)"
+                                        elif estilo_str_g and estilo_str_g != 'NAN': estilo_texto_g = estilo_val_g
+                                        else: estilo_texto_g = "juntos"
+                                    
+                                        obs_lista_g.append(f"⏱️ **YA NADARON JUNTOS:** Tienen un registro oficial de **{ant_g['tiempo_final']}** nadando **{estilo_texto_g}** en {ip_g['club']} ({ip_g['medida']}) el {ant_g['fecha']}.")
+                                
+                                    # Renderizar observaciones si hay alguna
+                                    if obs_lista_g:
+                                        st.markdown("---")
+                                        st.markdown("### 📋 Observaciones")
+                                        for obs in obs_lista_g:
+                                            if "COMPETITIVO" in obs or "PODIO" in obs:
+                                                st.success(obs)
+                                            else:
+                                                st.info(obs)
+                                
+                                    equipo_guardar = {
+                                        'etiqueta': f"{label} - {cat_nombre.upper()}",
+                                        'eq': row['eq'],
+                                        't': row['t'],
+                                        'cat': row['cat'],
+                                        'se': row['se'],
+                                        'estilos': [l[1] for l in legs_o]
+                                    }
+                                    st.button(
+                                        f"💾 Guardar {label} en Borrador", 
+                                        key=f"save_draft_{idx}_{cat_nombre}", 
+                                        on_click=guardar_equipo_borrador, 
+                                        args=(equipo_guardar,)
+                                    )
+
+    # --- 7. GRILLA DE EQUIPOS GUARDADOS (BORRADOR) ---
+    if st.session_state.equipos_borrador:
+        st.divider()
+        st.subheader("📋 Equipos Confirmados (Borrador)")
+        st.info("Los nadadores de estos equipos ya no están disponibles en el pool de arriba para generar nuevas estrategias.")
     
-    for i, equipo in enumerate(st.session_state.equipos_borrador):
-        with st.container(border=True):
-            cols_head = st.columns([0.8, 0.2])
-            with cols_head[0]:
-                st.markdown(f"#### {equipo['etiqueta']}")
-            with cols_head[1]:
-                st.button(
-                    "🗑️ Desarmar", 
-                    key=f"del_draft_{i}", 
-                    use_container_width=True, 
-                    on_click=eliminar_equipo_borrador, 
-                    args=(i,)
-                )
+        for i, equipo in enumerate(st.session_state.equipos_borrador):
+            with st.container(border=True):
+                cols_head = st.columns([0.8, 0.2])
+                with cols_head[0]:
+                    st.markdown(f"#### {equipo['etiqueta']}")
+                with cols_head[1]:
+                    st.button(
+                        "🗑️ Desarmar", 
+                        key=f"del_draft_{i}", 
+                        use_container_width=True, 
+                        on_click=eliminar_equipo_borrador, 
+                        args=(i,)
+                    )
                     
-            render_tarjeta_resumen(seg_a_tiempo(equipo['t']), equipo['cat'], equipo['se'])
+                render_tarjeta_resumen(seg_a_tiempo(equipo['t']), equipo['cat'], equipo['se'])
             
-            c_n1, c_n2, c_n3, c_n4 = st.columns(4)
-            c_n1.caption(f"**1. {equipo['estilos'][0]}**")
-            c_n1.write(equipo['eq'][0].split(',')[0])
-            c_n2.caption(f"**2. {equipo['estilos'][1]}**")
-            c_n2.write(equipo['eq'][1].split(',')[0])
-            c_n3.caption(f"**3. {equipo['estilos'][2]}**")
-            c_n3.write(equipo['eq'][2].split(',')[0])
-            c_n4.caption(f"**4. {equipo['estilos'][3]}**")
-            c_n4.write(equipo['eq'][3].split(',')[0])
+                c_n1, c_n2, c_n3, c_n4 = st.columns(4)
+                c_n1.caption(f"**1. {equipo['estilos'][0]}**")
+                c_n1.write(equipo['eq'][0].split(',')[0])
+                c_n2.caption(f"**2. {equipo['estilos'][1]}**")
+                c_n2.write(equipo['eq'][1].split(',')[0])
+                c_n3.caption(f"**3. {equipo['estilos'][2]}**")
+                c_n3.write(equipo['eq'][2].split(',')[0])
+                c_n4.caption(f"**4. {equipo['estilos'][3]}**")
+                c_n4.write(equipo['eq'][3].split(',')[0])
