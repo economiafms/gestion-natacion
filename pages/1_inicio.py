@@ -535,11 +535,18 @@ if db and st.session_state.user_id:
     with st.container(key="nob_profile"):
         if st.button(f"{me['nombre']} {me['apellido']}", key="btn_nombre_perfil", help="Ver mi ficha completa"):
             ir_a_mi_ficha()
-        st.markdown(f"""<div class="nob-id-row">
-<div><small>Categoría</small><b class="cat">{html.escape(str(cat))}</b></div>
+        # La celda Categoría lleva a Mi Categoría (botón invisible encima de la celda)
+        with st.container(key="nob_idrow"):
+            st.markdown(f"""<div class="nob-id-row">
+<div class="cat-link"><small>Categoría</small><b class="cat">{html.escape(str(cat))}</b></div>
 <div><small>Edad</small><b>{edad}</b></div>
 <div><small>Género</small><b>{html.escape(genero_txt)}</b></div>
 </div>""", unsafe_allow_html=True)
+            if st.button("Categoría", key="btn_cat_perfil"):
+                # Manager: la página Categorías abre directamente en su categoría y género
+                st.session_state["cat_sel"] = cat
+                st.session_state["cat_gen"] = str(me['codgenero']).strip()
+                st.switch_page("pages/6_mi_categoria.py")
 
     # Medallero personal: cada medalla abre la vista rápida de podios y marcas
     with st.container(key="nob_medals"):

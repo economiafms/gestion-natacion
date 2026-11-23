@@ -861,6 +861,15 @@ def aplicar_tema():
         .nob-mm-frases b { color: #fff; }
 
         /* Selector de nadador del manager: ← lista →, en una fila */
+        /* Inicio: la celda Categoría de la tarjeta de perfil abre Mi Categoría */
+        .st-key-nob_idrow { position: relative; gap: 0 !important; }
+        .st-key-nob_idrow .st-key-btn_cat_perfil {
+            position: absolute !important; left: 0; top: 0; width: 33.3% !important; height: 100%; z-index: 2;
+        }
+        .st-key-nob_idrow .st-key-btn_cat_perfil button {
+            width: 100% !important; height: 100% !important; min-height: 0 !important; opacity: 0; cursor: pointer;
+        }
+        .st-key-nob_idrow:has(.st-key-btn_cat_perfil button:hover) .cat-link b { text-decoration: underline; }
         [class*="st-key-selflecha_"] { flex-wrap: nowrap !important; }
         [class*="st-key-selflecha_"] > [data-testid="stElementContainer"]:has([data-testid="stSelectbox"]) { flex: 1 1 auto; min-width: 0; }
         [class*="st-key-selflecha_"] button { min-height: 40px !important; min-width: 40px; padding: 0 6px !important; border-radius: 12px !important; }

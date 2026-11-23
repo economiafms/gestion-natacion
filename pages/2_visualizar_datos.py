@@ -19,7 +19,7 @@ rol = st.session_state.role
 mi_id = st.session_state.user_id
 mi_nombre = st.session_state.user_name
 
-from nob_ui import hero, seccion
+from nob_ui import hero, seccion, select_flechas
 hero("Fichero del Club", "🗃️")
 
 # --- CSS PERSONALIZADO ---
@@ -346,11 +346,11 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
             top = validos.sort_values('count', ascending=False).iloc[0]
             c1, c2 = st.columns(2)
             estilos_ok = sorted(validos['Estilo'].unique())
-            g_est = c1.selectbox("Estilo Gráfico", estilos_ok, index=estilos_ok.index(top['Estilo']), key=f"g_est{unique_key_suffix}")
+            g_est = select_flechas("Estilo Gráfico", estilos_ok, f"g_est{unique_key_suffix}", index=estilos_ok.index(top['Estilo']), contenedor=c1)
 
             dist_ok = sorted(validos[validos['Estilo'] == g_est]['Distancia'].unique())
             idx_dist = dist_ok.index(top['Distancia']) if (g_est == top['Estilo'] and top['Distancia'] in dist_ok) else 0
-            g_dist = c2.selectbox("Distancia Gráfico", dist_ok, index=idx_dist, key=f"g_dist{unique_key_suffix}")
+            g_dist = select_flechas("Distancia Gráfico", dist_ok, f"g_dist{unique_key_suffix}", index=idx_dist, contenedor=c2)
 
             df_graph = mis_t[(mis_t['Estilo'] == g_est) & (mis_t['Distancia'] == g_dist)].dropna(subset=['segundos']).copy()
             df_graph['fecha_dt'] = pd.to_datetime(df_graph['fecha'], errors='coerce')
