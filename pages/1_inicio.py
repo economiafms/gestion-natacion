@@ -861,24 +861,10 @@ if db and st.session_state.user_id:
     pod_t = df_t[(t_f.dt.year == anio) & df_t['posicion'].isin([1, 2, 3])]
     pod_r = df_r[(r_f.dt.year == anio) & df_r['posicion'].isin([1, 2, 3])]
     med_club = len(pod_t) + len(pod_r)  # cada relevo cuenta una vez para el club
-    carreras_mes = int(((t_f.dt.year == anio) & (t_f.dt.month == hoy_d.month)).sum())
-
-    insc_prox = "–"
-    try:
-        _c, _i, _ = cargar_datos_inscripcion_inicio()
-        if _c is not None and not _c.empty:
-            _fut = _c[_c['fecha_evento'].dt.date >= hoy_d].sort_values('fecha_evento')
-            if not _fut.empty:
-                _id = _fut.iloc[0]['id_competencia']
-                insc_prox = 0 if _i is None or _i.empty else int((_i['id_competencia'] == _id).sum())
-    except Exception:
-        pass
 
     st.markdown(f"""<div class="nob-kpis">
 <div><b>{len(db['nadadores'])}</b><small>Nadadores</small></div>
 <div><b>{len(df_t) + len(df_r)}</b><small>Pruebas registradas</small></div>
-<div><b>{carreras_mes}</b><small>Carreras del mes</small></div>
-<div><b>{insc_prox}</b><small>Inscriptos próx. torneo</small></div>
 </div>""", unsafe_allow_html=True)
 
     # Medallero total (histórico) del club
@@ -917,22 +903,6 @@ if db and st.session_state.user_id:
         else:
             txt = f"🏅 Todavía no hay medallas del club en {anio}. ¡La primera puede ser tuya!"
         st.markdown(f'<div class="nob-aporte">{txt}</div>', unsafe_allow_html=True)
-    else:
-        # Manager: quién no registró rutinas este mes
-        _activos = set()
-        _seg = db.get('seguimiento')
-        if _seg is not None and not _seg.empty:
-            _fs = pd.to_datetime(_seg['fecha_realizada'], errors='coerce')
-            _activos = set(pd.to_numeric(_seg.loc[(_fs.dt.year == anio) & (_fs.dt.month == hoy_d.month), 'codnadador'],
-                                         errors='coerce').dropna().astype(int))
-        _nad = db['nadadores']
-        _sin = _nad[~pd.to_numeric(_nad['codnadador'], errors='coerce').isin(_activos)]
-        _nombres = ", ".join(html.escape(f"{r['nombre']} {r['apellido']}") for _, r in _sin.iterrows())
-        if len(_sin):
-            st.markdown(f"""<div class="nob-aporte"><details><summary>⚠️ <b>{len(_sin)}</b> nadadores sin rutinas registradas este mes</summary>
-<div class="nob-aporte-lista">{_nombres}</div></details></div>""", unsafe_allow_html=True)
-        else:
-            st.markdown('<div class="nob-aporte">✅ Todos los nadadores registraron rutinas este mes</div>', unsafe_allow_html=True)
 
     # Top 3 medallistas del año
     if not tabla.empty:
