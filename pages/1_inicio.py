@@ -618,7 +618,7 @@ if db and st.session_state.user_id:
     me = db['nadadores'][db['nadadores']['codnadador'] == user_id].iloc[0]
     # Nadador inactivo (sin marcas este año ni el anterior): sin rutinas ni resumen del año
     # El entrenador tiene ficha en Nadadores pero no compite: su Inicio no muestra datos de nadador
-    es_entrenador = str(st.session_state.get("nro_socio") or "").strip() == "364604"
+    es_entrenador = str(st.session_state.get("nro_socio") or "").strip() == "253973"
     # El entrenador tampoco tiene rutinas: se trata como inactivo para esas tarjetas
     inactivo = es_entrenador or (st.session_state.role == "N" and actividad.id_txt(user_id) not in actividad.ids_activos(
         db.get('tiempos'), db.get('relevos')))
