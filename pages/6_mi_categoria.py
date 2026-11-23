@@ -154,7 +154,6 @@ if rol == "N":
         target_genero = my_data['codgenero']
         
         edad_str = int(my_data['edad_calculada']) if pd.notna(my_data['edad_calculada']) else "-"
-        st.info(f"👋 Hola **{mi_nombre}**. Edad: {edad_str} años.")
         st.markdown(f"### 🏷️ Categoría: <span style='color:#E30613'>{target_categoria}</span> ({target_genero})", unsafe_allow_html=True)
     else:
         st.error("Perfil no encontrado o acceso restringido.")
