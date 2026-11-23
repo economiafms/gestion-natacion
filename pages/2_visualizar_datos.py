@@ -516,8 +516,11 @@ if rol == "N":
 else:
     # ROL MASTER (M)
     # Si se llega desde Inicio (nombre o medallas), abrir directo en la Ficha Técnica
-    if st.session_state.pop("fichero_tab_inicial", None) == "ficha":
+    _tab_ini = st.session_state.pop("fichero_tab_inicial", None)
+    if _tab_ini == "ficha":
         st.session_state["fichero_tabs_m"] = "👤 Ficha Técnica"
+    elif _tab_ini == "padron":
+        st.session_state["fichero_tabs_m"] = "👥 Padrón"
     tab1, tab2, tab3 = st.tabs(["👥 Padrón", "👤 Ficha Técnica", "🏊‍♂️ Relevos"], key="fichero_tabs_m", on_change="rerun")
     
     with tab1: render_tab_padron()

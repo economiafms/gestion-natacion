@@ -339,7 +339,7 @@ else:
 
     extras = []
     if st.session_state.role in ["M", "P"]:
-        extras += [("🏆", "Ranking", pg_ranking), ("🏊", "Simulador", pg_simulador)]
+        extras += [("👥", "Padrón", "padron"), ("🏆", "Ranking", pg_ranking), ("🏊", "Simulador", pg_simulador)]
         if st.session_state.admin_unlocked:
             extras.append(("⚙️", "Carga de Datos", pg_carga))
     # Cerrar sesión no va en el panel: tiene su propio botón fijo en la franja
@@ -363,7 +363,12 @@ else:
         elif accion[0] == "ficha":
             ir_a_mi_ficha_nav()
         elif accion[0] == "extra":
-            st.switch_page(extras[accion[1]][2])
+            destino = extras[accion[1]][2]
+            if destino == "padron":
+                st.session_state.fichero_tab_inicial = "padron"
+                st.switch_page(pg_datos)
+            else:
+                st.switch_page(destino)
         elif accion[0] == "salir":
             cerrar_sesion()
         elif accion[0] == "web_izq":

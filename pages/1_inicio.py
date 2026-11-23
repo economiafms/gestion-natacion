@@ -249,6 +249,12 @@ def buscar_mejor_tiempo(prueba, df_t_nadador):
     return ""
 
 # --- NAVEGACIÓN A LA FICHA Y VISTA RÁPIDA DE PODIOS / RÉCORDS ---
+def ir_al_padron():
+    """Abre el Fichero directamente en la pestaña Padrón (manager)."""
+    st.session_state.fichero_tab_inicial = "padron"
+    st.switch_page("pages/2_visualizar_datos.py")
+
+
 def ir_a_mi_ficha():
     """Abre el Fichero directamente en la ficha del usuario (en ambos roles)."""
     me_row = db['nadadores'][db['nadadores']['codnadador'] == st.session_state.user_id].iloc[0]
@@ -550,6 +556,15 @@ if db and st.session_state.user_id:
         with cols_med[3]:  # total de podios: solo informativo
             st.markdown(f'<div class="nob-med-info"><div class="v">★ {mi_total}</div><div class="l">Podios</div></div>',
                         unsafe_allow_html=True)
+
+    # Manager: debajo de sus datos, accesos a su ficha y al padrón completo
+    if st.session_state.role in ["M", "P"]:
+        if st.button("Ver mi ficha completa", type="primary", use_container_width=True,
+                     key="btn_ficha_inicio_m", icon=":material/person:"):
+            ir_a_mi_ficha()
+        if st.button("Ver padrón de nadadores", use_container_width=True,
+                     key="btn_padron_inicio_m", icon=":material/groups:"):
+            ir_al_padron()
 
     # RESUMEN: OBJETIVO DEL MES + PRÓXIMO TORNEO (solo nadadores)
     if st.session_state.role == "N":
