@@ -181,46 +181,9 @@ if target_categoria and target_genero:
     
     ids_rivales = rivales['codnadador'].tolist()
     
-    # --- MOSTRAR PADRÓN ---
-    st.markdown(f"<div class='section-title'>🏊 Padrón ({len(rivales)})</div>", unsafe_allow_html=True)
-    
-    if not rivales.empty:
-        # Rango de edad de la categoría: para marcar quién recién entra y quién sale el año próximo
-        rango = df_cat[df_cat['nombre_cat'] == target_categoria]
-        edad_min = pd.to_numeric(rango['edad_min'], errors='coerce').min() if not rango.empty else None
-        edad_max = pd.to_numeric(rango['edad_max'], errors='coerce').max() if not rango.empty else None
-
-        # Ordenado por edad: el mayor primero (el más cerca de pasar a la siguiente categoría)
-        rivales = rivales.sort_values(['edad_calculada', 'apellido'], ascending=[False, True])
-
-        cols = st.columns(2)
-        for i, (idx, row) in enumerate(rivales.iterrows()):
-            es_yo = (str(row['codnadador']) == str(mi_id)) if rol == "N" else False
-            clase = "swimmer-card is-me" if es_yo else "swimmer-card"
-            yo_lbl = " (TÚ)" if es_yo else ""
-            edad = row['edad_calculada']
-            edad_txt = int(edad) if pd.notna(edad) else "-"
-            etiqueta = ""
-            if pd.notna(edad) and edad_max is not None and pd.notna(edad_max) and int(edad) >= int(edad_max):
-                etiqueta = '<span class="cat-tag sale">Último año</span>'
-            elif pd.notna(edad) and edad_min is not None and pd.notna(edad_min) and int(edad) <= int(edad_min):
-                etiqueta = '<span class="cat-tag entra">Primer año</span>'
-
-            with cols[i % 2]:
-                st.markdown(f"""
-                <div class="{clase}">
-                    <div class="card-info">
-                        <div class="card-name">{row['apellido'].upper()}, {row['nombre']}{yo_lbl}</div>
-                        <div class="card-sub">Edad: {edad_txt} | {row['categoria_actual']} {etiqueta}</div>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-    else:
-        st.warning(f"No hay nadadores {target_genero} en {target_categoria}.")
-
     # --- GRÁFICA COMPARATIVA (PROMEDIOS) ---
     if not rivales.empty:
-        st.markdown("<div class='section-title'>📊 Tiempos promedios de la categoría</div>", unsafe_allow_html=True)
+        st.markdown("<div class='section-title'>Tiempos promedios de la categoría</div>", unsafe_allow_html=True)
         
         # 1. Cargar Tiempos y filtrar
         df_tiempos = db['tiempos'].copy()
@@ -325,3 +288,40 @@ if target_categoria and target_genero:
                 st.info("Selecciona una distancia para ver el ranking.")
         else:
             st.info("Esta categoría aún no tiene tiempos oficiales registrados.")
+
+    # --- MOSTRAR PADRÓN ---
+    st.markdown(f"<div class='section-title'>🏊 Padrón ({len(rivales)})</div>", unsafe_allow_html=True)
+    
+    if not rivales.empty:
+        # Rango de edad de la categoría: para marcar quién recién entra y quién sale el año próximo
+        rango = df_cat[df_cat['nombre_cat'] == target_categoria]
+        edad_min = pd.to_numeric(rango['edad_min'], errors='coerce').min() if not rango.empty else None
+        edad_max = pd.to_numeric(rango['edad_max'], errors='coerce').max() if not rango.empty else None
+
+        # Ordenado por edad: el mayor primero (el más cerca de pasar a la siguiente categoría)
+        rivales = rivales.sort_values(['edad_calculada', 'apellido'], ascending=[False, True])
+
+        cols = st.columns(2)
+        for i, (idx, row) in enumerate(rivales.iterrows()):
+            es_yo = (str(row['codnadador']) == str(mi_id)) if rol == "N" else False
+            clase = "swimmer-card is-me" if es_yo else "swimmer-card"
+            yo_lbl = " (TÚ)" if es_yo else ""
+            edad = row['edad_calculada']
+            edad_txt = int(edad) if pd.notna(edad) else "-"
+            etiqueta = ""
+            if pd.notna(edad) and edad_max is not None and pd.notna(edad_max) and int(edad) >= int(edad_max):
+                etiqueta = '<span class="cat-tag sale">Último año</span>'
+            elif pd.notna(edad) and edad_min is not None and pd.notna(edad_min) and int(edad) <= int(edad_min):
+                etiqueta = '<span class="cat-tag entra">Primer año</span>'
+
+            with cols[i % 2]:
+                st.markdown(f"""
+                <div class="{clase}">
+                    <div class="card-info">
+                        <div class="card-name">{row['apellido'].upper()}, {row['nombre']}{yo_lbl}</div>
+                        <div class="card-sub">Edad: {edad_txt} | {row['categoria_actual']} {etiqueta}</div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+    else:
+        st.warning(f"No hay nadadores {target_genero} en {target_categoria}.")
