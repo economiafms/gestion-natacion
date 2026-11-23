@@ -198,7 +198,16 @@ with tab_manual:
             aptos = df_nad[df_nad['codnadador'].isin(df_tiempos_50[df_tiempos_50['codestilo'] == cod_e]['codnadador'])]
             if s_gen != "X": aptos = aptos[aptos['codgenero'] == s_gen]
 
-            opciones_nadadores = ["⭐ INVITADO MANUAL"] + sorted(aptos['Nombre Completo'].tolist())
+            # Cada nadador se puede elegir en un solo selector: se ocultan los elegidos en los otros
+            # (los de arriba ya resueltos en esta pasada y los de abajo según su valor guardado)
+            elegidos_otros = {x for x in n_sel if x} | {
+                st.session_state.get(f"man_sel_{j}") for j in range(i + 1, len(legs))}
+            elegidos_otros.discard(None)
+            elegidos_otros.discard("⭐ INVITADO MANUAL")
+            if st.session_state.get(f"man_sel_{i}") in elegidos_otros:
+                st.session_state[f"man_sel_{i}"] = None   # quedó repetido: este selector se vacía
+            opciones_nadadores = ["⭐ INVITADO MANUAL"] + sorted(n for n in aptos['Nombre Completo'].tolist()
+                                                                 if n not in elegidos_otros)
             sel = st.selectbox(f"{i+1}. {nom_e}", opciones_nadadores, index=None, key=f"man_sel_{i}")
 
             if sel == "⭐ INVITADO MANUAL":
