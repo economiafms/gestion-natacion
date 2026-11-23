@@ -4,6 +4,7 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime
 import itertools
+import html
 
 # --- 1. CONFIGURACIÓN ---
 st.set_page_config(page_title="Simulador Pro - NOB", layout="centered")
@@ -12,7 +13,7 @@ st.set_page_config(page_title="Simulador Pro - NOB", layout="centered")
 if "role" not in st.session_state or not st.session_state.role:
     st.switch_page("index.py")
 
-from nob_ui import hero
+from nob_ui import hero, seccion
 hero("Simulador de Estrategia", "⏱️", "Armá la posta perfecta con datos reales.")
 
 conn = st.connection("gsheets", type=GSheetsConnection)
@@ -37,13 +38,13 @@ def cargar_datos_sim():
         df_n = data['nadadores'].copy()
         df_n['Nombre Completo'] = df_n['apellido'].astype(str).str.upper() + ", " + df_n['nombre'].astype(str)
         df_n['Edad_Master'] = datetime.now().year - pd.to_datetime(df_n['fechanac']).dt.year
-        
+
         # Filtrar mejores tiempos en 50m
         df_t = data['tiempos'][data['tiempos']['coddistancia'] == 'D1'].copy()
         df_t['segundos_calc'] = df_t['tiempo'].apply(tiempo_a_seg)
         df_t = df_t.sort_values(by=['codnadador', 'codestilo', 'segundos_calc'], ascending=[True, True, True])
         df_t_50_best = df_t.drop_duplicates(subset=['codnadador', 'codestilo'], keep='first')
-        
+
         return data, df_n, df_t_50_best
     except Exception as e:
         return None, None, None
@@ -63,7 +64,7 @@ def get_cat_info(suma, reg):
         return "Categoría Única", 0
     regs = data['cat_relevos'][data['cat_relevos']['tipo_reglamento'] == reg]
     for _, r in regs.iterrows():
-        if r['suma_min'] <= suma <= r['suma_max']: 
+        if r['suma_min'] <= suma <= r['suma_max']:
             return r['descripcion'], r['suma_min']
     return f"Suma {int(suma)}", suma
 
@@ -77,27 +78,48 @@ def analizar_competitividad(tiempo_seg, suma_edades, genero):
         elif tiempo_seg <= meta + 10: return f"✨ **COMPETITIVO.** Cerca de marcas de podio."
     return ""
 
+st.markdown("""<style>
+.sim-res { padding: 14px 16px; border-radius: 18px; margin-bottom: 12px;
+  background: linear-gradient(135deg, rgba(227,6,19,0.16), rgba(227,6,19,0.03)); border: 1px solid rgba(227,6,19,0.30); }
+.sim-kpis { display: grid; grid-template-columns: 1.2fr 1fr 0.8fr; gap: 8px; text-align: center; }
+.sim-kpis b { display: block; font-size: 24px; font-weight: 900; color: #fff; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.sim-kpis b.cat { font-size: 16px; color: #FF6B72; text-transform: uppercase; padding-top: 4px; }
+.sim-kpis small { display: block; margin-top: 4px; font-size: 10px; font-weight: 700; letter-spacing: 1px;
+  text-transform: uppercase; color: rgba(255,255,255,0.5); }
+.sim-legs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 4px 0 10px; }
+@media (max-width: 520px) { .sim-legs { grid-template-columns: repeat(2, 1fr); } }
+.sim-leg { padding: 9px 10px; border-radius: 12px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); }
+.sim-leg small { display: block; font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: rgba(255,255,255,0.5); }
+.sim-leg .n { font-size: 14px; font-weight: 800; color: #fff; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sim-leg .t { font-size: 15px; font-weight: 800; color: #FF6B72; font-variant-numeric: tabular-nums; margin-top: 2px; }
+.sim-eq-tit { font-size: 15px; font-weight: 800; color: #fff; }
+.sim-pool { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; margin-bottom: 6px;
+  color: rgba(255,255,255,0.8); background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); }
+</style>""", unsafe_allow_html=True)
+
+
 def render_tarjeta_resumen(tiempo, categoria, suma, dark=False):
-    bg = "#1e1e1e" if dark else "#f0f2f6"
-    text = "#ffffff" if dark else "#31333F"
-    st.markdown(f"""
-        <div style='background-color: {bg}; padding: 12px; border-radius: 10px; border-left: 8px solid #E30613; color: {text}; margin-bottom: 15px;'>
-            <div style='display: flex; justify-content: space-around; align-items: center; flex-wrap: wrap;'>
-                <div style='text-align: center;'>
-                    <b style='font-size: 26px; font-family: monospace;'>{tiempo}</b><br>
-                    <small style='color: #888;'>TIEMPO TOTAL</small>
-                </div>
-                <div style='text-align: center;'>
-                    <b style='font-size: 18px; color: #E30613;'>{categoria.upper()}</b><br>
-                    <small style='color: #888;'>CATEGORÍA</small>
-                </div>
-                <div style='text-align: center;'>
-                    <b style='font-size: 20px;'>{suma} <small>años</small></b><br>
-                    <small style='color: #888;'>SUMA</small>
-                </div>
-            </div>
-        </div>
-    """, unsafe_allow_html=True)
+    """Tiempo total, categoría y suma de edades del equipo."""
+    st.markdown(f"""<div class="sim-res"><div class="sim-kpis">
+<div><b>{html.escape(str(tiempo))}</b><small>Tiempo total</small></div>
+<div><b class="cat">{html.escape(str(categoria))}</b><small>Categoría</small></div>
+<div><b>{int(suma)}</b><small>Suma de edades</small></div>
+</div></div>""", unsafe_allow_html=True)
+
+
+def render_postas(nombres, estilos, tiempos=None):
+    """Las 4 postas del equipo: orden y estilo, apellido y (si se conoce) el tiempo de cada una."""
+    celdas = []
+    for i in range(4):
+        apellido = str(nombres[i]).split(',')[0]
+        t_html = f'<div class="t">{html.escape(tiempos[i])}</div>' if tiempos else ""
+        celdas.append(f'<div class="sim-leg"><small>{i + 1} · {html.escape(str(estilos[i]))}</small>'
+                      f'<div class="n">{html.escape(apellido)}</div>{t_html}</div>')
+    st.markdown(f'<div class="sim-legs">{"".join(celdas)}</div>', unsafe_allow_html=True)
+
+
+def titulo_obs():
+    st.markdown('<div class="nob-top-tit" style="margin-top:6px">Observaciones</div>', unsafe_allow_html=True)
 
 # --- INICIALIZACIÓN DE ESTADO Y CALLBACKS PARA BORRADOR ---
 if "equipos_borrador" not in st.session_state:
@@ -154,45 +176,45 @@ tab_grupo, tab_manual = st.tabs(["🎯 Por grupo de nadadores", "🧪 Posta manu
 # --- POSTA MANUAL ---
 with tab_manual:
     with st.container(border=True):
-        c1, c2, c3 = st.columns(3)
-    
         # Agregamos "ÚNICA" como opción manual también si corresponde
         opciones_reg = data['cat_relevos']['tipo_reglamento'].unique().tolist()
         if "ÚNICA" not in opciones_reg:
             opciones_reg.append("ÚNICA")
-        
-        s_reg_m = c1.selectbox("Reglamento", opciones_reg, key="s_reg_m")
-        s_tipo_m = c2.selectbox("Prueba", ["Libre (Crol)", "Combinado (Medley)"], key="s_tipo_m")
-        s_gen_sel = c3.selectbox("Género", ["Masculino (M)", "Femenino (F)", "Mixto (2M-2F)"], key="s_gen_m")
+
+        s_reg_m = st.selectbox("Reglamento", opciones_reg, key="s_reg_m")
+        s_tipo_m = st.segmented_control("Prueba", ["Libre (Crol)", "Combinado (Medley)"], default="Libre (Crol)",
+                                        key="s_tipo_m_sc") or "Libre (Crol)"
+        s_gen_sel = st.segmented_control("Género", ["Masculino (M)", "Femenino (F)", "Mixto (2M-2F)"],
+                                         default="Masculino (M)", key="s_gen_m_sc") or "Masculino (M)"
         s_gen = "X" if "Mixto" in s_gen_sel else ("M" if "(M)" in s_gen_sel else "F")
 
         legs = [("Espalda", "E2"), ("Pecho", "E3"), ("Mariposa", "E1"), ("Crol", "E4")] if "Medley" in s_tipo_m else [("Crol", "E4")] * 4
-    
+
         n_sel = []
         tiempos_invitados = {}
         edades_invitados = {}
-    
+
         for i, (nom_e, cod_e) in enumerate(legs):
             aptos = df_nad[df_nad['codnadador'].isin(df_tiempos_50[df_tiempos_50['codestilo'] == cod_e]['codnadador'])]
             if s_gen != "X": aptos = aptos[aptos['codgenero'] == s_gen]
-        
+
             opciones_nadadores = ["⭐ INVITADO MANUAL"] + sorted(aptos['Nombre Completo'].tolist())
             sel = st.selectbox(f"{i+1}. {nom_e}", opciones_nadadores, index=None, key=f"man_sel_{i}")
-        
+
             if sel == "⭐ INVITADO MANUAL":
                 with st.container():
                     c_inv1, c_inv2, c_inv3 = st.columns([2, 1, 1])
                     nom_inv = c_inv1.text_input("Nombre / Referencia", value=f"Invitado {i+1} ({nom_e})", key=f"inv_nom_{i}")
                     t_inv = c_inv2.text_input("Tiempo", value="00:30.00", key=f"inv_t_{i}", help="Formato MM:SS.cc")
                     e_inv = c_inv3.number_input("Edad", min_value=15, max_value=99, value=30, key=f"inv_e_{i}")
-                
+
                     n_sel.append(nom_inv)
                     tiempos_invitados[nom_inv] = tiempo_a_seg(t_inv)
                     edades_invitados[nom_inv] = e_inv
             else:
                 n_sel.append(sel)
 
-        btn_manual = st.button("🚀 Calcular Posta", use_container_width=True)
+        btn_manual = st.button("Calcular posta", type="primary", icon=":material/calculate:", use_container_width=True)
 
     res_manual_container = st.container()
 
@@ -210,32 +232,30 @@ with tab_manual:
                         m_loc[n] = {"E1": tiempos_invitados[n], "E2": tiempos_invitados[n], "E3": tiempos_invitados[n], "E4": tiempos_invitados[n]}
                     else:
                         m_loc[n] = {r['codestilo']: r['segundos_calc'] for _, r in df_tiempos_50[df_tiempos_50['codnadador'] == df_nad[df_nad['Nombre Completo'] == n]['codnadador'].iloc[0]].iterrows()}
-            
+
                 tiempos_p = [m_loc[n_sel[i]].get(legs[i][1], 999.0) for i in range(4)]
                 total = sum(tiempos_p)
-            
+
                 se = 0
                 for n in n_sel:
                     if n in edades_invitados:
                         se += edades_invitados[n]
                     else:
                         se += df_nad[df_nad['Nombre Completo'] == n]['Edad_Master'].iloc[0]
-                    
+
                 cat_n, _ = get_cat_info(se, s_reg_m)
 
                 with res_manual_container:
-                    st.write("") 
+                    st.write("")
                     render_tarjeta_resumen(seg_a_tiempo(total), cat_n, se)
 
-                    t_cols = st.columns(4)
-                    for i in range(4):
-                        t_cols[i].metric(n_sel[i].split(',')[0], seg_a_tiempo(tiempos_p[i]), delta=legs[i][0])
+                    render_postas(n_sel, [l[0] for l in legs], [seg_a_tiempo(t) for t in tiempos_p])
 
                     obs_lista = []
-                
+
                     comp = analizar_competitividad(total, se, s_gen)
                     if comp: obs_lista.append(comp)
-                
+
                     # Búsqueda de antecedentes históricos (excluyendo a los invitados)
                     ids_a = []
                     for n in n_sel:
@@ -244,21 +264,21 @@ with tab_manual:
                         else:
                             ids_a.append(int(df_nad[df_nad['Nombre Completo'] == n]['codnadador'].iloc[0]))
                     ids_a = sorted(ids_a)
-                
+
                     hist = data['relevos'][data['relevos'].apply(lambda r: sorted([int(r['nadador_1']), int(r['nadador_2']), int(r['nadador_3']), int(r['nadador_4'])]) == ids_a if pd.notnull(r['nadador_1']) else False, axis=1)]
                     if not hist.empty:
                         ant = hist.sort_values('tiempo_final').iloc[0]
                         ip = dict_piletas.get(ant['codpileta'], {"club": "Sede ?", "medida": "-"})
-                    
+
                         estilo_val = ant.get('estilo', ant.get('prueba', ant.get('codestilo', '')))
                         estilo_str = str(estilo_val).strip().upper()
                         if 'COMB' in estilo_str or 'MEDLEY' in estilo_str: estilo_texto = "Combinado (Medley)"
                         elif 'LIBR' in estilo_str or 'CROL' in estilo_str or 'E4' in estilo_str: estilo_texto = "Libre (Crol)"
                         elif estilo_str and estilo_str != 'NAN': estilo_texto = estilo_val
                         else: estilo_texto = "esa formación"
-                    
+
                         obs_lista.append(f"⏱️ **ANTECEDENTE:** Marcaron **{ant['tiempo_final']}** nadando **{estilo_texto}** en {ip['club']} ({ip['medida']}) el {ant['fecha']}.")
-                
+
                     mejor_t, mejor_o = total, n_sel
                     for p in itertools.permutations(n_sel):
                         tp = sum([m_loc[p[idx]].get(legs[idx][1], 999.0) for idx in range(4)])
@@ -267,8 +287,7 @@ with tab_manual:
                         obs_lista.append(f"💡 **ORDEN:** Bajan a **{seg_a_tiempo(mejor_t)}** alternando orden de salida.")
 
                     if obs_lista:
-                        st.markdown("---")
-                        st.markdown("### 📋 Observaciones")
+                        titulo_obs()
                         for item in obs_lista: st.info(item)
 
 # --- SIMULADOR POR GRUPO (y equipos guardados en borrador) ---
@@ -303,41 +322,41 @@ with tab_grupo:
 
     with st.container(border=True):
         lista_nadadores_completa = sorted(df_nad['Nombre Completo'].tolist())
-    
+
         nadadores_en_borrador = set()
         for equipo in st.session_state.equipos_borrador:
             nadadores_en_borrador.update(equipo['eq'])
-        
+
         lista_nadadores_disponibles = [n for n in lista_nadadores_completa if n not in nadadores_en_borrador]
-    
+
         valid_default = [x for x in st.session_state.current_pool if x in lista_nadadores_disponibles]
-    
-        st.info(f"Nadadores disponibles en el pool: **{len(lista_nadadores_disponibles)}**")
-    
+
+        st.markdown(f'<span class="sim-pool">{len(lista_nadadores_disponibles)} nadadores disponibles</span>', unsafe_allow_html=True)
         pool = st.multiselect(
-            "Seleccionar nadadores (Los ya asignados en el borrador no aparecerán aquí):", 
-            options=lista_nadadores_disponibles, 
-            default=valid_default, 
+            "Nadadores para armar los equipos (los que ya están en el borrador no aparecen)", 
+            options=lista_nadadores_disponibles,
+            default=valid_default,
             key=pool_key(),
             on_change=sync_pool
         )
 
-        c1, c2, c3 = st.columns(3)
-        o_reg = c1.selectbox("Reglamento", opciones_reg, key="o_reg_g")
-        o_tipo = c2.radio("Estilo de Prueba", ["Libre (Crol)", "Combinado (Medley)"], horizontal=True)
-        o_gen_sel = c3.radio("Género Prueba", ["Masculino (M)", "Femenino (F)", "Mixto (2M-2F)"], horizontal=True)
+        o_reg = st.selectbox("Reglamento", opciones_reg, key="o_reg_g")
+        o_tipo = st.segmented_control("Prueba", ["Libre (Crol)", "Combinado (Medley)"], default="Libre (Crol)",
+                                      key="o_tipo_sc") or "Libre (Crol)"
+        o_gen_sel = st.segmented_control("Género", ["Masculino (M)", "Femenino (F)", "Mixto (2M-2F)"],
+                                         default="Masculino (M)", key="o_gen_sc") or "Masculino (M)"
         o_gen = "X" if "Mixto" in o_gen_sel else ("M" if "(M)" in o_gen_sel else "F")
 
-    if st.button("🪄 Generar Estrategia Óptima", type="primary", use_container_width=True):
+    if st.button("Generar estrategia óptima", type="primary", icon=":material/auto_awesome:", use_container_width=True):
         if len(pool) < 4: st.warning("Seleccione al menos 4 nadadores del pool disponible.")
         else:
             with st.spinner("Calculando..."):
                 m_map = {n: {r['codestilo']: r['segundos_calc'] for _, r in df_tiempos_50[df_tiempos_50['codnadador'] == df_nad[df_nad['Nombre Completo'] == n]['codnadador'].iloc[0]].iterrows()} for n in pool}
                 for n in pool: m_map[n].update({'gen': df_nad[df_nad['Nombre Completo'] == n]['codgenero'].iloc[0], 'edad': df_nad[df_nad['Nombre Completo'] == n]['Edad_Master'].iloc[0]})
                 legs_o = [("E2", "Espalda"), ("E3", "Pecho"), ("E1", "Mariposa"), ("E4", "Crol")] if "Medley" in o_tipo else [("E4", "Crol")]*4
-            
+
                 combis = [c for c in itertools.combinations(pool, 4) if (o_gen=="M" and all(m_map[n]['gen']=="M" for n in c)) or (o_gen=="F" and all(m_map[n]['gen']=="F" for n in c)) or (o_gen=="X" and [m_map[n]['gen'] for n in c].count("M")==2)]
-            
+
                 resultados = []
                 for c in combis:
                     mt, mo = 999.0, None
@@ -352,25 +371,22 @@ with tab_grupo:
                 if not resultados: st.info("No se encontraron combinaciones válidas.")
                 else:
                     df_res = pd.DataFrame(resultados).sort_values(by=['s_min', 't'])
-                
+
                     # --- NUEVA LÓGICA PARA CATEGORÍA ÚNICA ---
                     if o_reg == "ÚNICA":
-                        st.markdown("### 🥇 TOP 3 ABSOLUTO")
+                        seccion("Top 3 absoluto")
                         df_res = df_res.sort_values(by='t', ascending=True).head(3)
-                    
+
                         for idx, row in df_res.reset_index().iterrows():
                             if idx == 0: label = "🏅 EQUIPO 1 (Más Rápido)"
                             elif idx == 1: label = "🥈 EQUIPO 2"
                             else: label = "🥉 EQUIPO 3"
-                        
+
                             with st.expander(f"{label} - {seg_a_tiempo(row['t'])}", expanded=True if idx == 0 else False):
-                                render_tarjeta_resumen(seg_a_tiempo(row['t']), "ÚNICA", row['se'], dark=True)
-                                cs = st.columns(4)
-                                for j in range(4):
-                                    cs[j].caption(f"**{legs_o[j][1]}**")
-                                    cs[j].write(row['eq'][j].split(',')[0]) 
-                                    cs[j].code(seg_a_tiempo(m_map[row['eq'][j]].get(legs_o[j][0], 999.0)))
-                            
+                                render_tarjeta_resumen(seg_a_tiempo(row['t']), "ÚNICA", row['se'])
+                                render_postas(row['eq'], [l[1] for l in legs_o],
+                                              [seg_a_tiempo(m_map[row['eq'][j]].get(legs_o[j][0], 999.0)) for j in range(4)])
+
                                 equipo_guardar = {
                                     'etiqueta': f"{label} - ÚNICA",
                                     'eq': row['eq'],
@@ -380,42 +396,39 @@ with tab_grupo:
                                     'estilos': [l[1] for l in legs_o]
                                 }
                                 st.button(
-                                    f"💾 Guardar {label} en Borrador", 
-                                    key=f"save_draft_unica_{idx}", 
-                                    on_click=guardar_equipo_borrador, 
+                                    f"Guardar {label.split(' (')[0]} en el borrador", icon=":material/bookmark_add:", 
+                                    key=f"save_draft_unica_{idx}",
+                                    on_click=guardar_equipo_borrador,
                                     args=(equipo_guardar,)
                                 )
 
                     # --- LÓGICA NORMAL POR CATEGORÍAS (FED / SIMPLE) ---
                     else:
                         for cat_nombre, group in df_res.groupby('cat', sort=False):
-                            st.markdown(f"### 🚩 {cat_nombre.upper()}")
+                            seccion(cat_nombre)
                             for idx, row in group.head(2).iterrows():
                                 label = "EQUIPO A" if idx == group.index[0] else "EQUIPO B"
                                 with st.expander(f"{label} - {seg_a_tiempo(row['t'])}", expanded=True if idx == group.index[0] else False):
-                                    render_tarjeta_resumen(seg_a_tiempo(row['t']), row['cat'], row['se'], dark=True)
-                                    cs = st.columns(4)
-                                    for j in range(4):
-                                        cs[j].caption(f"**{legs_o[j][1]}**")
-                                        cs[j].write(row['eq'][j].split(',')[0]) # Solo apellido
-                                        cs[j].code(seg_a_tiempo(m_map[row['eq'][j]].get(legs_o[j][0], 999.0)))
-                                
+                                    render_tarjeta_resumen(seg_a_tiempo(row['t']), row['cat'], row['se'])
+                                    render_postas(row['eq'], [l[1] for l in legs_o],
+                                                  [seg_a_tiempo(m_map[row['eq'][j]].get(legs_o[j][0], 999.0)) for j in range(4)])
+
                                     # --- OBSERVACIONES Y ANTECEDENTES PARA SIMULADOR GRUPO ---
                                     obs_lista_g = []
-                                
+
                                     # 1. Competitividad
                                     comp_g = analizar_competitividad(row['t'], row['se'], o_gen)
                                     if comp_g:
                                         obs_lista_g.append(comp_g)
-                                    
+
                                     # 2. Historial de los 4 nadadores
                                     ids_eq = sorted([int(df_nad[df_nad['Nombre Completo'] == n]['codnadador'].iloc[0]) for n in row['eq']])
                                     hist_g = data['relevos'][data['relevos'].apply(lambda r: sorted([int(r['nadador_1']), int(r['nadador_2']), int(r['nadador_3']), int(r['nadador_4'])]) == ids_eq if pd.notnull(r['nadador_1']) else False, axis=1)]
-                                
+
                                     if not hist_g.empty:
                                         ant_g = hist_g.sort_values('tiempo_final').iloc[0]
                                         ip_g = dict_piletas.get(ant_g['codpileta'], {"club": "Sede ?", "medida": "-"})
-                                    
+
                                         # Detectar el estilo nadado en el antecedente
                                         estilo_val_g = ant_g.get('estilo', ant_g.get('prueba', ant_g.get('codestilo', '')))
                                         estilo_str_g = str(estilo_val_g).strip().upper()
@@ -423,19 +436,18 @@ with tab_grupo:
                                         elif 'LIBR' in estilo_str_g or 'CROL' in estilo_str_g or 'E4' in estilo_str_g: estilo_texto_g = "Libre (Crol)"
                                         elif estilo_str_g and estilo_str_g != 'NAN': estilo_texto_g = estilo_val_g
                                         else: estilo_texto_g = "juntos"
-                                    
+
                                         obs_lista_g.append(f"⏱️ **YA NADARON JUNTOS:** Tienen un registro oficial de **{ant_g['tiempo_final']}** nadando **{estilo_texto_g}** en {ip_g['club']} ({ip_g['medida']}) el {ant_g['fecha']}.")
-                                
+
                                     # Renderizar observaciones si hay alguna
                                     if obs_lista_g:
-                                        st.markdown("---")
-                                        st.markdown("### 📋 Observaciones")
+                                        titulo_obs()
                                         for obs in obs_lista_g:
                                             if "COMPETITIVO" in obs or "PODIO" in obs:
                                                 st.success(obs)
                                             else:
                                                 st.info(obs)
-                                
+
                                     equipo_guardar = {
                                         'etiqueta': f"{label} - {cat_nombre.upper()}",
                                         'eq': row['eq'],
@@ -445,40 +457,31 @@ with tab_grupo:
                                         'estilos': [l[1] for l in legs_o]
                                     }
                                     st.button(
-                                        f"💾 Guardar {label} en Borrador", 
-                                        key=f"save_draft_{idx}_{cat_nombre}", 
-                                        on_click=guardar_equipo_borrador, 
+                                        f"Guardar {label.split(' (')[0]} en el borrador", icon=":material/bookmark_add:", 
+                                        key=f"save_draft_{idx}_{cat_nombre}",
+                                        on_click=guardar_equipo_borrador,
                                         args=(equipo_guardar,)
                                     )
 
     # --- 7. GRILLA DE EQUIPOS GUARDADOS (BORRADOR) ---
     if st.session_state.equipos_borrador:
-        st.divider()
-        st.subheader("📋 Equipos Confirmados (Borrador)")
-        st.info("Los nadadores de estos equipos ya no están disponibles en el pool de arriba para generar nuevas estrategias.")
-    
+        seccion(f"Equipos en borrador ({len(st.session_state.equipos_borrador)})")
+        st.caption("Los nadadores de estos equipos ya no están disponibles arriba para armar nuevas estrategias.")
+
         for i, equipo in enumerate(st.session_state.equipos_borrador):
             with st.container(border=True):
-                cols_head = st.columns([0.8, 0.2])
+                cols_head = st.columns([0.7, 0.3], vertical_alignment="center")
                 with cols_head[0]:
-                    st.markdown(f"#### {equipo['etiqueta']}")
+                    st.markdown(f'<div class="sim-eq-tit">{html.escape(str(equipo["etiqueta"]))}</div>', unsafe_allow_html=True)
                 with cols_head[1]:
                     st.button(
-                        "🗑️ Desarmar", 
-                        key=f"del_draft_{i}", 
-                        use_container_width=True, 
-                        on_click=eliminar_equipo_borrador, 
+                        "Desarmar", icon=":material/group_remove:", 
+                        key=f"del_draft_{i}",
+                        use_container_width=True,
+                        on_click=eliminar_equipo_borrador,
                         args=(i,)
                     )
-                    
+
                 render_tarjeta_resumen(seg_a_tiempo(equipo['t']), equipo['cat'], equipo['se'])
-            
-                c_n1, c_n2, c_n3, c_n4 = st.columns(4)
-                c_n1.caption(f"**1. {equipo['estilos'][0]}**")
-                c_n1.write(equipo['eq'][0].split(',')[0])
-                c_n2.caption(f"**2. {equipo['estilos'][1]}**")
-                c_n2.write(equipo['eq'][1].split(',')[0])
-                c_n3.caption(f"**3. {equipo['estilos'][2]}**")
-                c_n3.write(equipo['eq'][2].split(',')[0])
-                c_n4.caption(f"**4. {equipo['estilos'][3]}**")
-                c_n4.write(equipo['eq'][3].split(',')[0])
+
+                render_postas(equipo['eq'], equipo['estilos'])
