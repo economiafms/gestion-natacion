@@ -293,8 +293,16 @@ def dialogo_resumen_anual(id_nadador, nombre, anio):
         png = _imagen_resumen(tuple(sorted((k, v) for k, v in r.items() if k != "fechas_detalle")), nombre, formato)
     st.image(png, use_container_width=True)
     if r.get("fechas_detalle"):
-        with st.expander(f"📅 Fechas contadas ({r['torneos']})"):
-            st.markdown("\n".join(f"- {f}" for f in r["fechas_detalle"]))
+        filas = "".join(
+            f"<div class='ra-fecha'><b>{html.escape(t)}</b>"
+            + "".join(f"<div class='ra-prueba'>{html.escape(c)}</div>" for c in carreras) + "</div>"
+            for t, carreras in r["fechas_detalle"])
+        st.markdown(f"""<style>
+.ra-fechas h4 {{ font-size: 15px; font-weight: 800; margin: 10px 0 6px; }}
+.ra-fecha {{ background: rgba(255,255,255,0.04); border-left: 3px solid #E30613; border-radius: 8px; padding: 7px 10px; margin-bottom: 6px; }}
+.ra-fecha b {{ display: block; font-size: 13.5px; color: #fff; margin-bottom: 2px; }}
+.ra-prueba {{ font-size: 13px; color: #ccc; }}
+</style><div class="ra-fechas"><h4>📅 Fechas contadas ({r['torneos']})</h4>{filas}</div>""", unsafe_allow_html=True)
     archivo = f"mi_{anio}_en_el_agua.png"
     st.download_button("⬇️ Descargar imagen", data=png, file_name=archivo, mime="image/png",
                        type="primary", use_container_width=True, key="ra_descargar")

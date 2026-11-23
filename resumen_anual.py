@@ -64,29 +64,31 @@ def detalle_fechas(df, clubes=None):
     """Fechas de competencia del nadador: una sede (club) en un día.
     - Piletas distintas del mismo club (p. ej. 25 m y 50 m) cuentan como la misma sede.
     - Un registro sin pileta se suma a la fecha de ese mismo día.
-    Devuelve una lista ordenada de (fecha_inicio, fecha_fin, nombre_sede)."""
+    Devuelve una lista ordenada de (fecha, nombre_sede, [índices de las filas de esa fecha])."""
     if df.empty:
         return []
     clubes = {(_pileta_norm(k)): v for k, v in (clubes or {}).items() if _pileta_norm(k) is not None}
     dias = _fechas(df['fecha']).dt.date
     pil = df['codpileta'].map(_pileta_norm) if 'codpileta' in df.columns else pd.Series([None] * len(df), index=df.index)
-    nombre = {}
-    pares = set()
-    for d, p in zip(dias, pil):
+    nombre, filas = {}, {}
+    for i, d, p in zip(df.index, dias, pil):
         if pd.isna(d) or pd.isna(p):
             continue
         club = clubes.get(p, f"Pileta {p}")
         clave = _club_norm(club)
         nombre.setdefault(clave, str(club))
-        pares.add((d, clave))
-    dias_con_sede = {d for d, _ in pares}
-    for d, p in zip(dias, pil):
-        if pd.notna(d) and pd.isna(p) and d not in dias_con_sede:
-            pares.add((d, "SIN SEDE"))
-            nombre.setdefault("SIN SEDE", "Sede sin cargar")
-            dias_con_sede.add(d)
+        filas.setdefault((d, clave), []).append(i)
+    for i, d, p in zip(df.index, dias, pil):
+        if pd.isna(d) or pd.notna(p):
+            continue
+        # Sin pileta: va a la sede de ese día; si no hay ninguna, queda como "Sede sin cargar"
+        clave = next((c for (dd, c) in filas if dd == d), None)
+        if clave is None:
+            clave = "SIN SEDE"
+            nombre.setdefault(clave, "Sede sin cargar")
+        filas.setdefault((d, clave), []).append(i)
     # Cada día en cada sede es una fecha (dos días seguidos en el mismo club son dos fechas)
-    return sorted((d, d, nombre[c]) for d, c in pares)
+    return sorted((d, nombre[c], idx) for (d, c), idx in filas.items())
 
 
 def contar_torneos(df, clubes=None):
@@ -108,9 +110,19 @@ def calcular_resumen(db, id_nadador, anio, mis_resultados, clubes=None):
 
     fechas = detalle_fechas(del_anio, clubes)
     r["torneos"] = len(fechas)
-    r["fechas_detalle"] = [
-        (f"{a.strftime('%d/%m')}" + (f" al {b.strftime('%d/%m')}" if b != a else "")) + f" · {sede}"
-        for a, b, sede in fechas]
+    detalle = []
+    for dia, sede, idx in fechas:
+        carreras = []
+        for _, fila in del_anio.loc[idx].iterrows():
+            prueba = " ".join(str(x) for x in (fila.get('Distancia'), fila.get('Estilo')) if pd.notna(x)) or "Prueba"
+            if fila.get('tipo') == 'Relevo':
+                prueba = f"Relevo 4x{prueba}"
+            marca = fila.get('marca')
+            pos = int(fila['posicion']) if pd.notna(fila.get('posicion')) else 0
+            carreras.append(prueba + (f" ({marca})" if pd.notna(marca) and str(marca).strip() else "")
+                            + (f" · {pos}°" if pos > 0 else ""))
+        detalle.append((f"{dia.strftime('%d/%m')} · {sede}", carreras))
+    r["fechas_detalle"] = detalle
     r["oro"] = int((del_anio['posicion'] == 1).sum())
     r["plata"] = int((del_anio['posicion'] == 2).sum())
     r["bronce"] = int((del_anio['posicion'] == 3).sum())
