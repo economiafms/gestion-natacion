@@ -710,6 +710,14 @@ def aplicar_tema():
         }
         [class*="st-key-pad_"] button { opacity: 0 !important; cursor: pointer; }
         [class*="st-key-pad_"]:hover .padron-card { border-color: rgba(227,6,19,0.55) !important; }
+        /* Celular: la categoría siempre en un renglón; la columna derecha toma el espacio que necesita */
+        .padron-card .p-cat, .padron-card .p-total { white-space: nowrap; }
+        @media (max-width: 520px) {
+            .padron-card .p-col-right { flex: 0 0 auto; padding-left: 8px; border-left-width: 1px; }
+            .padron-card .p-col-center { flex: 1 1 auto; padding: 0 6px; }
+            .padron-card .p-col-left { flex: 1.6 1 0; min-width: 0; }
+            .padron-card .p-medals { gap: 6px; }
+        }
 
         /* Filtro por distancia en el detalle por estilo: centrado arriba de la ficha */
         .st-key-dlg_est_filtro { align-items: center; margin-bottom: 4px; }
