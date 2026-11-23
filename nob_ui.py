@@ -742,9 +742,19 @@ def aplicar_tema():
             /* Solo el color: "background" completo borraría la imagen del escudo del botón central */
             .st-key-bn_row button:hover { background-color: rgba(255,255,255,0.05) !important; }
             .st-key-bn_row button p { font-size: 22px !important; line-height: 1.1; }
-            .st-key-bn_row button::after { font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.65); white-space: nowrap; }
+            .st-key-bn_row button::after {
+                font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.65); white-space: nowrap;
+                /* El texto nunca sale de su botón (no invade al vecino) */
+                display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis;
+            }
+            .st-key-bn_row button { overflow: visible; }
+            /* Manager: 7 accesos, textos un poco más chicos para que "Entrenamientos" entre completo */
+            .st-key-nob_bottom_nav:has(.st-key-bnw_izq) .st-key-bn_row button::after { font-size: 10px; letter-spacing: -0.2px; }
             /* Escudo central elevado */
             .st-key-bn_2 button {
+                /* Ancho fijo y centrado: no ocupa toda la columna ni tapa a Entrenamientos / Mi Categoría */
+                display: flex !important;
+                width: 100% !important; max-width: 78px; margin-left: auto !important; margin-right: auto !important;
                 position: relative; min-height: 70px !important; margin-top: -26px;
                 border-radius: 22px !important; background-color: #1A0204 !important;
                 border: 2px solid #E30613 !important; box-shadow: 0 6px 18px rgba(227,6,19,0.45) !important;
@@ -787,7 +797,7 @@ def aplicar_tema():
         @media (min-width: 901px) and (max-width: 1250px) {
             .st-key-nob_bottom_nav:has(.st-key-bnw_izq) { gap: 8px !important; padding-left: 14px; }
             .st-key-nob_bottom_nav:has(.st-key-bnw_izq) .st-key-bn_nombre button p { font-size: 13px !important; max-width: 110px; }
-            .st-key-nob_bottom_nav:has(.st-key-bnw_izq) .st-key-bn_row button::after { font-size: 9.5px; letter-spacing: -0.2px; }
+            .st-key-nob_bottom_nav:has(.st-key-bnw_izq) .st-key-bn_row button::after { font-size: 9px; letter-spacing: -0.2px; }
         }
         /* Pantallas anchas: dock centrado de verdad (alineado con el contenido), con el mismo margen
            a ambos lados para no tocar el sello de Streamlit de la derecha */
