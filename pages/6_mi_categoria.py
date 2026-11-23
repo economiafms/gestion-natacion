@@ -298,10 +298,12 @@ if target_categoria and target_genero:
         edad_min = pd.to_numeric(rango['edad_min'], errors='coerce').min() if not rango.empty else None
         edad_max = pd.to_numeric(rango['edad_max'], errors='coerce').max() if not rango.empty else None
 
-        # Ordenado por edad: el mayor primero (el más cerca de pasar a la siguiente categoría)
-        rivales = rivales.sort_values(['edad_calculada', 'apellido'], ascending=[False, True])
+        # Ordenado por edad: el mayor primero (el más cerca de pasar a la siguiente categoría).
+        # Se usa la fecha de nacimiento para desempatar a quienes tienen la misma edad.
+        rivales['_nac'] = pd.to_datetime(rivales['fechanac'], errors='coerce')
+        rivales = rivales.sort_values(['edad_calculada', '_nac', 'apellido'], ascending=[False, True, True])
 
-        cols = st.columns(2)
+        # Una sola columna: el orden se lee de arriba hacia abajo
         for i, (idx, row) in enumerate(rivales.iterrows()):
             es_yo = (str(row['codnadador']) == str(mi_id)) if rol == "N" else False
             clase = "swimmer-card is-me" if es_yo else "swimmer-card"
@@ -314,14 +316,13 @@ if target_categoria and target_genero:
             elif pd.notna(edad) and edad_min is not None and pd.notna(edad_min) and int(edad) <= int(edad_min):
                 etiqueta = '<span class="cat-tag entra">Primer año</span>'
 
-            with cols[i % 2]:
-                st.markdown(f"""
-                <div class="{clase}">
-                    <div class="card-info">
-                        <div class="card-name">{row['apellido'].upper()}, {row['nombre']}{yo_lbl}</div>
-                        <div class="card-sub">Edad: {edad_txt} | {row['categoria_actual']} {etiqueta}</div>
-                    </div>
+            st.markdown(f"""
+            <div class="{clase}">
+                <div class="card-info">
+                    <div class="card-name">{row['apellido'].upper()}, {row['nombre']}{yo_lbl}</div>
+                    <div class="card-sub">Edad: {edad_txt} | {row['categoria_actual']} {etiqueta}</div>
                 </div>
-                """, unsafe_allow_html=True)
+            </div>
+            """, unsafe_allow_html=True)
     else:
         st.warning(f"No hay nadadores {target_genero} en {target_categoria}.")
