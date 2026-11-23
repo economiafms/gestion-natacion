@@ -656,6 +656,38 @@ def aplicar_tema():
         :has(> .st-key-nob_bottom_nav) { display: contents !important; }
         .st-key-nob_bottom_nav > [data-testid="stElementContainer"]:has(style) { display: none; }
 
+        /* ---------- El club y vos (Inicio) ---------- */
+        .nob-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-bottom: 10px; }
+        .nob-kpis > div {
+            text-align: center; padding: 12px 6px; border-radius: 14px;
+            background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.07);
+        }
+        .nob-kpis b { display: block; font-size: 24px; font-weight: 900; color: #fff; line-height: 1.1; }
+        .nob-kpis small { display: block; margin-top: 4px; font-size: 10px; font-weight: 700; letter-spacing: 1px;
+                          text-transform: uppercase; color: rgba(255,255,255,0.5); }
+        .nob-aporte {
+            padding: 12px 14px; border-radius: 14px; margin-bottom: 12px; font-size: 14px; color: rgba(255,255,255,0.85);
+            background: linear-gradient(135deg, rgba(227,6,19,0.14), rgba(227,6,19,0.03)); border: 1px solid rgba(227,6,19,0.28);
+        }
+        .nob-aporte b { color: #fff; }
+        .nob-aporte summary { cursor: pointer; }
+        .nob-aporte-lista { margin-top: 8px; font-size: 13px; color: rgba(255,255,255,0.7); line-height: 1.5; }
+        .nob-top-tit { font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase;
+                       color: rgba(255,255,255,0.5); margin: 4px 0 6px; }
+        .nob-top {
+            display: flex; align-items: center; gap: 10px; padding: 9px 12px; margin-bottom: 6px; border-radius: 12px;
+            background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);
+        }
+        .nob-top.yo { background: rgba(227,6,19,0.12); border-color: rgba(227,6,19,0.4); }
+        .nob-top .p { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; flex: 0 0 auto;
+                      font-size: 12px; font-weight: 800; background: rgba(255,255,255,0.08); color: #fff; }
+        .nob-top .n { flex: 1; min-width: 0; font-size: 14px; font-weight: 700; color: #fff;
+                      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .nob-top .m { font-size: 13px; color: rgba(255,255,255,0.8); white-space: nowrap; }
+        .nob-top .t { font-size: 14px; font-weight: 800; color: #fff; white-space: nowrap; }
+        .nob-top-pos { font-size: 12px; color: rgba(255,255,255,0.6); text-align: right; margin-top: 2px; }
+        @media (max-width: 520px) { .nob-kpis { grid-template-columns: repeat(2, 1fr); } }
+
         /* Filtro por distancia en el detalle por estilo: centrado arriba de la ficha */
         .st-key-dlg_est_filtro { align-items: center; margin-bottom: 4px; }
 

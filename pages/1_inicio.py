@@ -453,6 +453,40 @@ def dialogo_estilo(estilo):
     pie_dialogo("dlg_est")
 
 
+@st.dialog("Estadísticas del club", width="large")
+def dialogo_club(df_t, df_r):
+    """Gráficos de nadadores por categoría y género (los totales y el medallero quedan en Inicio)."""
+    seccion("Nadadores")
+    df_n = db['nadadores'].copy()
+    df_n['Anio'] = pd.to_datetime(df_n['fechanac'], errors='coerce').dt.year
+    df_n['Categoria'] = df_n['Anio'].apply(calcular_categoria_grafico)
+    colors = alt.Scale(domain=['M', 'F'], range=['#E30613', '#E6E6E6'])
+    leyenda = alt.Legend(title=None, orient="bottom", labelColor="#BBBBBB",
+                         labelExpr="datum.label == 'M' ? 'Masculino' : 'Femenino'")
+
+    t_c, t_g = st.tabs(["Categorías Master", "Género"])
+    with t_c:
+        orden = ["Juvenil", "PRE", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K+"]
+        graf_cat = alt.Chart(df_n).mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4).encode(
+            x=alt.X('Categoria', sort=orden, title=None, axis=alt.Axis(labelAngle=0)),
+            y=alt.Y('count()', title=None, axis=alt.Axis(format='d', tickMinStep=1)),
+            color=alt.Color('codgenero', legend=leyenda, scale=colors),
+            tooltip=[alt.Tooltip('Categoria', title='Categoría'), alt.Tooltip('count()', title='Nadadores')],
+        ).properties(height=220).configure(background='transparent').configure_view(stroke=None)
+        st.altair_chart(graf_cat, use_container_width=True)
+    with t_g:
+        base = alt.Chart(df_n).encode(theta=alt.Theta("count()", stack=True))
+        graf_gen = (base.mark_arc(outerRadius=80, innerRadius=50).encode(color=alt.Color("codgenero", scale=colors, legend=leyenda))
+                    + base.mark_text(radius=100).encode(text="count()", order=alt.Order("codgenero"), color=alt.value("white"))
+                    ).configure(background='transparent').configure_view(stroke=None)
+        st.altair_chart(graf_gen, use_container_width=True)
+
+    st.write("")
+    with st.container(key="pie_dlg_club"):
+        if st.button("← Volver", key="dlg_club_volver", use_container_width=True):
+            st.rerun()
+
+
 # --- VISUALIZACIÓN ---
 
 # ENCABEZADO PERSONALIZADO
@@ -813,57 +847,114 @@ if db and st.session_state.user_id:
                                  help=f"Ver mejores marcas e historial de {estilo}"):
                         dialogo_estilo(estilo)
     
-    # // 2️⃣ Estadísticas del club
-    seccion("El club en números")
+    # // 2️⃣ EL CLUB Y VOS: datos del año / del mes que cambian, aporte personal y top medallistas
+    seccion("El club y vos")
+    hoy_d = date.today()
+    anio = hoy_d.year
 
-    total_nadadores = len(db['nadadores'])
-    total_pruebas_reg = len(df_t) + len(df_r)
+    def _fechas(df):
+        if 'fecha' in df.columns:
+            return pd.to_datetime(df['fecha'], errors='coerce')
+        return pd.Series(pd.NaT, index=df.index)
 
-    st.markdown(f"""
-    <div class="nob-chip-row" style="margin-bottom: 10px;">
-        <div class="nob-chip"><div class="v">{total_nadadores}</div><div class="l">Nadadores</div></div>
-        <div class="nob-chip"><div class="v">{total_pruebas_reg}</div><div class="l">Pruebas registradas</div></div>
-    </div>
-    """, unsafe_allow_html=True)
+    t_f, r_f = _fechas(df_t), _fechas(df_r)
+    pod_t = df_t[(t_f.dt.year == anio) & df_t['posicion'].isin([1, 2, 3])]
+    pod_r = df_r[(r_f.dt.year == anio) & df_r['posicion'].isin([1, 2, 3])]
+    med_club = len(pod_t) + len(pod_r)  # cada relevo cuenta una vez para el club
+    carreras_mes = int(((t_f.dt.year == anio) & (t_f.dt.month == hoy_d.month)).sum())
 
-    t_oro = len(df_t[df_t['posicion']==1]) + len(df_r[df_r['posicion']==1])
-    t_plata = len(df_t[df_t['posicion']==2]) + len(df_r[df_r['posicion']==2])
-    t_bronce = len(df_t[df_t['posicion']==3]) + len(df_r[df_r['posicion']==3])
-    total_med = t_oro + t_plata + t_bronce
+    insc_prox = "–"
+    try:
+        _c, _i, _ = cargar_datos_inscripcion_inicio()
+        if _c is not None and not _c.empty:
+            _fut = _c[_c['fecha_evento'].dt.date >= hoy_d].sort_values('fecha_evento')
+            if not _fut.empty:
+                _id = _fut.iloc[0]['id_competencia']
+                insc_prox = 0 if _i is None or _i.empty else int((_i['id_competencia'] == _id).sum())
+    except Exception:
+        pass
 
-    st.markdown(f"""
-    <div class="nob-stats" style="margin-bottom: 22px;">
-        <div class="nob-stat gold"><div class="v">🥇 {t_oro}</div><div class="l">Oro</div></div>
-        <div class="nob-stat silver"><div class="v">🥈 {t_plata}</div><div class="l">Plata</div></div>
-        <div class="nob-stat bronze"><div class="v">🥉 {t_bronce}</div><div class="l">Bronce</div></div>
-        <div class="nob-stat total"><div class="v">★ {total_med}</div><div class="l">Medallero</div></div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # 5. GRÁFICOS
-    df_n = db['nadadores'].copy()
-    df_n['Anio'] = pd.to_datetime(df_n['fechanac'], errors='coerce').dt.year
-    df_n['Categoria'] = df_n['Anio'].apply(calcular_categoria_grafico)
-    colors = alt.Scale(domain=['M', 'F'], range=['#E30613', '#E6E6E6'])
-    leyenda = alt.Legend(title=None, orient="bottom", labelColor="#BBBBBB",
-                         labelExpr="datum.label == 'M' ? 'Masculino' : 'Femenino'")
+    st.markdown(f"""<div class="nob-kpis">
+<div><b>{len(db['nadadores'])}</b><small>Nadadores</small></div>
+<div><b>{len(df_t) + len(df_r)}</b><small>Pruebas registradas</small></div>
+<div><b>{carreras_mes}</b><small>Carreras del mes</small></div>
+<div><b>{insc_prox}</b><small>Inscriptos próx. torneo</small></div>
+</div>""", unsafe_allow_html=True)
 
-    t_c, t_g = st.tabs(["Categorías Master", "Género"])
-    with t_c:
-        orden = ["Juvenil", "PRE", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K+"]
-        graf_cat = alt.Chart(df_n).mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4).encode(
-            x=alt.X('Categoria', sort=orden, title=None, axis=alt.Axis(labelAngle=0)),
-            y=alt.Y('count()', title=None, axis=alt.Axis(format='d', tickMinStep=1)),
-            color=alt.Color('codgenero', legend=leyenda, scale=colors),
-            tooltip=[alt.Tooltip('Categoria', title='Categoría'), alt.Tooltip('count()', title='Nadadores')],
-        ).properties(height=220).configure(background='transparent').configure_view(stroke=None)
-        st.altair_chart(graf_cat, use_container_width=True)
-    with t_g:
-        base = alt.Chart(df_n).encode(theta=alt.Theta("count()", stack=True))
-        graf_gen = (base.mark_arc(outerRadius=80, innerRadius=50).encode(color=alt.Color("codgenero", scale=colors, legend=leyenda))
-                    + base.mark_text(radius=100).encode(text="count()", order=alt.Order("codgenero"), color=alt.value("white"))
-                    ).configure(background='transparent').configure_view(stroke=None)
-        st.altair_chart(graf_gen, use_container_width=True)
+    # Medallero total (histórico) del club
+    _t_oro = len(df_t[df_t['posicion'] == 1]) + len(df_r[df_r['posicion'] == 1])
+    _t_plata = len(df_t[df_t['posicion'] == 2]) + len(df_r[df_r['posicion'] == 2])
+    _t_bronce = len(df_t[df_t['posicion'] == 3]) + len(df_r[df_r['posicion'] == 3])
+    st.markdown(f'<div style="margin-bottom:12px;">{html_medrow(_t_oro, _t_plata, _t_bronce)}</div>', unsafe_allow_html=True)
+
+    # Medallas del año por nadador (individuales + relevos de los que participó)
+    _partes = [pod_t[['codnadador', 'posicion']]]
+    for _k in range(1, 5):
+        _col = f'nadador_{_k}'
+        if _col in pod_r.columns:
+            _partes.append(pod_r[[_col, 'posicion']].rename(columns={_col: 'codnadador'}))
+    _med = pd.concat(_partes, ignore_index=True)
+    _med['codnadador'] = pd.to_numeric(_med['codnadador'], errors='coerce')
+    _med = _med.dropna(subset=['codnadador'])
+    if not _med.empty:
+        tabla = (_med.groupby('codnadador')['posicion'].value_counts().unstack(fill_value=0)
+                 .reindex(columns=[1, 2, 3], fill_value=0))
+        tabla['total'] = tabla.sum(axis=1)
+        tabla = tabla.sort_values(['total', 1, 2, 3], ascending=False)
+    else:
+        tabla = pd.DataFrame(columns=[1, 2, 3, 'total'])
+
+    try:
+        _yo = float(user_id)
+    except Exception:
+        _yo = None
+
+    if st.session_state.role == "N":
+        mias = int(tabla.loc[_yo, 'total']) if _yo in tabla.index else 0
+        if med_club:
+            pct = round(mias / med_club * 100)
+            txt = f"🏅 Aportaste <b>{mias}</b> de las <b>{med_club}</b> medallas del club en {anio} ({pct}%)"
+        else:
+            txt = f"🏅 Todavía no hay medallas del club en {anio}. ¡La primera puede ser tuya!"
+        st.markdown(f'<div class="nob-aporte">{txt}</div>', unsafe_allow_html=True)
+    else:
+        # Manager: quién no registró rutinas este mes
+        _activos = set()
+        _seg = db.get('seguimiento')
+        if _seg is not None and not _seg.empty:
+            _fs = pd.to_datetime(_seg['fecha_realizada'], errors='coerce')
+            _activos = set(pd.to_numeric(_seg.loc[(_fs.dt.year == anio) & (_fs.dt.month == hoy_d.month), 'codnadador'],
+                                         errors='coerce').dropna().astype(int))
+        _nad = db['nadadores']
+        _sin = _nad[~pd.to_numeric(_nad['codnadador'], errors='coerce').isin(_activos)]
+        _nombres = ", ".join(html.escape(f"{r['nombre']} {r['apellido']}") for _, r in _sin.iterrows())
+        if len(_sin):
+            st.markdown(f"""<div class="nob-aporte"><details><summary>⚠️ <b>{len(_sin)}</b> nadadores sin rutinas registradas este mes</summary>
+<div class="nob-aporte-lista">{_nombres}</div></details></div>""", unsafe_allow_html=True)
+        else:
+            st.markdown('<div class="nob-aporte">✅ Todos los nadadores registraron rutinas este mes</div>', unsafe_allow_html=True)
+
+    # Top 3 medallistas del año
+    if not tabla.empty:
+        _nombres_por_id = {float(r['codnadador']): f"{r['nombre']} {r['apellido']}"
+                           for _, r in db['nadadores'].iterrows() if pd.notna(pd.to_numeric(r['codnadador'], errors='coerce'))}
+        filas_top = []
+        for pos, (cod, r) in enumerate(tabla.head(3).iterrows(), start=1):
+            meds = " ".join(f"{e}{int(r[k])}" for k, e in ((1, "🥇"), (2, "🥈"), (3, "🥉")) if r[k])
+            es_yo = _yo is not None and cod == _yo
+            filas_top.append(
+                f'<div class="nob-top{" yo" if es_yo else ""}"><span class="p">{pos}</span>'
+                f'<span class="n">{html.escape(_nombres_por_id.get(cod, "-"))}{" · vos" if es_yo else ""}</span>'
+                f'<span class="m">{meds}</span><span class="t">★ {int(r["total"])}</span></div>')
+        extra = ""
+        if _yo is not None and _yo in tabla.index and _yo not in list(tabla.head(3).index):
+            extra = f'<div class="nob-top-pos">Tu posición: {list(tabla.index).index(_yo) + 1}°</div>'
+        st.markdown(f'<div class="nob-top-tit">Top medallistas {anio}</div>{"".join(filas_top)}{extra}',
+                    unsafe_allow_html=True)
+
+    st.write("")
+    if st.button("Ver más estadísticas", key="btn_club_stats", icon=":material/bar_chart:", use_container_width=True):
+        dialogo_club(df_t, df_r)
 
     # --- 6. GESTIÓN (Perfil M) ---
     if st.session_state.role == "M":
