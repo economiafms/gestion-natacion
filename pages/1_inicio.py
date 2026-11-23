@@ -772,8 +772,13 @@ if db and st.session_state.user_id:
             # pueda ser clickeable: con la inscripción abierta, tocarla abre la Agenda en ese torneo.
             _limpio = lambda h: "\n".join(l.strip() for l in h.splitlines() if l.strip())
             st.markdown("""<style>
-.st-key-nob_duo_st { display: grid !important; grid-template-columns: repeat(var(--duo-n), 1fr); gap: 12px !important; margin-bottom: 14px; }
-.st-key-nob_duo_st .nob-goal, .st-key-nob_duo_st .nob-next { margin-bottom: 0; height: 100%; }
+.st-key-nob_duo_st { display: grid !important; grid-template-columns: repeat(var(--duo-n), minmax(0, 1fr));
+  align-items: stretch !important; gap: 12px !important; margin-bottom: 14px; }
+/* Mismo ancho y misma altura: cada nivel interno ocupa todo el alto de su celda */
+.st-key-nob_duo_st > div, .st-key-nob_duo_st [data-testid="stVerticalBlock"],
+.st-key-nob_duo_st [data-testid="stElementContainer"], .st-key-nob_duo_st [data-testid="stMarkdown"],
+.st-key-nob_duo_st [data-testid="stMarkdownContainer"] { height: 100% !important; width: 100% !important; }
+.st-key-nob_duo_st .nob-goal, .st-key-nob_duo_st .nob-next { margin-bottom: 0; height: 100%; box-sizing: border-box; }
 @media (max-width: 520px) { .st-key-nob_duo_st { grid-template-columns: 1fr; } }
 .st-key-nob_torneo_card { position: relative; }
 .st-key-nob_torneo_card .st-key-btn_invitar_torneo { position: absolute !important; left: 0; top: 0; z-index: 2;
