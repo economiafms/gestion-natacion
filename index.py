@@ -127,8 +127,10 @@ def dialogo_gestion():
     if ingresar:
         sec_user, sec_pass = credenciales_gestion()
         if usuario == sec_user and clave == sec_pass:
+            # Igual que "Acceso Profesor" de Inicio: solo desbloquea la gestión.
+            # La rueda del dock pasa a ser el botón "Cargar datos".
             st.session_state.admin_unlocked = True
-            st.session_state.ir_a_carga = True
+            st.session_state.show_login_form = False
             st.rerun()
         else:
             st.error("Usuario o contraseña incorrectos.")
@@ -354,13 +356,14 @@ else:
     web_izq = ("🏊", "Simulador", pg.url_path == pg_simulador.url_path) if es_manager else None
     web_der = ("🏆", "Ranking", pg.url_path == pg_ranking.url_path) if es_manager else None
 
-    # Después de desbloquear la gestión desde el diálogo, ir directo a Carga de Datos
-    if st.session_state.pop("ir_a_carga", False) and st.session_state.admin_unlocked:
-        st.switch_page(pg_carga)
+    # Rueda (pide clave) mientras la gestión está bloqueada; una vez desbloqueada, botón "Cargar datos"
+    web_gestion = None
+    if es_manager:
+        web_gestion = "carga" if st.session_state.admin_unlocked else "rueda"
 
     accion = barra_movil([(i, e) for i, e, _ in principales], st.session_state.user_name or "Mi Ficha",
                          [(i, e) for i, e, _ in extras], activo,
-                         web_izq=web_izq, web_der=web_der, web_gestion=es_manager)
+                         web_izq=web_izq, web_der=web_der, web_gestion=web_gestion)
     if accion is not None:
         if accion[0] == "principal":
             st.switch_page(principales[accion[1]][2])
@@ -375,10 +378,9 @@ else:
         elif accion[0] == "web_der":
             st.switch_page(pg_ranking)
         elif accion[0] == "gestion":
-            if st.session_state.admin_unlocked:
-                st.switch_page(pg_carga)
-            else:
-                dialogo_gestion()
+            dialogo_gestion()
+        elif accion[0] == "carga":
+            st.switch_page(pg_carga)
 
     with st.sidebar:
         st.write("") 

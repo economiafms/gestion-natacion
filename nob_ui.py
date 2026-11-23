@@ -146,11 +146,12 @@ def barra_movil(principales, nombre, extras, activo=None, web_izq=None, web_der=
     Solo en la computadora (el celular no los muestra):
       - `web_izq` / `web_der`: (icono, etiqueta, activo) a la izquierda y a la derecha de la fila principal
         (para el manager: Simulador y Ranking).
-      - `web_gestion`: botón de Gestión en lugar del "+".
+      - `web_gestion`: "rueda" (pide clave) o "carga" (gestión desbloqueada: botón Cargar datos),
+        en lugar del "+". None si no corresponde.
 
     `activo`: índice (0-4) de la página actual en la fila principal, o None.
     Devuelve ("principal", i) | ("ficha",) | ("extra", i) | ("salir",) |
-             ("web_izq",) | ("web_der",) | ("gestion",) | None.
+             ("web_izq",) | ("web_der",) | ("gestion",) | ("carga",) | None.
     """
     css = [f'.st-key-bn_{i} button::after {{ content: "{e.replace(chr(34), "")}"; }}'
            for i, (_, e) in enumerate(principales)]
@@ -192,9 +193,13 @@ def barra_movil(principales, nombre, extras, activo=None, web_izq=None, web_der=
                             if st.button(icono, key=f"bnx_{j}", use_container_width=True):
                                 accion = ("extra", j)
 
-        # Solo computadora: botón de Gestión (en lugar del "+")
-        if web_gestion and st.button("", key="bnw_gestion", icon=":material/settings:", help="Gestión de competencias"):
-            accion = ("gestion",)
+        # Solo computadora: rueda de Gestión (en lugar del "+"); desbloqueada, se reemplaza por "Cargar datos"
+        if web_gestion == "rueda":
+            if st.button("", key="bnw_gestion", icon=":material/settings:", help="Gestión de competencias"):
+                accion = ("gestion",)
+        elif web_gestion == "carga":
+            if st.button("", key="bnw_carga", icon=":material/upload_file:", help="Cargar datos"):
+                accion = ("carga",)
 
         with st.container(key="bn_row"):
             # Simulador y Ranking (manager) son columnas más de la misma fila, a los extremos:
@@ -586,7 +591,7 @@ def aplicar_tema():
         .nob-mas-btn:has(input:checked) { border-color: #E30613 !important; }
         .st-key-bn_panel { display: none !important; }
         /* Botones solo para la computadora (manager): ocultos por defecto */
-        .st-key-bnw_gestion { display: none !important; }
+        :is(.st-key-bnw_gestion, .st-key-bnw_carga) { display: none !important; }
         .st-key-nob_bottom_nav:has(#nob-mas-chk:checked) .st-key-bn_panel { display: flex !important; }
         @media (max-width: 900px) {
             .st-key-nob_bottom_nav {
@@ -705,21 +710,23 @@ def aplicar_tema():
                                 /* Separador antes del grupo rueda / cerrar sesión (el nombre tiene el suyo) */
                                 border-right: 1px solid rgba(255,255,255,0.10); padding-right: 14px; }
             [data-testid="stElementContainer"]:has(.nob-mas-btn)    { order: 2; flex: 0 0 auto !important; width: auto !important; }
-            .st-key-bnw_gestion { order: 2; }
+            :is(.st-key-bnw_gestion, .st-key-bnw_carga) { order: 2; }
             .st-key-bn_salir  { order: 3; flex: 0 0 auto !important; width: auto !important; }
 
             /* Manager en la computadora: Simulador y Ranking son columnas de la misma fila (toman su
                estilo) y Gestión reemplaza al "+" */
-            .st-key-bnw_gestion { display: block !important; flex: 0 0 auto !important; width: auto !important; }
-            .st-key-nob_bottom_nav:has(.st-key-bnw_gestion) [data-testid="stElementContainer"]:has(.nob-mas-btn),
-            .st-key-nob_bottom_nav:has(.st-key-bnw_gestion) .st-key-bn_panel { display: none !important; }
-            .st-key-bnw_gestion button {
+            :is(.st-key-bnw_gestion, .st-key-bnw_carga) { display: block !important; flex: 0 0 auto !important; width: auto !important; }
+            .st-key-nob_bottom_nav:has(:is(.st-key-bnw_gestion, .st-key-bnw_carga)) [data-testid="stElementContainer"]:has(.nob-mas-btn),
+            .st-key-nob_bottom_nav:has(:is(.st-key-bnw_gestion, .st-key-bnw_carga)) .st-key-bn_panel { display: none !important; }
+            :is(.st-key-bnw_gestion, .st-key-bnw_carga) button {
                 border-radius: 999px !important; min-width: 48px !important; min-height: 44px !important; padding: 2px 12px !important;
                 background: rgba(255,255,255,0.08) !important; border: 1px solid rgba(255,255,255,0.16) !important;
                 box-shadow: none !important; transform: none !important;
             }
-            .st-key-bnw_gestion button:hover { border-color: #E30613 !important; }
-            .st-key-bnw_gestion button [data-testid="stIconMaterial"] { font-size: 24px !important; color: #fff; margin: 0 !important; }
+            :is(.st-key-bnw_gestion, .st-key-bnw_carga) button:hover { border-color: #E30613 !important; }
+            :is(.st-key-bnw_gestion, .st-key-bnw_carga) button [data-testid="stIconMaterial"] { font-size: 24px !important; color: #fff; margin: 0 !important; }
+            /* Gestión desbloqueada: "Cargar datos" con borde rojo para indicar el acceso habilitado */
+            .st-key-bnw_carga button { border-color: rgba(227,6,19,0.75) !important; background: rgba(227,6,19,0.12) !important; }
 
             .st-key-bn_nombre button {
                 background: transparent !important; border: none !important; box-shadow: none !important;
