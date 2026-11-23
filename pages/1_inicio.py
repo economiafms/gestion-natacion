@@ -1100,25 +1100,44 @@ if db and st.session_state.user_id:
     if st.button("Ver más estadísticas", key="btn_club_stats", icon=":material/bar_chart:", use_container_width=True):
         dialogo_club(df_t, df_r)
 
-    # Entrenador: nadadores por categoría (total, por género y activos)
+    # Entrenador: nadadores por categoría (total y activos). Cada género abre Categorías
+    # con esa categoría y ese género ya elegidos. Se usan las categorías de la hoja Categorias,
+    # igual que en la página Categorías, para que coincidan.
     if es_entrenador:
+        _dc = db['categorias'].copy()
+        _dc.columns = _dc.columns.str.strip().str.lower()
+        _dc['edad_min'] = pd.to_numeric(_dc['edad_min'], errors='coerce')
+        _dc['edad_max'] = pd.to_numeric(_dc['edad_max'], errors='coerce')
+        _dc = _dc.dropna(subset=['edad_min', 'edad_max']).sort_values('edad_min')
         _dn = db['nadadores'].copy()
-        _dn['_anio'] = pd.to_datetime(_dn['fechanac'], errors='coerce').dt.year
-        _dn = _dn.dropna(subset=['_anio'])
-        _dn['_cat'] = _dn['_anio'].apply(calcular_categoria_grafico)
-        _dn['_gen'] = _dn['codgenero'].astype(str).str.strip().str.upper()
+        _dn = _dn[_dn['codnadador'].astype(str) != '66']  # igual que la página Categorías
+        _dn['_edad'] = date.today().year - pd.to_datetime(_dn['fechanac'], errors='coerce').dt.year
+        _dn['_gen'] = _dn['codgenero'].astype(str).str.strip()
         _dn['_act'] = pd.to_numeric(_dn['codnadador'], errors='coerce').isin(_ids_act)
-        _orden = ["Juvenil", "PRE", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K+"]
-        _cats = sorted(_dn['_cat'].unique(), key=lambda c: _orden.index(c) if c in _orden else len(_orden))
-        _filas = []
-        for _c in _cats:
-            _g = _dn[_dn['_cat'] == _c]
-            _filas.append(f'<div class="nob-top"><span class="n">{html.escape(str(_c))}</span>'
-                          f'<span class="m">♂ {int((_g["_gen"] == "M").sum())} · ♀ {int((_g["_gen"] == "F").sum())}'
-                          f' · {int(_g["_act"].sum())} activos</span><span class="t">{len(_g)}</span></div>')
-        if _filas:
-            st.markdown(f'<div class="nob-top-tit" style="margin-top:14px;">Nadadores por categoría</div>{"".join(_filas)}',
-                        unsafe_allow_html=True)
+
+        def _ir_categoria(cat_nom, gen):
+            st.session_state["cat_sel"] = cat_nom
+            st.session_state["cat_gen"] = gen
+            st.switch_page("pages/6_mi_categoria.py")
+
+        _hay = False
+        for _i, _c in enumerate(_dc.itertuples()):
+            _g = _dn[(_dn['_edad'] >= _c.edad_min) & (_dn['_edad'] <= _c.edad_max)]
+            if _g.empty:
+                continue
+            if not _hay:
+                st.markdown('<div class="nob-top-tit" style="margin-top:14px;">Nadadores por categoría</div>',
+                            unsafe_allow_html=True)
+                _hay = True
+            with st.container(key=f"ent_cat_{_i}", horizontal=True, vertical_alignment="center", gap="small"):
+                st.markdown(f"**{html.escape(str(_c.nombre_cat))}** · {len(_g)} "
+                            f"<span style='color:#aaa;font-size:13px'>({int(_g['_act'].sum())} activos)</span>",
+                            unsafe_allow_html=True)
+                for _gen, _ico in (("M", "♂"), ("F", "♀")):
+                    _n = int((_g['_gen'].str.upper() == _gen).sum())
+                    if st.button(f"{_ico} {_n}", key=f"ent_cat_{_i}_{_gen}", disabled=_n == 0,
+                                 help=f"Ver {_c.nombre_cat} {'masculino' if _gen == 'M' else 'femenino'} en Categorías"):
+                        _ir_categoria(_c.nombre_cat, _g.loc[_g['_gen'].str.upper() == _gen, '_gen'].iloc[0])
 
     # --- 6. GESTIÓN (Perfil M) ---
     if st.session_state.role == "M":
