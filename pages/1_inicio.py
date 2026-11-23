@@ -351,7 +351,7 @@ def pie_dialogo(key):
 
 def html_medrow(n1, n2, n3, activa=None):
     """Fila informativa de medallas (sin acción). `activa` (1/2/3) resalta la medalla elegida."""
-    datos = [(1, "gold", "🥇", n1, "Oros"), (2, "silver", "🥈", n2, "Platas"), (3, "bronze", "🥉", n3, "Bronces")]
+    datos = [(1, "gold", "🥇", n1, "Oro"), (2, "silver", "🥈", n2, "Plata"), (3, "bronze", "🥉", n3, "Bronce")]
     celdas = "".join(
         f'<div class="{cls}{" on" if activa == pos else (" off" if activa else "")}">'
         f'<div class="v">{emo} {n}</div><div class="l">{lab}</div></div>'
@@ -854,9 +854,9 @@ if db and st.session_state.user_id:
 
     st.markdown(f"""
     <div class="nob-stats" style="margin-bottom: 22px;">
-        <div class="nob-stat gold"><div class="v">🥇 {t_oro}</div><div class="l">Oros</div></div>
-        <div class="nob-stat silver"><div class="v">🥈 {t_plata}</div><div class="l">Platas</div></div>
-        <div class="nob-stat bronze"><div class="v">🥉 {t_bronce}</div><div class="l">Bronces</div></div>
+        <div class="nob-stat gold"><div class="v">🥇 {t_oro}</div><div class="l">Oro</div></div>
+        <div class="nob-stat silver"><div class="v">🥈 {t_plata}</div><div class="l">Plata</div></div>
+        <div class="nob-stat bronze"><div class="v">🥉 {t_bronce}</div><div class="l">Bronce</div></div>
         <div class="nob-stat total"><div class="v">★ {total_med}</div><div class="l">Medallero</div></div>
     </div>
     """, unsafe_allow_html=True)

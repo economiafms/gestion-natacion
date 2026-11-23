@@ -603,9 +603,9 @@ def aplicar_tema():
         .st-key-med_oro button    { background: rgba(255,215,0,0.07) !important;  border-color: rgba(255,215,0,0.35) !important; }
         .st-key-med_plata button  { background: rgba(200,200,200,0.06) !important; border-color: rgba(200,200,200,0.30) !important; }
         .st-key-med_bronce button { background: rgba(205,127,50,0.07) !important; border-color: rgba(205,127,50,0.35) !important; }
-        .st-key-med_oro button::after    { content: "OROS"; }
-        .st-key-med_plata button::after  { content: "PLATAS"; }
-        .st-key-med_bronce button::after { content: "BRONCES"; }
+        .st-key-med_oro button::after    { content: "ORO"; }
+        .st-key-med_plata button::after  { content: "PLATA"; }
+        .st-key-med_bronce button::after { content: "BRONCE"; }
         /* Total de podios: tarjeta informativa (sin acción) */
         .nob-med-info {
             min-height: 74px; border-radius: 16px; display: flex; flex-direction: column;
@@ -661,6 +661,10 @@ def aplicar_tema():
         .st-key-nob_ayuda {
             position: fixed !important; top: 14px; left: 16px; z-index: 1000001;
             width: auto !important;
+        }
+        /* Computadora: alineado con el borde izquierdo del banner (columna central de 704 px) */
+        @media (min-width: 901px) {
+            .st-key-nob_ayuda { left: max(16px, calc(50% - 352px)); }
         }
         .st-key-nob_ayuda button {
             min-height: 30px !important; padding: 2px 12px !important; border-radius: 999px !important;
@@ -932,9 +936,9 @@ def aplicar_tema():
         .st-key-dmed_1 button { background: rgba(255,215,0,0.07) !important;  border-color: rgba(255,215,0,0.35) !important; }
         .st-key-dmed_2 button { background: rgba(200,200,200,0.06) !important; border-color: rgba(200,200,200,0.30) !important; }
         .st-key-dmed_3 button { background: rgba(205,127,50,0.07) !important; border-color: rgba(205,127,50,0.35) !important; }
-        .st-key-dmed_1 button::after { content: "OROS"; }
-        .st-key-dmed_2 button::after { content: "PLATAS"; }
-        .st-key-dmed_3 button::after { content: "BRONCES"; }
+        .st-key-dmed_1 button::after { content: "ORO"; }
+        .st-key-dmed_2 button::after { content: "PLATA"; }
+        .st-key-dmed_3 button::after { content: "BRONCE"; }
         .nob-med-info.dlg { min-height: 62px; border-style: solid; opacity: .5; }
         .nob-med-info.dlg .v { font-size: 20px; }
         [class*="st-key-pie_"] [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; }
