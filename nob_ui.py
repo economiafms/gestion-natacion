@@ -410,9 +410,30 @@ def aplicar_tema():
             background: linear-gradient(135deg, rgba(227,6,19,0.16), rgba(227,6,19,0.03));
             border: 1px solid rgba(227,6,19,0.30);
         }
-        .nob-est-name { font-size: 22px; font-weight: 900; color: #fff; text-transform: uppercase; letter-spacing: .5px; }
-        .nob-est-info { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 6px; font-size: 13px; color: rgba(255,255,255,0.65); }
-        .nob-est-info b { color: #fff; }
+        .nob-est-head { text-align: center; padding: 18px 16px 16px; }
+        .nob-est-name { font-size: 26px; font-weight: 900; color: #fff; text-transform: uppercase; letter-spacing: .5px; line-height: 1.1; }
+        .nob-est-desc { margin-top: 4px; font-size: 13px; color: rgba(255,255,255,0.65); }
+        .nob-medrow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 14px; }
+        .nob-medrow > div {
+            padding: 10px 4px; border-radius: 14px; text-align: center;
+            background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+        }
+        .nob-medrow .v { font-size: 20px; font-weight: 900; color: #fff; line-height: 1.2; }
+        .nob-medrow .l { font-size: 10px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: rgba(255,255,255,0.5); margin-top: 2px; }
+        .nob-medrow .gold   { background: rgba(255,215,0,0.07);   border-color: rgba(255,215,0,0.35); }
+        .nob-medrow .silver { background: rgba(200,200,200,0.06); border-color: rgba(200,200,200,0.30); }
+        .nob-medrow .bronze { background: rgba(205,127,50,0.07);  border-color: rgba(205,127,50,0.35); }
+        .nob-medrow .total  { background: rgba(227,6,19,0.10);    border-color: rgba(227,6,19,0.40); }
+        /* Botón Volver en las ventanas emergentes */
+        [class*="st-key-volver_"] button {
+            min-height: 34px !important; padding: 4px 14px !important; border-radius: 999px !important;
+            background: rgba(255,255,255,0.06) !important; border: 1px solid rgba(255,255,255,0.14) !important;
+        }
+        [class*="st-key-volver_"] button p { font-size: 14px !important; font-weight: 700 !important; }
+        [class*="st-key-pie_"] [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; }
+        [class*="st-key-pie_"] [data-testid="stColumn"] { min-width: 0 !important; }
+        .nob-medrow .off { opacity: .45; }
+        .nob-medrow .on  { border-width: 2px; box-shadow: 0 0 0 3px rgba(255,255,255,0.06); }
         .st-key-nob_medals button:hover { transform: translateY(-2px); box-shadow: 0 10px 22px rgba(0,0,0,0.35); }
 
         /* Vista rápida: podios y mejores marcas */
