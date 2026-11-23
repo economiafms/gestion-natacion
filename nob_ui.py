@@ -656,8 +656,12 @@ def aplicar_tema():
         :has(> .st-key-nob_bottom_nav) { display: contents !important; }
         .st-key-nob_bottom_nav > [data-testid="stElementContainer"]:has(style) { display: none; }
 
-        /* Chip "Guía rápida" arriba del banner, alineado a la derecha */
-        .st-key-nob_ayuda { align-items: flex-end; margin-bottom: -6px; }
+        /* Chip "Guía rápida": fijo arriba de todo a la izquierda, en la franja superior de la página */
+        :has(> .st-key-nob_ayuda) { display: contents !important; }
+        .st-key-nob_ayuda {
+            position: fixed !important; top: 14px; left: 16px; z-index: 1000001;
+            width: auto !important;
+        }
         .st-key-nob_ayuda button {
             min-height: 30px !important; padding: 2px 12px !important; border-radius: 999px !important;
             background: rgba(255,255,255,0.05) !important; border: 1px solid rgba(255,255,255,0.14) !important;
