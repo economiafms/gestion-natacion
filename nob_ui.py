@@ -349,8 +349,21 @@ AYUDA_PAGINAS = {
 - Los nadadores de tu categoría y los tiempos promedio por estilo y distancia, para comparar tu rendimiento."""},
     "Categorías": {"comun": """
 - Elegí una categoría y un género para ver sus nadadores (ordenados por edad, con quién está en su primer o último año) y los tiempos promedio por estilo y distancia."""},
-    "Agenda": {"comun": """
-- Las próximas competencias: inscribite eligiendo tus pruebas antes de la fecha límite, o date de baja si no vas a participar."""},
+    "Agenda": {
+        "comun": """
+- **Carrete de torneos (arriba):** deslizá para ver todos los eventos. Primero los próximos y, después de la línea *Finalizados*, los pasados. Tocá uno para ver sus datos debajo.
+- Cada tarjeta muestra la fecha y el estado: **Abierta** (con los días que quedan para anotarse), **Inscripción cerrada** o **Finalizado**. El ✅ indica que estás inscripto.
+- **Datos del torneo:** sede, costo, cierre de inscripción, cantidad de inscriptos y cuántas pruebas podés nadar.""",
+        "nadador": """
+- **📝 Mi inscripción:** elegí tus pruebas y tocá *Inscribirme*. Mientras la inscripción esté abierta podés cambiarlas o darte de baja. Al lado de cada prueba aparece tu mejor tiempo.
+- **👥 Inscriptos:** quiénes van, filtrando por prueba, categoría o género.""",
+        "manager": """
+- **＋ Nuevo evento** (primera tarjeta del carrete): completá los 4 pasos (torneo, fecha y horario, inscripción e información) y tocá *Crear evento*.
+- **👥 Inscriptos:** la lista con filtros, la planilla para descargar y el botón para dar de baja a un nadador.
+- **➕ Inscribir:** anotá a cualquier nadador (o modificá sus pruebas si ya está inscripto).
+- **⚙️ Editar:** cambiá cualquier dato del evento. Para eliminarlo, marcá la confirmación primero.
+- **🚀 Simulador:** lleva a los inscriptos al Simulador para armar las postas.""",
+    },
     "Ranking": {"comun": """
 - Los mejores tiempos del club por prueba. Filtrá por estilo, distancia y género; en *Relevos*, las mejores postas."""},
     "Simulador": {"comun": """
