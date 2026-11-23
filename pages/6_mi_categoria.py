@@ -116,16 +116,16 @@ def _id_txt(v):
     try: return str(int(float(v)))
     except: return str(v).strip()
 
-def ids_activos(db, anio):
-    """Nadadores con al menos una marca de competencia (individual o relevo) en el año dado."""
+def ids_activos(db, anios):
+    """Nadadores con al menos una marca de competencia (individual o relevo) en alguno de los años dados."""
     ids = set()
     t = db['tiempos']
     if t is not None and not t.empty and 'fecha' in t.columns:
-        t_anio = t[pd.to_datetime(t['fecha'], errors='coerce').dt.year == anio]
+        t_anio = t[pd.to_datetime(t['fecha'], errors='coerce').dt.year.isin(anios)]
         ids.update(_id_txt(x) for x in t_anio['codnadador'].dropna())
     r = db.get('relevos')
     if r is not None and not r.empty and 'fecha' in r.columns:
-        r_anio = r[pd.to_datetime(r['fecha'], errors='coerce').dt.year == anio]
+        r_anio = r[pd.to_datetime(r['fecha'], errors='coerce').dt.year.isin(anios)]
         for k in range(1, 5):
             col = f'nadador_{k}'
             if col in r_anio.columns:
@@ -163,9 +163,11 @@ else:
     st.error("Error: No se encuentra la columna 'nombre_cat' en la tabla Categorias.")
     st.stop()
 
-# 3. Activos: compitieron el año anterior al actual. El resto se considera inactivo.
-ANIO_REF = date.today().year - 1
-ACTIVOS = ids_activos(db, ANIO_REF)
+# 3. Activos: compitieron este año o el anterior. El resto se considera inactivo.
+ANIO_ACT = date.today().year
+ANIO_REF = ANIO_ACT - 1
+PERIODO = f"{ANIO_REF} o {ANIO_ACT}"
+ACTIVOS = ids_activos(db, [ANIO_REF, ANIO_ACT])
 df_nad['activo'] = df_nad['codnadador'].apply(lambda x: _id_txt(x) in ACTIVOS)
 COLOR_ACTIVO = "#8B1A1A"
 COLOR_INACTIVO = "#555555"
@@ -304,7 +306,7 @@ if target_categoria and target_genero:
                     )
                     st.markdown(
                         f"<div style='font-size:12px;color:#aaa;margin-bottom:-6px;'>"
-                        f"<span style='color:{COLOR_ACTIVO}'>■</span> Activos (compitieron en {ANIO_REF}) &nbsp; "
+                        f"<span style='color:{COLOR_ACTIVO}'>■</span> Activos (compitieron en {PERIODO}) &nbsp; "
                         f"<span style='color:{COLOR_INACTIVO}'>■</span> Inactivos</div>",
                         unsafe_allow_html=True)
                     st.plotly_chart(fig, use_container_width=True,
@@ -366,11 +368,11 @@ if target_categoria and target_genero:
         inactivos = rivales[~rivales['activo']]
         t_act, t_inact = st.tabs([f"Activos ({len(activos)})", f"Inactivos ({len(inactivos)})"])
         with t_act:
-            st.caption(f"Con al menos una marca de competencia en {ANIO_REF}.")
-            if activos.empty: st.info(f"Nadie de esta categoría compitió en {ANIO_REF}.")
+            st.caption(f"Con al menos una marca de competencia en {PERIODO}.")
+            if activos.empty: st.info(f"Nadie de esta categoría compitió en {PERIODO}.")
             else: mostrar_tarjetas(activos)
         with t_inact:
-            st.caption(f"Sin marcas de competencia en {ANIO_REF}.")
+            st.caption(f"Sin marcas de competencia en {ANIO_REF} ni en {ANIO_ACT}.")
             if inactivos.empty: st.info("No hay nadadores inactivos en esta categoría.")
             else: mostrar_tarjetas(inactivos)
     else:
