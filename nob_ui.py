@@ -8,10 +8,16 @@ from pathlib import Path
 import streamlit as st
 
 ROJO = "#E30613"
-ESCUDO_PATH = Path(__file__).parent / "escudo.png"
+RAIZ = Path(__file__).parent
+ESCUDO_PATH = RAIZ / "escudo.png"
 ESCUDO_URL = "https://raw.githubusercontent.com/economiafms/gestion-natacion/main/escudo.png"
+# Escudo de Newell's (lado derecho del banner). Se muestra solo si el archivo está en la raíz del proyecto.
+ESCUDO_NOB_CANDIDATOS = ["escudonob.png", "escudonob.svg", "escudonob.jpg", "escudonob.jpeg", "escudonob.webp"]
 
-FRASES = [
+# Palabras que nunca deben aparecer en las frases motivadoras
+PALABRAS_EXCLUIDAS = ["pecho", "gigante", "central"]
+
+_FRASES_BASE = [
     "Cada largo cuenta. Hoy sumás uno más.",
     "La constancia le gana al talento cuando el talento no entrena.",
     "No se trata de ser el mejor, se trata de ser mejor que ayer.",
@@ -35,18 +41,39 @@ FRASES = [
     "Respirá, empujá la pared y andá por más.",
     "Los límites están para nadarlos de largo.",
     "Entrená como si la próxima competencia fuera mañana.",
-    "Con el escudo en el pecho, cada brazada vale doble.",
+    "Con la rojinegra, cada brazada vale doble.",
     "La mejor versión de vos está a un entrenamiento de distancia.",
 ]
+
+FRASES = [f for f in _FRASES_BASE if not any(p in f.lower() for p in PALABRAS_EXCLUIDAS)]
+
+_MIME = {".png": "image/png", ".svg": "image/svg+xml", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
+
+
+def _img_data_uri(ruta: Path) -> str:
+    return f"data:{_MIME.get(ruta.suffix.lower(), 'image/png')};base64," + base64.b64encode(ruta.read_bytes()).decode()
 
 
 @st.cache_data
 def escudo_src() -> str:
     """Escudo embebido en base64 (no depende de internet); si falta el archivo usa GitHub."""
     try:
-        return "data:image/png;base64," + base64.b64encode(ESCUDO_PATH.read_bytes()).decode()
+        return _img_data_uri(ESCUDO_PATH)
     except Exception:
         return ESCUDO_URL
+
+
+@st.cache_data
+def escudo_nob_src() -> str | None:
+    """Escudo de Newell's para el lado derecho del banner, o None si el archivo no está."""
+    for nombre in ESCUDO_NOB_CANDIDATOS:
+        ruta = RAIZ / nombre
+        if ruta.exists():
+            try:
+                return _img_data_uri(ruta)
+            except Exception:
+                return None
+    return None
 
 
 def ahora_arg():
@@ -77,16 +104,19 @@ def hero(titulo: str, icono: str | None = None, subtitulo: str | None = None,
     `icono` y `saludar` se mantienen por compatibilidad con llamadas existentes, pero ya no se usan.
     """
     frase = html.escape(subtitulo) if subtitulo else html.escape(frase_motivadora(titulo))
+    nob = escudo_nob_src()
+    escudo_der = f'<img class="nob-hero-crest der" src="{nob}" alt="Escudo Newell\'s Old Boys">' if nob else ""
     st.markdown(
         f"""
         <div class="nob-hero">
             <div class="nob-hero-wave"></div>
-            <img class="nob-hero-crest" src="{escudo_src()}" alt="Escudo Newell's Old Boys">
+            <img class="nob-hero-crest" src="{escudo_src()}" alt="Escudo Complejo Acuático">
             <div class="nob-hero-body">
                 <div class="nob-hero-eyebrow">{html.escape(eyebrow)}</div>
                 <div class="nob-hero-title">{html.escape(titulo)}</div>
                 <div class="nob-hero-sub">“{frase}”</div>
             </div>
+            {escudo_der}
         </div>
         """,
         unsafe_allow_html=True,
@@ -181,7 +211,8 @@ def aplicar_tema():
             width: 84px; height: 84px; object-fit: contain;
             filter: drop-shadow(0 8px 18px rgba(227,6,19,0.40));
         }
-        .nob-hero-body { position: relative; min-width: 0; }
+        .nob-hero-body { position: relative; min-width: 0; flex: 1 1 auto; }
+        .nob-hero-crest.der { margin-left: auto; filter: drop-shadow(0 8px 18px rgba(0,0,0,0.5)); }
         .nob-hero-eyebrow {
             font-size: 11px; font-weight: 700; letter-spacing: 2.5px; text-transform: uppercase;
             color: #FF4D57; margin-bottom: 4px;
@@ -581,6 +612,7 @@ def aplicar_tema():
             .st-key-nob_estilos button::after { font-size: 9px; letter-spacing: 0.2px; }
             .nob-hero { gap: 14px; padding: 18px; }
             .nob-hero-crest { width: 56px; height: 56px; }
+            .nob-hero-crest.der { width: 44px; height: 44px; }
             .nob-duo { grid-template-columns: 1fr; }
             .nob-hero-title { font-size: 23px; }
             .nob-stats { grid-template-columns: repeat(2, 1fr); }
