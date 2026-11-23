@@ -269,11 +269,11 @@ def aplicar_tema():
         .nob-hero-crest.der { margin-left: auto; filter: drop-shadow(0 8px 18px rgba(0,0,0,0.5)); }
         .nob-hero-eyebrow {
             font-size: 11px; font-weight: 700; letter-spacing: 2.5px; text-transform: uppercase;
-            color: #FF4D57; margin-bottom: 4px;
+            color: #FF4D57; margin-bottom: 4px; text-align: center;
         }
         .nob-hero-title {
             font-size: 28px; font-weight: 900; line-height: 1.1;
-            color: #fff; letter-spacing: -0.6px;
+            color: #fff; letter-spacing: -0.6px; text-align: center;
         }
         .nob-hero-sub {
             margin-top: 8px; padding-left: 12px;
@@ -628,6 +628,93 @@ def aplicar_tema():
             .st-key-bn_2 button p { position: absolute; top: 10px; left: 0; right: 0; }
             .st-key-bn_2 button::after { color: #FF6A72; font-weight: 800; }
             .block-container { padding-bottom: 160px !important; }
+        }
+
+        /* ---------- Computadora: la misma barra como dock flotante abajo al centro ---------- */
+        @media (min-width: 641px) {
+            /* El menú lateral se reemplaza por el dock */
+            [data-testid="stSidebar"], [data-testid="stSidebarCollapsedControl"],
+            [data-testid="stExpandSidebarButton"] { display: none !important; }
+
+            .st-key-nob_bottom_nav {
+                display: flex !important; flex-direction: row !important; align-items: center;
+                position: fixed; z-index: 999990; bottom: 18px;
+                /* Centrado dentro del espacio que deja libre el sello de Streamlit (abajo a la derecha) */
+                left: 20px; right: 160px; margin: 0 auto; max-width: 880px; width: auto !important;
+                gap: 14px !important; padding: 8px 12px 8px 18px;
+                border-radius: 26px;
+                background: rgba(14,15,19,0.92); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+                border: 1px solid rgba(255,255,255,0.10);
+                box-shadow: 0 18px 40px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.05);
+            }
+            /* La franja se "disuelve": nombre a la izquierda, + y salir a la derecha de las secciones */
+            .st-key-nob_bottom_nav > [data-testid="stLayoutWrapper"],
+            .st-key-bn_strip { display: contents !important; }
+            .st-key-bn_nombre { order: 0; flex: 0 1 auto !important; min-width: 0; width: auto !important; }
+            .st-key-bn_row    { order: 1; flex: 1 1 auto !important; min-width: 0; width: auto !important; }
+            .st-key-bn_mas    { order: 2; flex: 0 0 auto !important; width: auto !important; }
+            .st-key-bn_salir  { order: 3; flex: 0 0 auto !important; width: auto !important; }
+
+            .st-key-bn_nombre button {
+                background: transparent !important; border: none !important; box-shadow: none !important;
+                padding: 4px 16px 4px 0 !important; min-height: 44px !important; transform: none !important;
+                border-right: 1px solid rgba(255,255,255,0.10) !important; border-radius: 0 !important;
+            }
+            .st-key-bn_nombre button p {
+                font-size: 15px !important; font-weight: 800 !important; color: #fff; white-space: nowrap;
+                max-width: 200px; overflow: hidden; text-overflow: ellipsis;
+            }
+            .st-key-bn_nombre button:hover p { color: #FF4D57 !important; }
+
+            .st-key-bn_row [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; gap: 4px !important; align-items: flex-end; }
+            .st-key-bn_row [data-testid="stColumn"] { min-width: 0 !important; }
+            .st-key-bn_row button {
+                flex-direction: column !important; gap: 2px; min-height: 56px !important; padding: 4px 0 !important;
+                background: transparent !important; border: none !important; box-shadow: none !important;
+                border-radius: 14px !important; transform: none !important;
+            }
+            .st-key-bn_row button:hover { background: rgba(255,255,255,0.05) !important; }
+            .st-key-bn_row button p { font-size: 22px !important; line-height: 1.1; }
+            .st-key-bn_row button::after { font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.65); white-space: nowrap; }
+            /* Escudo central elevado */
+            .st-key-bn_2 button {
+                position: relative; min-height: 70px !important; margin-top: -26px;
+                border-radius: 22px !important; background-color: #1A0204 !important;
+                border: 2px solid #E30613 !important; box-shadow: 0 6px 18px rgba(227,6,19,0.45) !important;
+                padding-top: 54px !important; background-size: 46px 46px !important;
+            }
+            .st-key-bn_2 button:hover { background-color: #2A0306 !important; }
+            .st-key-bn_2 button p { position: absolute; top: 10px; left: 0; right: 0; }
+            .st-key-bn_2 button::after { color: #FF6A72; font-weight: 800; }
+
+            .st-key-bn_mas button, .st-key-bn_salir button {
+                border-radius: 999px !important; min-width: 48px !important; min-height: 44px !important; padding: 2px 12px !important;
+                background: rgba(255,255,255,0.08) !important; border: 1px solid rgba(255,255,255,0.16) !important;
+                box-shadow: none !important;
+            }
+            .st-key-bn_mas button:hover, .st-key-bn_salir button:hover { border-color: #E30613 !important; }
+            .st-key-bn_mas button [data-testid="stIconMaterial"],
+            .st-key-bn_salir button [data-testid="stIconMaterial"] { font-size: 24px !important; color: #fff; margin: 0 !important; }
+
+            /* Panel del + (manager): se abre arriba del dock, a la derecha */
+            .st-key-bn_panel {
+                position: absolute !important; bottom: calc(100% + 10px); right: 0; width: 340px !important;
+                gap: 8px !important; padding: 12px;
+                border-radius: 18px; background: rgba(14,15,19,0.96);
+                border: 1px solid rgba(255,255,255,0.10); box-shadow: 0 18px 40px rgba(0,0,0,0.55);
+            }
+            .st-key-bn_panel [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; gap: 8px !important; }
+            .st-key-bn_panel [data-testid="stColumn"] { min-width: 0 !important; }
+            .st-key-bn_panel button {
+                flex-direction: row !important; justify-content: flex-start !important; gap: 8px;
+                min-height: 44px !important; border-radius: 12px !important; padding: 6px 12px !important;
+                background: rgba(255,255,255,0.05) !important; border: 1px solid rgba(255,255,255,0.10) !important;
+            }
+            .st-key-bn_panel button > div { flex: 0 0 auto !important; width: auto !important; }
+            .st-key-bn_panel button p { font-size: 18px !important; }
+            .st-key-bn_panel button::after { font-size: 13px; font-weight: 700; color: #fff; white-space: nowrap; }
+
+            .block-container { padding-bottom: 140px !important; }
         }
 
         /* Ficha superior de la ventana de podios: medallas tocables para cambiar de medalla */
