@@ -107,7 +107,7 @@ def frase_motivadora(pagina: str = "") -> str:
 
 
 def hero(titulo: str, icono: str | None = None, subtitulo: str | None = None,
-         saludar: bool | None = None, eyebrow: str = "Newell's Old Boys · Natación"):
+         saludar: bool | None = None, eyebrow: str = "Newell's Old Boys"):
     """Encabezado institucional: escudo, título y frase motivadora.
 
     `icono` y `saludar` se mantienen por compatibilidad con llamadas existentes, pero ya no se usan.

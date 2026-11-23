@@ -448,7 +448,7 @@ def dialogo_estilo(estilo):
 # --- VISUALIZACIÓN ---
 
 # ENCABEZADO PERSONALIZADO
-hero("Newell's Old Boys", eyebrow="Complejo Acuático · Natación")
+hero("Newell's Old Boys", eyebrow="Complejo Acuático")
 
 # =====================================================================
 # SISTEMA DE MENSAJES FLASH (PARA EVITAR ERRORES DE WEBSOCKET)
