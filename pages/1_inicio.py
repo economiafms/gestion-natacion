@@ -895,7 +895,20 @@ if db and st.session_state.user_id:
     except Exception:
         _yo = None
 
-    if st.session_state.role == "N":
+    # "Tu aporte": siempre para el nadador; para el manager solo si nadó en el año
+    _corrio_en_anio = False
+    if _yo is not None:
+        _ids_t = pd.to_numeric(df_t.loc[t_f.dt.year == anio, 'codnadador'], errors='coerce')
+        _corrio_en_anio = bool((_ids_t == _yo).any())
+        if not _corrio_en_anio:
+            _rel_anio = df_r[r_f.dt.year == anio]
+            for _k in range(1, 5):
+                _col = f'nadador_{_k}'
+                if _col in _rel_anio.columns and (pd.to_numeric(_rel_anio[_col], errors='coerce') == _yo).any():
+                    _corrio_en_anio = True
+                    break
+
+    if st.session_state.role == "N" or _corrio_en_anio:
         mias = int(tabla.loc[_yo, 'total']) if _yo in tabla.index else 0
         if med_club:
             pct = round(mias / med_club * 100)
