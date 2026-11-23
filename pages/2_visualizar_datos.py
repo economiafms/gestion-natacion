@@ -358,10 +358,15 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
             mejor_seg = df_graph['segundos'].min()
             promedio_seg = df_graph['segundos'].mean()
             mejora = df_graph['segundos'].iloc[0] - mejor_seg
+            # Última carrera: cómo viene nadando ahora frente a su mejor marca
+            ultima_seg = df_graph['segundos'].iloc[-1]
+            dif_ultima = ultima_seg - mejor_seg
+            txt_ultima = "Última · ¡es su mejor marca!" if dif_ultima <= 0 else f"Última · +{dif_ultima:.2f}s de la mejor"
             st.markdown(f"""<div class="nob-kpis">
 <div><b>{seg_a_tiempo(mejor_seg)}</b><small>Mejor marca</small></div>
 <div><b>{seg_a_tiempo(promedio_seg)}</b><small>Tiempo promedio</small></div>
 <div><b class="{'up' if mejora > 0 else ''}">{f'↓ {mejora:.2f}s' if mejora > 0 else '—'}</b><small>Mejora desde la 1ª carrera</small></div>
+<div><b class="{'up' if dif_ultima <= 0 else ''}">{seg_a_tiempo(ultima_seg)}</b><small>{txt_ultima}</small></div>
 </div>""", unsafe_allow_html=True)
 
             # Calcular categoría histórica para tooltip
