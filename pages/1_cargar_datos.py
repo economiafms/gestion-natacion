@@ -1,6 +1,7 @@
 import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
+import entrenador
 import html
 import time
 from datetime import date
@@ -121,7 +122,8 @@ df_t = data['tiempos'].copy()
 df_t['hash_validacion'] = df_t['codnadador'].astype(str) + "_" + df_t['codestilo'].astype(str) + "_" + df_t['coddistancia'].astype(str) + "_" + df_t['fecha'].astype(str)
 set_tiempos_existentes = set(df_t['hash_validacion'].unique())
 
-lista_nombres = sorted(df_nad['Nombre Completo'].dropna().unique())
+df_nad_sel = df_nad[df_nad['codnadador'].isin(entrenador.sin_entrenador(df_nad)['codnadador'])]  # sin el entrenador
+lista_nombres = sorted(df_nad_sel['Nombre Completo'].dropna().unique())
 df_pil = data['piletas'].copy()
 col_club_pil = 'club' if 'club' in df_pil.columns else df_pil.columns[1]
 df_pil['Detalle'] = df_pil[col_club_pil].astype(str) + " (" + df_pil['medida'].astype(str) + ")"
@@ -409,9 +411,9 @@ elif seccion_activa == HERRAMIENTAS[2]:
     # Filtro estricto del género para la lista de integrantes
     ld = []
     if r_gen in ["M", "F"]:
-        mask_gen = df_nad['codgenero'].astype(str).str.strip().str.upper()
+        mask_gen = df_nad_sel['codgenero'].astype(str).str.strip().str.upper()
         valores = ['M', 'MASCULINO'] if r_gen == "M" else ['F', 'FEMENINO']
-        ld = df_nad[mask_gen.isin(valores)]['Nombre Completo'].dropna().sort_values().tolist()
+        ld = df_nad_sel[mask_gen.isin(valores)]['Nombre Completo'].dropna().sort_values().tolist()
     elif r_gen == "X":
         ld = lista_nombres
 

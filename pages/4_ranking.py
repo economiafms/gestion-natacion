@@ -1,5 +1,6 @@
 import streamlit as st
 import datos
+import entrenador
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime
@@ -9,7 +10,6 @@ st.set_page_config(page_title="Ranking NOB", layout="centered", initial_sidebar_
 
 # --- 2. SEGURIDAD (SOLO PERFIL M o P) ---
 # El entrenador también puede ver el ranking aunque su perfil no sea M/P
-import entrenador
 _es_entrenador = entrenador.es_entrenador()
 if "role" not in st.session_state or (st.session_state.role not in ["M", "P"] and not _es_entrenador):
     st.warning("⚠️ Acceso restringido.")
@@ -48,7 +48,7 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 def cargar_datos_ranking():
     try:
         return {
-            "nadadores": datos.leer("Nadadores"),
+            "nadadores": entrenador.sin_entrenador(datos.leer("Nadadores")),  # el entrenador no figura en el ranking
             "tiempos": datos.leer("Tiempos"),
             "estilos": datos.leer("Estilos"),
             "distancias": datos.leer("Distancias"),
@@ -87,6 +87,7 @@ with tab_indiv:
         df = df.drop(columns=['club'])
 
     # 2. Merges (Cruces de tablas)
+    df = df[pd.to_numeric(df['codnadador'], errors='coerce').isin(pd.to_numeric(data['nadadores']['codnadador'], errors='coerce'))]  # solo nadadores (sin el entrenador)
     df = df.merge(data['nadadores'], on='codnadador', how='left')
     df = df.merge(data['estilos'], on='codestilo', how='left')
     df = df.merge(data['distancias'], on='coddistancia', how='left')

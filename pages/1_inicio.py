@@ -570,7 +570,7 @@ def dialogo_estilo(estilo):
 def dialogo_club(df_t, df_r):
     """Gráficos de nadadores por categoría y género (los totales y el medallero quedan en Inicio)."""
     seccion("Nadadores")
-    df_n = db['nadadores'].copy()
+    df_n = entrenador.sin_entrenador(db['nadadores']).copy()   # el entrenador no cuenta como nadador
     df_n['Anio'] = pd.to_datetime(df_n['fechanac'], errors='coerce').dt.year
     df_n['Categoria'] = df_n['Anio'].apply(calcular_categoria_grafico)
     colors = alt.Scale(domain=['M', 'F'], range=['#E30613', '#E6E6E6'])

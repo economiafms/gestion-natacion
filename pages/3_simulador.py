@@ -1,5 +1,6 @@
 import streamlit as st
 import datos
+import entrenador
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime
@@ -29,7 +30,7 @@ def tiempo_a_seg(t_str):
 def cargar_datos_sim():
     try:
         data = {
-            "nadadores": datos.leer("Nadadores"),
+            "nadadores": entrenador.sin_entrenador(datos.leer("Nadadores")),  # el entrenador no se elige como nadador
             "tiempos": datos.leer("Tiempos"),
             "relevos": datos.leer("Relevos"),
             "cat_relevos": datos.leer("Categorias_Relevos"),

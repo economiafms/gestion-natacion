@@ -1,5 +1,6 @@
 import streamlit as st
 import datos
+import entrenador
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime, date
@@ -209,7 +210,7 @@ def leer_entrenamientos_fresco():
 def cargar_entrenamientos():
     try:
         return {
-            "nadadores": datos.leer("Nadadores"),
+            "nadadores": entrenador.sin_entrenador(datos.leer("Nadadores")),  # el entrenador no se elige como nadador
             "entrenamientos": datos.leer("Entrenamientos"),
             "estilos": datos.leer("Estilos"),
             "distancias": datos.leer("Distancias")

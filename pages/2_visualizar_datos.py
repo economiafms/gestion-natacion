@@ -1,5 +1,6 @@
 import streamlit as st
 import datos
+import entrenador
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime
@@ -77,7 +78,7 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 def cargar_visualizacion():
     try:
         return {
-            "nadadores": datos.leer("Nadadores"),
+            "nadadores": entrenador.sin_entrenador(datos.leer("Nadadores")),  # sin el entrenador: no tiene ficha ni figura en el padrón
             "tiempos": datos.leer("Tiempos"),
             "relevos": datos.leer("Relevos"),
             "estilos": datos.leer("Estilos"),

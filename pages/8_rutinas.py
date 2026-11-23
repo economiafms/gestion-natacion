@@ -1,5 +1,6 @@
 import streamlit as st
 import datos
+import entrenador
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime, date, timedelta, timezone
@@ -193,7 +194,7 @@ def cargar_datos_rutinas_view():
             df_seg = pd.DataFrame(columns=["id_rutina", "codnadador", "fecha_realizada"])
 
         try:
-            df_nad = datos.leer("Nadadores").copy()
+            df_nad = entrenador.sin_entrenador(datos.leer("Nadadores")).copy()  # el entrenador no figura en el seguimiento
         except:
             df_nad = pd.DataFrame(columns=["codnadador", "nombre", "apellido"])
             

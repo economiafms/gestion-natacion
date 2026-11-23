@@ -16,7 +16,7 @@ if "role" not in st.session_state or not st.session_state.role:
     st.switch_page("index.py")
 
 rol = st.session_state.role
-mi_id = st.session_state.user_id 
+mi_id = st.session_state.user_id
 mi_nombre = st.session_state.user_name
 
 from nob_ui import hero, select_flechas
@@ -42,17 +42,25 @@ st.markdown("""
         background-color: #2b1e1e;
     }
     .card-info { display: flex; flex-direction: column; }
+    [class*="st-key-catcard_"] { position: relative; }
+    [class*="st-key-catcard_"] [class*="st-key-catbtn_"] { position: absolute !important; left: 0; top: 0; z-index: 2;
+        width: 100% !important; height: 100% !important; }
+    [class*="st-key-catcard_"] [class*="st-key-catbtn_"] [data-testid="stButton"],
+    [class*="st-key-catcard_"] [class*="st-key-catbtn_"] .stButton { width: 100% !important; height: 100% !important; }
+    [class*="st-key-catcard_"] [class*="st-key-catbtn_"] button { width: 100% !important; height: 100% !important;
+        min-height: 0 !important; padding: 0 !important; opacity: 0; cursor: pointer; }
+    [class*="st-key-catcard_"] .swimmer-card { cursor: pointer !important; }
     .card-name { font-size: 16px; font-weight: bold; color: white; text-transform: uppercase; }
     .card-sub { font-size: 12px; color: #aaa; margin-top: 2px; }
-    
-    .section-title { 
-        color: #E30613; 
-        font-weight: bold; 
-        margin-top: 25px; 
-        margin-bottom: 15px; 
-        border-bottom: 1px solid #444; 
-        font-size: 16px; 
-        text-transform: uppercase; 
+
+    .section-title {
+        color: #E30613;
+        font-weight: bold;
+        margin-top: 25px;
+        margin-bottom: 15px;
+        border-bottom: 1px solid #444;
+        font-size: 16px;
+        text-transform: uppercase;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -164,7 +172,7 @@ if rol == "N":
         my_data = me.iloc[0]
         target_categoria = my_data['categoria_actual']
         target_genero = my_data['codgenero']
-        
+
         edad_str = int(my_data['edad_calculada']) if pd.notna(my_data['edad_calculada']) else "-"
         st.markdown(f"### Categoría: <span style='color:#E30613'>{target_categoria}</span> ({target_genero})", unsafe_allow_html=True)
     else:
@@ -176,7 +184,31 @@ elif rol in ["M", "P"]:
     st.markdown("<div class='section-title'>🔍 Panel de Control</div>", unsafe_allow_html=True)
     opciones_cat = sorted(df_cat['nombre_cat'].unique().tolist())
     opciones_gen = sorted(df_nad['codgenero'].dropna().unique().tolist())
-    
+
+    # Buscador por nombre: al elegir a alguien, la categoría y el género saltan a los suyos
+    df_nad['_nombre_busq'] = df_nad['apellido'].astype(str).str.strip().str.upper() + ", " + df_nad['nombre'].astype(str).str.strip()
+    nombres_busq = sorted(df_nad['_nombre_busq'].dropna().unique().tolist())
+
+    def _ir_a_persona():
+        elegido = st.session_state.get("cat_buscar")
+        if not elegido:
+            st.session_state.pop("cat_resaltado", None)
+            return
+        fila = df_nad[df_nad['_nombre_busq'] == elegido].iloc[0]
+        if fila['categoria_actual'] in opciones_cat:
+            st.session_state["cat_sel"] = fila['categoria_actual']
+            st.session_state["cat_gen"] = fila['codgenero']
+            st.session_state["cat_resaltado"] = str(fila['codnadador'])
+            st.session_state["cat_ir_tab"] = True   # el padrón abre la pestaña (activos/inactivos) donde está
+        else:
+            st.session_state["cat_resaltado"] = None
+            st.session_state["cat_aviso"] = f"{elegido} no tiene una categoría asignada (revisá su fecha de nacimiento)."
+
+    st.selectbox("Buscar nadador", nombres_busq, index=None, key="cat_buscar", on_change=_ir_a_persona,
+                 placeholder="🔎 Escribí un nombre para ir a su categoría...", label_visibility="collapsed")
+    if st.session_state.get("cat_aviso"):
+        st.warning(st.session_state.pop("cat_aviso"))
+
     c1, c2 = st.columns(2)
     target_categoria = select_flechas("Categoría", opciones_cat, "cat_sel", contenedor=c1)
     target_genero = select_flechas("Género", opciones_gen, "cat_gen", contenedor=c2)
@@ -184,36 +216,36 @@ elif rol in ["M", "P"]:
 # --- VISUALIZACIÓN ---
 
 if target_categoria and target_genero:
-    
+
     # 1. FILTRAR RIVALES
     rivales = df_nad[
-        (df_nad['categoria_actual'] == target_categoria) & 
+        (df_nad['categoria_actual'] == target_categoria) &
         (df_nad['codgenero'] == target_genero)
     ].copy()
-    
+
     ids_rivales = rivales['codnadador'].tolist()
-    
+
     # --- GRÁFICA COMPARATIVA (PROMEDIOS) ---
     if not rivales.empty:
         st.markdown("<div class='section-title'>📊 Tiempos promedios de la categoría</div>", unsafe_allow_html=True)
-        
+
         # 1. Cargar Tiempos y filtrar
         df_tiempos = db['tiempos'].copy()
         df_tiempos = df_tiempos[df_tiempos['codnadador'].isin(ids_rivales)]
-        
+
         if not df_tiempos.empty:
             # 2. Unir con Estilos y Distancias
             df_tiempos = df_tiempos.merge(db['estilos'], on='codestilo', how='left')
             df_tiempos = df_tiempos.merge(db['distancias'], on='coddistancia', how='left')
-            
+
             # 3. Filtros Dinámicos
             c_e, c_d = st.columns(2)
-            
+
             estilos_disp = sorted(df_tiempos['descripcion_x'].dropna().unique())
             sel_est = select_flechas("Estilo", estilos_disp, "cat_est", contenedor=c_e)
-            
+
             dist_disp = sorted(df_tiempos[df_tiempos['descripcion_x'] == sel_est]['descripcion_y'].dropna().unique())
-            
+
             sel_dist = None
             if dist_disp:
                 sel_dist = select_flechas("Distancia", dist_disp, "cat_dist", contenedor=c_d)
@@ -223,23 +255,23 @@ if target_categoria and target_genero:
             if sel_est and sel_dist:
                 # 4. Filtrar datos finales
                 data_chart = df_tiempos[
-                    (df_tiempos['descripcion_x'] == sel_est) & 
+                    (df_tiempos['descripcion_x'] == sel_est) &
                     (df_tiempos['descripcion_y'] == sel_dist)
                 ].copy()
-                
+
                 # 5. Procesar tiempos (PROMEDIO)
                 data_chart['segundos'] = data_chart['tiempo'].apply(a_segundos)
                 data_chart = data_chart[data_chart['segundos'] > 0]
-                
+
                 if not data_chart.empty:
                     # Promedio por nadador
                     avg_times = data_chart.groupby('codnadador')['segundos'].mean().reset_index()
-                    
+
                     # Pegar nombres
                     avg_times = avg_times.merge(rivales[['codnadador', 'apellido', 'nombre', 'activo']], on='codnadador')
                     avg_times['Atleta'] = avg_times['apellido'].str.upper() + " " + avg_times['nombre'].str[0] + "."
                     avg_times['Etiqueta'] = avg_times['segundos'].apply(fmt_mm_ss)
-                    
+
                     # Colores: yo en rojo, activos en celeste, inactivos en gris
                     def get_color(row):
                         if rol == "N" and str(row['codnadador']) == str(mi_id): return "#E30613" # Rojo Usuario
@@ -247,23 +279,23 @@ if target_categoria and target_genero:
 
                     avg_times['Color'] = avg_times.apply(get_color, axis=1)
                     avg_times['Estado'] = np.where(avg_times['activo'], "Activo", "Inactivo")
-                    
+
                     # ORDENAR DE MENOR A MAYOR TIEMPO (El mejor primero)
-                    avg_times = avg_times.sort_values('segundos', ascending=True) 
-                    
+                    avg_times = avg_times.sort_values('segundos', ascending=True)
+
                     # 6. Graficar
                     fig = px.bar(
-                        avg_times, 
-                        x='Atleta', 
-                        y='segundos', 
-                        text='Etiqueta', 
-                        color='Color', 
+                        avg_times,
+                        x='Atleta',
+                        y='segundos',
+                        text='Etiqueta',
+                        color='Color',
                         color_discrete_map="identity"
                     )
-                    
+
                     # Ajuste de Ejes
                     max_y = avg_times['segundos'].max() * 1.15
-                    
+
                     # Forzar ordenamiento visual
                     fig.update_xaxes(categoryorder='array', categoryarray=avg_times['Atleta'])
 
@@ -292,7 +324,7 @@ if target_categoria and target_genero:
                         unsafe_allow_html=True)
                     st.plotly_chart(fig, use_container_width=True,
                                     config={"displayModeBar": False, "scrollZoom": False, "doubleClick": False, "showTips": False})
-                    
+
                     # Mensaje de posición
                     if rol == "N":
                         mi_dato = avg_times[avg_times['codnadador'].astype(str) == str(mi_id)]
@@ -310,7 +342,7 @@ if target_categoria and target_genero:
 
     # --- MOSTRAR PADRÓN ---
     st.markdown(f"<div class='section-title'>🏊 Padrón ({len(rivales)})</div>", unsafe_allow_html=True)
-    
+
     if not rivales.empty:
         # Rango de edad de la categoría: para marcar quién recién entra y quién sale el año próximo
         rango = df_cat[df_cat['nombre_cat'] == target_categoria]
@@ -326,7 +358,8 @@ if target_categoria and target_genero:
             # Una sola columna: el orden se lee de arriba hacia abajo
             for i, (idx, row) in enumerate(lista.iterrows()):
                 es_yo = (str(row['codnadador']) == str(mi_id)) if rol == "N" else False
-                clase = "swimmer-card is-me" if es_yo else "swimmer-card"
+                es_buscado = rol in ["M", "P"] and str(row['codnadador']) == str(st.session_state.get("cat_resaltado"))
+                clase = "swimmer-card is-me" if (es_yo or es_buscado) else "swimmer-card"
                 yo_lbl = " (TÚ)" if es_yo else ""
                 edad = row['edad_calculada']
                 edad_txt = int(edad) if pd.notna(edad) else "-"
@@ -336,18 +369,33 @@ if target_categoria and target_genero:
                 elif pd.notna(edad) and edad_min is not None and pd.notna(edad_min) and int(edad) <= int(edad_min):
                     etiqueta = '<span class="cat-tag entra">Primer año</span>'
 
-                st.markdown(f"""
+                tarjeta = f"""
                 <div class="{clase}">
                     <div class="card-info">
                         <div class="card-name">{row['apellido'].upper()}, {row['nombre']}{yo_lbl}</div>
                         <div class="card-sub">Edad: {edad_txt} | {row['categoria_actual']} {etiqueta}</div>
                     </div>
                 </div>
-                """, unsafe_allow_html=True)
+                """
+                if rol in ["M", "P"]:
+                    # Manager: toda la tarjeta abre la ficha del nadador (botón invisible encima)
+                    cod = str(row['codnadador'])
+                    with st.container(key=f"catcard_{cod}"):
+                        st.markdown(tarjeta, unsafe_allow_html=True)
+                        if st.button("Ver ficha", key=f"catbtn_{cod}"):
+                            st.session_state.nadador_seleccionado = f"{str(row['apellido']).upper()}, {row['nombre']}"
+                            st.session_state.fichero_tab_inicial = "ficha"
+                            st.switch_page("pages/2_visualizar_datos.py")
+                else:
+                    st.markdown(tarjeta, unsafe_allow_html=True)
 
         activos = rivales[rivales['activo']]
         inactivos = rivales[~rivales['activo']]
-        t_act, t_inact = st.tabs([f"Activos ({len(activos)})", f"Inactivos ({len(inactivos)})"])
+        etiquetas_tabs = [f"Activos ({len(activos)})", f"Inactivos ({len(inactivos)})"]
+        if st.session_state.pop("cat_ir_tab", False):
+            _buscado = str(st.session_state.get("cat_resaltado"))
+            st.session_state["cat_tabs"] = etiquetas_tabs[1] if _buscado in inactivos['codnadador'].astype(str).tolist() else etiquetas_tabs[0]
+        t_act, t_inact = st.tabs(etiquetas_tabs, key="cat_tabs", on_change="rerun")
         with t_act:
             st.caption(f"Con al menos una marca de competencia en {PERIODO}.")
             if activos.empty: st.info(f"Nadie de esta categoría compitió en {PERIODO}.")

@@ -1,5 +1,6 @@
 import streamlit as st
 import datos
+import entrenador
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime, date
@@ -110,7 +111,7 @@ def cargar_datos_agenda():
             df_ins = pd.DataFrame(columns=["id_inscripcion", "id_competencia", "codnadador", "pruebas", "fecha_inscripcion"])
 
         try:
-            df_nad = datos.leer("Nadadores").copy()
+            df_nad = entrenador.sin_entrenador(datos.leer("Nadadores")).copy()  # el entrenador no se inscribe ni figura como nadador
             df_nad['codnadador'] = pd.to_numeric(df_nad['codnadador'], errors='coerce').fillna(0).astype(int)
             df_nad['fechanac'] = pd.to_datetime(df_nad['fechanac'], errors='coerce')
         except:
