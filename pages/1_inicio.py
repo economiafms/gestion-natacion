@@ -425,7 +425,7 @@ def dialogo_estilo(estilo):
     # Ficha superior: estilo + descripción, y debajo las medallas (solo informativas)
     st.markdown(f"""<div class="nob-est-head">
 <div class="nob-est-name">{html.escape(str(estilo))}</div>
-<div class="nob-est-desc">{n_reg} {"registro" if n_reg == 1 else "registros"} en este estilo</div>
+<div class="nob-est-desc" style="visibility:hidden" aria-hidden="true">&nbsp;</div>
 {html_medrow(n1, n2, n3)}
 </div>""", unsafe_allow_html=True)
 
