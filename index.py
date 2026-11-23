@@ -2,7 +2,7 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 import time
-from nob_ui import aplicar_tema, barra_movil
+from nob_ui import aplicar_tema, barra_movil, chip_ayuda
 
 # --- 1. CONFIGURACIÓN DEL ÍCONO (ENLACE GITHUB RAW) ---
 # Usamos el enlace RAW directo de GitHub. Esto es lo más compatible que existe.
@@ -376,9 +376,12 @@ else:
             st.switch_page(pg_carga)
 
     with st.sidebar:
-        st.write("") 
+        st.write("")
         if st.button("Cerrar Sesión", type="secondary", use_container_width=True):
             cerrar_sesion()
+
+    # Chip "Guía rápida" arriba del banner de todas las páginas
+    chip_ayuda()
 
     pg.run()
 

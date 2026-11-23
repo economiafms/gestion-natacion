@@ -235,6 +235,85 @@ def barra_movil(principales, nombre, extras, activo=None, web_izq=None, web_der=
     return accion
 
 
+GUIA_MANAGER = """
+Esta guía detalla las herramientas disponibles para mi gestión, facilitando el análisis y la toma de decisiones.
+
+**📂 Fichero**
+Puedo consultar la ficha técnica completa de todos mis nadadores, incluyendo historial de competencias, mejores tiempos y relevos, con filtros para facilitar mi análisis.
+
+**📝 Rutinas**
+Permite crear, editar y asignar rutinas a mis nadadores, y verificar quiénes cumplen con los entrenamientos planificados.
+
+**🏋️ Entrenamientos**
+Visualización de los tiempos de test de todos los nadadores para evaluar evolución y rendimiento.
+
+**🏅 Mi categoría**
+Visualización de nadadores agrupados por categorías para análisis comparativo.
+
+**📅 Agenda**
+Carga y edición de competencias, junto con la gestión de nadadores inscriptos.
+
+**🏆 Ranking**
+Visualización de los mejores tiempos por prueba para identificar a los nadadores más destacados.
+
+**🏊 Simulador**
+Simulación de escenarios manuales y automáticos de relevos para estimar tiempos basados en datos reales.
+
+**⚙️ Cargar competencias**
+Desde el botón CARGAR COMPETENCIAS de Inicio (o la rueda del menú en la computadora), con la palabra clave, puedo cargar nuevos nadadores, asignar permisos de Manager o Nadador y cargar tiempos de competencias y relevos.
+
+---
+**Aclaración final:**
+* La carga diaria de datos deportivos es responsabilidad del nadador.
+* Mi rol es analizar y tomar decisiones a partir de esa información.
+"""
+
+GUIA_NADADOR = """
+Este sistema está diseñado para que cada nadador gestione y registre su propia información deportiva.
+Cuantos más datos cargues, mejor vas a poder analizar tu rendimiento y evolución en el tiempo.
+
+**👤 Ficha**
+Encontrás todo lo relacionado a tu perfil deportivo: competencias, mejores tiempos, historial y relevos.
+También podés consultar la ficha de un compañero si conocés su DNI.
+
+**📝 Rutinas**
+Accedés a las rutinas mensuales del entrenador, con una barra de progreso para saber en qué sesión estás y llevar un registro ordenado de tus entrenamientos.
+
+**🏋️ Entrenamientos**
+Este módulo se utiliza para cargar los test de rendimiento.
+Los test pueden incluir parciales, divididos en cuatro tramos según la distancia de la prueba. Recordá anotar los parciales según esta tabla.
+
+50mts = 1x50  /  100mts = 4x25   /    200mts = 4x50 /     400mts = 4x100
+
+**🏅 Mi categoría**
+Visualizás los valores promedio de tu categoría y los nadadores que la integran, para comparar tus tiempos y rendimiento en competencias.
+
+**📅 Agenda**
+Encontrás las próximas competencias del equipo y podés registrarte de forma simple, reemplazando el registro en Excel por un sistema más dinámico.
+
+---
+**Aclaraciones importantes**
+* La información es autogestionada por el nadador
+* El entrenador no carga ni corrige datos
+* Cada registro suma para tu mejora futura
+* Uso personal, voluntario y a libre demanda
+"""
+
+
+@st.dialog("Guía rápida de uso", width="large")
+def dialogo_guia():
+    es_manager = st.session_state.get("role") in ["M", "P"]
+    st.caption("Perfil Manager" if es_manager else "Perfil Nadador")
+    st.markdown(GUIA_MANAGER if es_manager else GUIA_NADADOR)
+
+
+def chip_ayuda():
+    """Chip "Guía rápida" arriba del banner; abre la guía de uso según el perfil."""
+    with st.container(key="nob_ayuda"):
+        if st.button("Guía rápida", key="nob_ayuda_btn", icon=":material/help:"):
+            dialogo_guia()
+
+
 def seccion(texto: str):
     st.markdown(f'<div class="nob-section">{html.escape(texto)}</div>', unsafe_allow_html=True)
 
@@ -576,6 +655,17 @@ def aplicar_tema():
         /* El envoltorio de Streamlit alrededor de la barra no debe ocupar lugar ni sumar separación */
         :has(> .st-key-nob_bottom_nav) { display: contents !important; }
         .st-key-nob_bottom_nav > [data-testid="stElementContainer"]:has(style) { display: none; }
+
+        /* Chip "Guía rápida" arriba del banner, alineado a la derecha */
+        .st-key-nob_ayuda { align-items: flex-end; margin-bottom: -6px; }
+        .st-key-nob_ayuda button {
+            min-height: 30px !important; padding: 2px 12px !important; border-radius: 999px !important;
+            background: rgba(255,255,255,0.05) !important; border: 1px solid rgba(255,255,255,0.14) !important;
+            box-shadow: none !important; gap: 6px;
+        }
+        .st-key-nob_ayuda button:hover { border-color: #E30613 !important; }
+        .st-key-nob_ayuda button p { font-size: 12px !important; font-weight: 600 !important; color: rgba(255,255,255,0.8); }
+        .st-key-nob_ayuda button [data-testid="stIconMaterial"] { font-size: 16px !important; color: #FF6A72; }
 
         /* Botón "+" (manager): interruptor del navegador, abre/cierra el panel SIN recargar la página */
         .nob-mas-btn {
