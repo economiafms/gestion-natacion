@@ -503,7 +503,7 @@ with tab_ver:
                     texto_registros = f"{row['veces']} registro" if row['veces'] == 1 else f"{row['veces']} registros"
                     con_grafico = int(row['veces']) >= 2
                     if con_grafico:
-                        texto_registros += ' · <span class="tst-ver">ver evolución ›</span>'
+                        texto_registros += ' · 📈'
                     
                     tarjeta_html = f"""
                     <div class="test-card">
