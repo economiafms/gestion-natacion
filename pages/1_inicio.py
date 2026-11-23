@@ -688,8 +688,8 @@ if db and st.session_state.user_id:
         if st.button("Ver padrón de nadadores", type="primary" if es_entrenador else "secondary",
                      use_container_width=True, key="btn_padron_inicio_m", icon=":material/groups:"):
             ir_al_padron()
-        if es_entrenador and st.button("Simulador de postas", use_container_width=True,
-                                       key="btn_simulador_ent", icon=":material/pool:"):
+        if vista_staff and st.button("Simulador de postas", use_container_width=True,
+                                     key="btn_simulador_ent", icon=":material/pool:"):
             st.switch_page("pages/3_simulador.py")
         if not es_entrenador:
             tarjeta_resumen_anual(me)
@@ -1168,8 +1168,8 @@ if db and st.session_state.user_id:
     elif filas_top:
         st.markdown(f'<div class="nob-top-tit">Top medallistas {anio}</div>{"".join(filas_top)}',
                     unsafe_allow_html=True)
-    # Entrenador: acceso al ranking completo debajo del top
-    if es_entrenador:
+    # Entrenador y managers: acceso al ranking completo debajo del top
+    if vista_staff:
         if st.button("Ver ranking total", key="btn_ranking_ent", icon=":material/leaderboard:", use_container_width=True):
             st.switch_page("pages/4_ranking.py")
 
