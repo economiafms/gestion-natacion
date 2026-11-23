@@ -425,7 +425,7 @@ def render_tab_padron():
             st.markdown(f"""<div class="padron-card nob-pad">
 <div class="p-col-left">
 <div class="p-name">{html.escape(str(row['Nombre Completo']))}</div>
-<div class="p-meta">{edad} años (al 31/12) • {html.escape(str(row['codgenero']))}</div>
+<div class="p-meta">{edad} años<span class="p-al"> (al 31/12)</span> • {html.escape(str(row['codgenero']))}</div>
 </div>
 <div class="p-col-center"><div class="p-medals"><span>🥇{o}</span> <span>🥈{p}</span> <span>🥉{b}</span></div></div>
 <div class="p-col-right"><div class="p-total">★ {t}</div><div class="p-cat">{html.escape(str(cat))}</div></div>

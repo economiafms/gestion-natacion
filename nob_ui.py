@@ -715,8 +715,15 @@ def aplicar_tema():
         @media (max-width: 520px) {
             .padron-card .p-col-right { flex: 0 0 auto; padding-left: 8px; border-left-width: 1px; }
             .padron-card .p-col-center { flex: 1 1 auto; padding: 0 6px; }
-            .padron-card .p-col-left { flex: 1.6 1 0; min-width: 0; }
-            .padron-card .p-medals { gap: 6px; }
+            .padron-card .p-col-left { flex: 2 1 0; min-width: 0; padding-right: 8px; }
+            /* Edad y género en un solo renglón (letra un poco menor en el celular) */
+            .padron-card .p-meta { font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+            .padron-card .p-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+            .padron-card .p-medals { gap: 4px; font-size: 14px; }
+        }
+        /* Celulares muy angostos: se omite "(al 31/12)" para que la edad entre completa */
+        @media (max-width: 380px) {
+            .padron-card .p-al { display: none; }
         }
 
         /* Filtro por distancia en el detalle por estilo: centrado arriba de la ficha */
