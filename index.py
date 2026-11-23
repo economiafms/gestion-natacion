@@ -303,26 +303,34 @@ else:
     aplicar_tema()
 
     # --- BARRA INFERIOR (SOLO CELULAR) ---
-    # [Rutinas][Entrenamientos][ CENTRO ][Mi Categoría][Agenda]
-    # Centro: Inicio (escudo); estando en Inicio, el centro es Mi Ficha.
-    # Si estoy en una de las laterales, ese lugar pasa a ser Mi Ficha.
-    FICHA = ("👤", "Mi Ficha", "ficha")
-    actual = pg.url_path
-    laterales = [("📝", "Rutinas", pg_rutinas), ("⏱️", "Entrenamientos", pg_entrenamientos),
-                 ("🏅", "Mi Categoría", pg_categoria), ("📅", "Agenda", pg_agenda)]
-    slots = []
-    for icono, etiqueta, destino in laterales:
-        slots.append(FICHA if destino.url_path == actual else (icono, etiqueta, destino))
-    centro = FICHA if actual == pg_inicio.url_path else ("escudo", "Inicio", pg_inicio)
-    slots.insert(2, centro)
+    # Fila fija: [Rutinas][Entrenamientos][ INICIO (escudo) ][Mi Categoría][Agenda]
+    # Debajo: nombre del nadador (→ Mi Ficha) y flecha ⌃ que despliega el resto:
+    # herramientas del manager y Cerrar sesión.
+    principales = [("📝", "Rutinas", pg_rutinas), ("⏱️", "Entrenamientos", pg_entrenamientos),
+                   ("escudo", "Inicio", pg_inicio),
+                   ("🏅", "Mi Categoría", pg_categoria), ("📅", "Agenda", pg_agenda)]
+    activo = next((i for i, (_, _, p) in enumerate(principales) if p.url_path == pg.url_path), None)
 
-    tocado = barra_movil([(s[0], s[1]) for s in slots])
-    if tocado is not None:
-        destino = slots[tocado][2]
-        if destino == "ficha":
+    extras = []
+    if st.session_state.role in ["M", "P"]:
+        extras += [("🏆", "Ranking", pg_ranking), ("⏱️", "Simulador", pg_simulador)]
+        if st.session_state.admin_unlocked:
+            extras.append(("⚙️", "Carga de Datos", pg_carga))
+    extras.append(("🚪", "Cerrar sesión", "salir"))
+
+    accion = barra_movil([(i, e) for i, e, _ in principales], st.session_state.user_name or "Mi Ficha",
+                         [(i, e) for i, e, _ in extras], activo)
+    if accion is not None:
+        if accion[0] == "principal":
+            st.switch_page(principales[accion[1]][2])
+        elif accion[0] == "ficha":
             ir_a_mi_ficha_nav()
-        else:
-            st.switch_page(destino)
+        elif accion[0] == "extra":
+            destino = extras[accion[1]][2]
+            if destino == "salir":
+                cerrar_sesion()
+            else:
+                st.switch_page(destino)
 
     with st.sidebar:
         st.write("") 

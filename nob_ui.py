@@ -132,58 +132,73 @@ def hero(titulo: str, icono: str | None = None, subtitulo: str | None = None,
     )
 
 
-def en_streamlit_cloud() -> bool:
-    """True si la app está publicada en Streamlit Community Cloud (*.streamlit.app).
-
-    Para probar localmente cómo queda, se puede forzar con la variable de entorno NOB_SIMULAR_CLOUD=1.
-    """
-    import os
-    if os.environ.get("NOB_SIMULAR_CLOUD") == "1":
-        return True
-    try:
-        host = (st.context.headers.get("host") or "") + " " + (st.context.url or "")
-    except Exception:
-        return False
-    return "streamlit.app" in host or "share.streamlit.io" in host
+def _alternar_panel_nav():
+    st.session_state.nav_mas_abierto = not st.session_state.get("nav_mas_abierto", False)
 
 
-def barra_movil(items):
+def barra_movil(principales, nombre, extras, activo=None):
     """Barra de navegación fija abajo, SOLO en el celular (en computadora no se muestra).
 
-    `items`: 5 tuplas (icono, etiqueta). El del medio (índice 2) es el botón central elevado;
-    si su icono es "escudo", muestra el escudo del club.
-    Devuelve el índice del botón tocado, o None.
+    Estructura (de arriba hacia abajo):
+      - Panel desplegable con `extras` (se abre/cierra con la flecha junto al nombre).
+      - Fila principal fija de 5 botones `principales` (icono, etiqueta); el del medio es el
+        botón central elevado y, si su icono es "escudo", muestra el escudo del club.
+      - Franja inferior: nombre del nadador (va a Mi Ficha) + flecha ⌃/⌄. El rincón derecho
+        queda libre para el sello de Streamlit Cloud.
+
+    `activo`: índice (0-4) de la página actual en la fila principal, o None.
+    Devuelve ("principal", i) | ("ficha",) | ("extra", i) | None.
     """
-    css = []
-    for i, (icono, etiqueta) in enumerate(items):
-        css.append(f'.st-key-bn_{i} button::after {{ content: "{etiqueta.replace(chr(34), "")}"; }}')
-    if items[2][0] == "escudo":
+    abierto = st.session_state.get("nav_mas_abierto", False)
+
+    css = [f'.st-key-bn_{i} button::after {{ content: "{e.replace(chr(34), "")}"; }}'
+           for i, (_, e) in enumerate(principales)]
+    if principales[2][0] == "escudo":
         css.append(
-            f'.st-key-bn_2 button .nob-bn-ico, .st-key-bn_2 button p {{ visibility: hidden; }}'
+            '.st-key-bn_2 button p { visibility: hidden; }'
             f'.st-key-bn_2 button {{ background-image: url("{ESCUDO_URL}") !important; '
             'background-size: 44px 44px !important; background-position: center 6px !important; '
             'background-repeat: no-repeat !important; }'
         )
-    # En Streamlit Cloud aparece el sello de Streamlit abajo a la derecha, por encima de la app
-    # (no se puede ocultar desde el código). Se reserva una franja libre al pie de la barra para
-    # que el sello caiga ahí y no tape los botones.
-    if en_streamlit_cloud():
+    if activo is not None:
         css.append(
-            "@media (max-width: 640px) {"
-            " .st-key-nob_bottom_nav { padding-bottom: calc(46px + env(safe-area-inset-bottom)) !important; }"
-            " .block-container { padding-bottom: 140px !important; }"
-            "}"
+            f'.st-key-bn_{activo} button::after {{ color: #FF4D57 !important; font-weight: 800 !important; }}'
+            f'.st-key-bn_{activo} button {{ box-shadow: inset 0 2px 0 #E30613 !important; }}'
+            if activo != 2 else
+            '.st-key-bn_2 button { box-shadow: 0 0 0 3px rgba(227,6,19,0.35), 0 6px 18px rgba(227,6,19,0.45) !important; }'
         )
+    css += [f'.st-key-bnx_{i} button::after {{ content: "{e.replace(chr(34), "")}"; }}'
+            for i, (_, e) in enumerate(extras)]
 
-    tocado = None
+    accion = None
     with st.container(key="nob_bottom_nav"):
         # Los estilos van dentro de la barra fija para no sumar espacio arriba de la página
         st.html(f"<style>{''.join(css)}</style>")
-        for i, (col, (icono, _)) in enumerate(zip(st.columns(5, gap="small"), items)):
-            with col:
-                if st.button("·" if icono == "escudo" else icono, key=f"bn_{i}", use_container_width=True):
-                    tocado = i
-    return tocado
+
+        if abierto and extras:
+            with st.container(key="bn_panel"):
+                for fila in range(0, len(extras), 2):
+                    for col, (j, (icono, _)) in zip(st.columns(2, gap="small"),
+                                                    list(enumerate(extras))[fila:fila + 2]):
+                        with col:
+                            if st.button(icono, key=f"bnx_{j}", use_container_width=True):
+                                accion = ("extra", j)
+
+        with st.container(key="bn_row"):
+            for i, (col, (icono, _)) in enumerate(zip(st.columns(5, gap="small"), principales)):
+                with col:
+                    if st.button("·" if icono == "escudo" else icono, key=f"bn_{i}", use_container_width=True):
+                        accion = ("principal", i)
+
+        with st.container(key="bn_strip", horizontal=True, vertical_alignment="center"):
+            if st.button(f"👤 {nombre}  ›", key="bn_nombre"):
+                accion = ("ficha",)
+            st.button("⌄" if abierto else "⌃", key="bn_mas", on_click=_alternar_panel_nav,
+                      help="Más opciones")
+
+    if accion is not None:
+        st.session_state.nav_mas_abierto = False
+    return accion
 
 
 def seccion(texto: str):
@@ -526,21 +541,59 @@ def aplicar_tema():
         @media (max-width: 640px) {
             .st-key-nob_bottom_nav {
                 display: flex !important; position: fixed; left: 0; right: 0; bottom: 0; z-index: 999990;
-                padding: 4px 6px calc(6px + env(safe-area-inset-bottom));
+                gap: 0 !important;
+                padding: 4px 6px calc(4px + env(safe-area-inset-bottom));
                 background: rgba(10,11,14,0.97); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
                 border-top: 1px solid rgba(255,255,255,0.08);
             }
-            .st-key-nob_bottom_nav [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; gap: 2px !important; align-items: flex-end; }
-            .st-key-nob_bottom_nav [data-testid="stColumn"] { min-width: 0 !important; }
-            .st-key-nob_bottom_nav button {
+            /* Ocultar el menú lateral en el celular: todo está en la barra */
+            [data-testid="stExpandSidebarButton"] { display: none !important; }
+
+            /* Fila principal fija */
+            .st-key-bn_row { margin-top: 4px; }
+            .st-key-bn_row [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; gap: 2px !important; align-items: flex-end; }
+            .st-key-bn_row [data-testid="stColumn"] { min-width: 0 !important; }
+            .st-key-bn_row button {
                 flex-direction: column !important; gap: 0; min-height: 54px !important; padding: 4px 0 !important;
                 background: transparent !important; border: none !important; box-shadow: none !important; transform: none !important;
             }
-            .st-key-nob_bottom_nav button p { font-size: 21px !important; line-height: 1.1; }
-            .st-key-nob_bottom_nav button::after {
+            .st-key-bn_row button p { font-size: 21px !important; line-height: 1.1; }
+            .st-key-bn_row button::after {
                 font-size: 9.5px; font-weight: 600; color: rgba(255,255,255,0.6); white-space: nowrap;
                 letter-spacing: -0.1px;
             }
+
+            /* Franja inferior: nombre (→ Mi Ficha) + flecha para más opciones; el rincón derecho queda libre */
+            .st-key-bn_strip {
+                gap: 4px !important; padding: 2px 4px 0; margin-top: 2px;
+                border-top: 1px solid rgba(255,255,255,0.06); min-height: 40px;
+            }
+            .st-key-bn_strip button {
+                min-height: 34px !important; padding: 2px 8px !important; border: none !important;
+                background: transparent !important; box-shadow: none !important; transform: none !important;
+            }
+            .st-key-bn_nombre button p { font-size: 14px !important; font-weight: 700 !important; color: #fff; white-space: nowrap; }
+            .st-key-bn_mas button {
+                border-radius: 999px !important; min-width: 34px; background: rgba(255,255,255,0.07) !important;
+                border: 1px solid rgba(255,255,255,0.12) !important;
+            }
+            .st-key-bn_mas button p { font-size: 16px !important; font-weight: 800 !important; color: #FF6A72; }
+
+            /* Panel desplegable de más opciones */
+            .st-key-bn_panel {
+                gap: 6px !important; padding: 8px 4px 10px; margin-bottom: 4px;
+                border-bottom: 1px solid rgba(255,255,255,0.08);
+            }
+            .st-key-bn_panel [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; gap: 6px !important; }
+            .st-key-bn_panel [data-testid="stColumn"] { min-width: 0 !important; }
+            .st-key-bn_panel button {
+                flex-direction: row !important; justify-content: flex-start !important; gap: 8px;
+                min-height: 44px !important; border-radius: 12px !important; padding: 6px 12px !important;
+                background: rgba(255,255,255,0.05) !important; border: 1px solid rgba(255,255,255,0.10) !important;
+            }
+            .st-key-bn_panel button > div { flex: 0 0 auto !important; width: auto !important; }
+            .st-key-bn_panel button p { font-size: 18px !important; }
+            .st-key-bn_panel button::after { font-size: 13px; font-weight: 700; color: #fff; white-space: nowrap; }
             /* Botón central elevado */
             .st-key-bn_2 button {
                 position: relative; min-height: 64px !important; margin-top: -18px;
@@ -552,7 +605,7 @@ def aplicar_tema():
             }
             .st-key-bn_2 button p { position: absolute; top: 10px; left: 0; right: 0; }
             .st-key-bn_2 button::after { color: #FF6A72; font-weight: 800; }
-            .block-container { padding-bottom: 96px !important; }
+            .block-container { padding-bottom: 140px !important; }
         }
 
         /* Ficha superior de la ventana de podios: medallas tocables para cambiar de medalla */
