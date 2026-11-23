@@ -379,7 +379,6 @@ def dialogo_medallas():
     cuenta = todos['posicion'].value_counts()
     n1, n2, n3 = (int(cuenta.get(k, 0)) for k in (1, 2, 3))
     podios = todos[todos['posicion'] == pos_sel]
-    nombre = {1: "Oro", 2: "Plata", 3: "Bronce"}[pos_sel]
     n_sel = len(podios)
 
     # Ficha superior: medalla elegida + descripción, y debajo las medallas.
@@ -392,8 +391,7 @@ def dialogo_medallas():
         + "</style>"
     )
     with st.container(key="dlg_med_head"):
-        st.markdown(f"""{estilo_sel}<div class="nob-est-name">{MEDALLAS[pos_sel]} {nombre}</div>""",
-                    unsafe_allow_html=True)
+        st.markdown(estilo_sel, unsafe_allow_html=True)
         cols = st.columns(4, gap="small")
         for col, (pos, emo, n) in zip(cols, [(1, "🥇", n1), (2, "🥈", n2), (3, "🥉", n3)]):
             with col:
