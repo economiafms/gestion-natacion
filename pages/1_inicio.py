@@ -1092,7 +1092,31 @@ if db and st.session_state.user_id:
             filas_top.append(_fila_top(list(tabla.index).index(_yo) + 1, _yo, tabla.loc[_yo], True))
         else:
             filas_top.append(_fila_top("–", _yo, None, True))
-    if filas_top:
+    if filas_top and es_entrenador:
+        # Entrenador: cada fila abre la ficha del nadador en el Fichero (botón invisible encima de la fila)
+        st.markdown("""<style>
+.st-key-ent_tops { gap: 6px !important; margin-bottom: 6px; }
+.st-key-ent_tops .nob-top { margin-bottom: 0; }
+[class*="st-key-ent_top_"] { position: relative; gap: 0 !important; }
+[class*="st-key-ent_top_"] [class*="st-key-ent_topbtn_"] { position: absolute !important; inset: 0; z-index: 2; }
+[class*="st-key-ent_top_"] [class*="st-key-ent_topbtn_"] button {
+  width: 100% !important; height: 100% !important; min-height: 0 !important; opacity: 0; cursor: pointer; }
+[class*="st-key-ent_top_"]:has(button:hover) .nob-top { border-color: rgba(227,6,19,0.45); }
+[class*="st-key-ent_top_"]:has(button:hover) .nob-top .n { text-decoration: underline; }
+</style>""", unsafe_allow_html=True)
+        st.markdown(f'<div class="nob-top-tit">Top medallistas {anio}</div>', unsafe_allow_html=True)
+        _filas_nad = db['nadadores'].assign(_cod=pd.to_numeric(db['nadadores']['codnadador'], errors='coerce'))
+        _tops = st.container(key="ent_tops")
+        for _k, (_fila, _cod) in enumerate(zip(filas_top, tabla.head(10).index)):
+            with _tops, st.container(key=f"ent_top_{_k}"):
+                st.markdown(_fila, unsafe_allow_html=True)
+                if st.button("Ver ficha", key=f"ent_topbtn_{_k}"):
+                    _n = _filas_nad[_filas_nad['_cod'] == _cod]
+                    if not _n.empty:
+                        st.session_state.nadador_seleccionado = f"{str(_n.iloc[0]['apellido']).upper()}, {_n.iloc[0]['nombre']}"
+                        st.session_state.fichero_tab_inicial = "ficha"
+                        st.switch_page("pages/2_visualizar_datos.py")
+    elif filas_top:
         st.markdown(f'<div class="nob-top-tit">Top medallistas {anio}</div>{"".join(filas_top)}',
                     unsafe_allow_html=True)
 
