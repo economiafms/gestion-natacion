@@ -430,7 +430,8 @@ def render_tab_padron():
 <div class="p-col-center"><div class="p-medals"><span>🥇{o}</span> <span>🥈{p}</span> <span>🥉{b}</span></div></div>
 <div class="p-col-right"><div class="p-total">★ {t}</div><div class="p-cat">{html.escape(str(cat))}</div></div>
 </div>""", unsafe_allow_html=True)
-            st.button("", key=f"btn_p_{row['codnadador']}", icon=":material/arrow_forward:", help="Ver ficha",
+            # Botón invisible que cubre toda la tarjeta: tocar la tarjeta abre la ficha
+            st.button(f"Ver ficha de {row['nombre']}", key=f"btn_p_{row['codnadador']}",
                       on_click=_abrir_ficha_desde_padron, args=(row['Nombre Completo'],))
 
 def render_tab_relevos_general():

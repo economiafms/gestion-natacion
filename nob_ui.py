@@ -699,11 +699,17 @@ def aplicar_tema():
         .nob-pb-est { margin: 10px 0 6px; font-size: 12px; font-weight: 800; letter-spacing: 1px;
                       text-transform: uppercase; color: #FF4D57; }
         .nob-pad { margin-bottom: 0 !important; flex: 1; min-width: 0; }
-        [class*="st-key-pad_"] { gap: 6px !important; margin-bottom: 6px; flex-wrap: nowrap !important; }
+        /* Padrón: toda la tarjeta es tocable (un botón invisible la cubre) */
+        [class*="st-key-pad_"] { position: relative; margin-bottom: 8px; flex-wrap: nowrap !important; }
         [class*="st-key-pad_"] > [data-testid="stElementContainer"]:first-child { flex: 1 1 auto; min-width: 0; }
-        [class*="st-key-pad_"] button {
-            min-height: 44px !important; min-width: 44px; padding: 0 10px !important; border-radius: 12px !important;
+        [class*="st-key-pad_"] > [data-testid="stElementContainer"]:has(button) {
+            position: absolute !important; inset: 0; width: 100% !important; z-index: 2; margin: 0 !important;
         }
+        [class*="st-key-pad_"] [data-testid="stButton"], [class*="st-key-pad_"] button {
+            width: 100% !important; height: 100% !important; min-height: 100% !important;
+        }
+        [class*="st-key-pad_"] button { opacity: 0 !important; cursor: pointer; }
+        [class*="st-key-pad_"]:hover .padron-card { border-color: rgba(227,6,19,0.55) !important; }
 
         /* Filtro por distancia en el detalle por estilo: centrado arriba de la ficha */
         .st-key-dlg_est_filtro { align-items: center; margin-bottom: 4px; }
