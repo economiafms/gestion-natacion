@@ -1127,42 +1127,64 @@ if db and st.session_state.user_id:
                 _tarjetas.append((_c.nombre_cat, _g))
 
         if _tarjetas:
-            # Tarjetas cuadradas, 3 por fila también en el celular. Hombres en rojo y mujeres en
-            # blanco, los mismos colores del gráfico de "Ver más estadísticas".
+            # Tarjetas cuadradas en grilla (3 por fila; 2 en el celular). Hombres en rojo y mujeres
+            # en rosa: la barra muestra la proporción y los botones abren Categorías con ese género.
             st.markdown("""<style>
-.st-key-ent_cats [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; gap: 8px !important; }
-.st-key-ent_cats [data-testid="stColumn"] { min-width: 0 !important; flex: 1 1 0 !important; width: auto !important; }
+.st-key-ent_cats { flex-direction: row !important; flex-wrap: wrap !important; gap: 10px !important; }
+.st-key-ent_cats > div { width: calc((100% - 20px) / 3) !important; flex: 0 0 auto !important; }
+@media (max-width: 520px) { .st-key-ent_cats > div { width: calc((100% - 10px) / 2) !important; } }
 [class*="st-key-ent_card_"] {
-  aspect-ratio: 1 / 1; justify-content: center; align-items: center; gap: 6px !important;
-  padding: 8px 6px; border-radius: 16px; text-align: center;
-  background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.07);
+  width: 100%; aspect-ratio: 1 / 1; position: relative; overflow: hidden; justify-content: space-between; gap: 0 !important;
+  padding: 14px 12px 12px; border-radius: 18px;
+  background: linear-gradient(160deg, rgba(255,255,255,0.07), rgba(255,255,255,0.015));
+  border: 1px solid rgba(255,255,255,0.09); box-shadow: 0 6px 18px rgba(0,0,0,0.25);
 }
-.ent-cat-n { font-size: 17px; font-weight: 900; color: #fff; line-height: 1.1; }
-.ent-cat-s { font-size: 11px; color: rgba(255,255,255,0.55); margin-top: 2px; }
+[class*="st-key-ent_card_"]::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px;
+  background: linear-gradient(90deg, #E30613, #F06292);
+}
 [class*="st-key-ent_card_"] [data-testid="stMarkdownContainer"] p { margin: 0; }
-[class*="st-key-ent_btns_"] { justify-content: center; gap: 6px !important; }
+.ent-k { font-size: 9.5px; font-weight: 700; letter-spacing: 1.6px; text-transform: uppercase; color: rgba(255,255,255,0.45); }
+.ent-top { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; margin-top: 2px; }
+.ent-n { font-size: 24px; font-weight: 900; color: #fff; line-height: 1; }
+.ent-t { font-size: 22px; font-weight: 800; color: rgba(255,255,255,0.9); line-height: 1; }
+.ent-t small { display: block; font-size: 9px; font-weight: 700; letter-spacing: 1px; color: rgba(255,255,255,0.45); text-align: right; }
+.ent-act { display: inline-block; margin-top: 8px; padding: 2px 8px; border-radius: 999px; font-size: 10.5px; font-weight: 700;
+  color: rgba(255,255,255,0.75); background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); }
+.ent-bar { display: flex; height: 5px; border-radius: 999px; overflow: hidden; background: rgba(255,255,255,0.08); margin-top: 10px; }
+.ent-bar .m { background: #E30613; } .ent-bar .f { background: #F06292; }
+[class*="st-key-ent_btns_"] { gap: 6px !important; flex-wrap: nowrap !important; }
+[class*="st-key-ent_btns_"] > div { flex: 1 1 0 !important; min-width: 0 !important; }
 [class*="st-key-ent_m_"] button, [class*="st-key-ent_f_"] button {
-  min-height: 30px; padding: 2px 8px; border-radius: 999px; font-weight: 800; font-size: 13px;
+  width: 100%; min-height: 32px; padding: 2px 6px; border-radius: 10px; font-weight: 800; font-size: 14px;
+  transition: transform .12s ease, background .12s ease;
 }
-[class*="st-key-ent_m_"] button { background: #E30613 !important; border-color: #E30613 !important; color: #fff !important; }
-[class*="st-key-ent_f_"] button { background: #E6E6E6 !important; border-color: #E6E6E6 !important; color: #111 !important; }
-[class*="st-key-ent_m_"] button:disabled, [class*="st-key-ent_f_"] button:disabled { opacity: .35; }
+[class*="st-key-ent_m_"] button { background: rgba(227,6,19,0.16) !important; border: 1px solid rgba(227,6,19,0.55) !important; color: #FF6B72 !important; }
+[class*="st-key-ent_f_"] button { background: rgba(240,98,146,0.16) !important; border: 1px solid rgba(240,98,146,0.55) !important; color: #F8A5C2 !important; }
+[class*="st-key-ent_m_"] button:hover { background: rgba(227,6,19,0.32) !important; transform: translateY(-1px); }
+[class*="st-key-ent_f_"] button:hover { background: rgba(240,98,146,0.32) !important; transform: translateY(-1px); }
+[class*="st-key-ent_m_"] button:disabled, [class*="st-key-ent_f_"] button:disabled { opacity: .3; transform: none; }
 </style><div class="nob-top-tit" style="margin-top:14px;">Nadadores por categoría</div>""",
                         unsafe_allow_html=True)
-            with st.container(key="ent_cats"):
-                for _f in range(0, len(_tarjetas), 3):
-                    for _col, (_k, (_nom, _g)) in zip(st.columns(3), enumerate(_tarjetas[_f:_f + 3], start=_f)):
-                        with _col, st.container(key=f"ent_card_{_k}"):
-                            st.markdown(f'<div class="ent-cat-n">{html.escape(str(_nom))}</div>'
-                                        f'<div class="ent-cat-s">{len(_g)} · {int(_g["_act"].sum())} activos</div>',
-                                        unsafe_allow_html=True)
-                            with st.container(key=f"ent_btns_{_k}", horizontal=True):
-                                for _gen, _ico in (("M", "♂"), ("F", "♀")):
-                                    _sel = _g['_gen'].str.upper() == _gen
-                                    _n = int(_sel.sum())
-                                    if st.button(f"{_ico} {_n}", key=f"ent_{_gen.lower()}_{_k}", disabled=_n == 0,
-                                                 help=f"Ver {_nom} {'masculino' if _gen == 'M' else 'femenino'} en Categorías"):
-                                        _ir_categoria(_nom, _g.loc[_sel, '_gen'].iloc[0])
+            with st.container(key="ent_cats", horizontal=True):
+                for _k, (_nom, _g) in enumerate(_tarjetas):
+                    _cnt = {_gen: int((_g['_gen'].str.upper() == _gen).sum()) for _gen in ("M", "F")}
+                    _tot = len(_g)
+                    _pm = round(_cnt["M"] / _tot * 100) if _tot else 0
+                    with st.container(key=f"ent_card_{_k}"):
+                        st.markdown(f'<div class="ent-k">Categoría</div>'
+                                    f'<div class="ent-top"><span class="ent-n">{html.escape(str(_nom))}</span>'
+                                    f'<span class="ent-t">{_tot}<small>Total</small></span></div>'
+                                    f'<span class="ent-act">{int(_g["_act"].sum())} activos</span>'
+                                    f'<div class="ent-bar"><div class="m" style="width:{_pm}%"></div>'
+                                    f'<div class="f" style="width:{100 - _pm if _tot else 0}%"></div></div>',
+                                    unsafe_allow_html=True)
+                        with st.container(key=f"ent_btns_{_k}", horizontal=True):
+                            for _gen, _ico in (("M", "♂"), ("F", "♀")):
+                                _sel = _g['_gen'].str.upper() == _gen
+                                if st.button(f"{_ico} {_cnt[_gen]}", key=f"ent_{_gen.lower()}_{_k}", disabled=_cnt[_gen] == 0,
+                                             help=f"Ver {_nom} {'masculino' if _gen == 'M' else 'femenino'} en Categorías"):
+                                    _ir_categoria(_nom, _g.loc[_sel, '_gen'].iloc[0])
 
     # --- 6. GESTIÓN (Perfil M) ---
     if st.session_state.role == "M":
