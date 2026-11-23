@@ -865,7 +865,8 @@ def bloque_simulador():
     nombres = (d_full['apellido'].astype(str).str.upper() + ", " + d_full['nombre'].astype(str)).tolist()
     def cb_ir_sim():
         st.session_state.simulador_pre_pool = nombres
-        if "pool_opt_g" in st.session_state: del st.session_state["pool_opt_g"]
+        st.session_state.simulador_evento = str(row['nombre_evento'])
+        st.session_state.sim_desde_agenda = True   # el Simulador sabe que se llega desde la Agenda
     if st.button(f"🚀 Ir al Simulador con los {len(nombres)} inscriptos", key=f"btn_sim_comp_{comp_id}", type="primary",
                  use_container_width=True, on_click=cb_ir_sim):
         st.switch_page("pages/3_simulador.py")

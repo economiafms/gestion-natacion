@@ -106,40 +106,44 @@ if "equipos_borrador" not in st.session_state:
 if "current_pool" not in st.session_state:
     st.session_state.current_pool = []
 
-if "last_agenda_pool" not in st.session_state:
-    st.session_state.last_agenda_pool = None
+if "pool_ver" not in st.session_state:
+    st.session_state.pool_ver = 0
+
+def pool_key():
+    # La selección de nadadores usa una clave versionada: al cambiar la versión,
+    # el selector se vuelve a dibujar con current_pool (sirve para reiniciar o recargar la lista).
+    return f"pool_opt_g_{st.session_state.pool_ver}"
+
+def recargar_pool(lista):
+    st.session_state.current_pool = list(lista)
+    st.session_state.pool_ver += 1
 
 # =====================================================================
-# TRUCO PARA DETECTAR LA ENTRADA A LA PÁGINA Y REINICIAR DE CERO
+# ENTRADA A LA PÁGINA: desde la Agenda trae a los inscriptos; desde el menú arranca vacío
 # =====================================================================
 if "o_reg_g" not in st.session_state:
     st.session_state.equipos_borrador = []
-    agenda_pool = st.session_state.get("simulador_pre_pool", [])
-    st.session_state.current_pool = agenda_pool.copy()
-    st.session_state.last_agenda_pool = agenda_pool.copy()
-    st.session_state.sim_abrir_grupo = bool(agenda_pool)
-else:
-    agenda_pool = st.session_state.get("simulador_pre_pool", [])
-    if st.session_state.last_agenda_pool != agenda_pool:
-        st.session_state.equipos_borrador = []
-        st.session_state.current_pool = agenda_pool.copy()
-        st.session_state.last_agenda_pool = agenda_pool.copy()
-        st.session_state.sim_abrir_grupo = bool(agenda_pool)
+    if st.session_state.pop("sim_desde_agenda", False):
+        lista_entrada = list(st.session_state.get("simulador_pre_pool") or [])
+    else:
+        lista_entrada = []
+        st.session_state.simulador_pre_pool = []
+        st.session_state.pop("simulador_evento", None)
+    recargar_pool(lista_entrada)
+    st.session_state.sim_abrir_grupo = bool(lista_entrada)
 
 def sync_pool():
-    st.session_state.current_pool = st.session_state.pool_opt_g
+    st.session_state.current_pool = list(st.session_state.get(pool_key(), []))
 
 def guardar_equipo_borrador(equipo_dict):
     st.session_state.equipos_borrador.append(equipo_dict)
-    if "pool_opt_g" in st.session_state:
-        st.session_state.current_pool = [n for n in st.session_state.pool_opt_g if n not in equipo_dict['eq']]
+    actual = st.session_state.get(pool_key(), st.session_state.current_pool)
+    recargar_pool([n for n in actual if n not in equipo_dict['eq']])
 
 def eliminar_equipo_borrador(index):
     equipo_recuperado = st.session_state.equipos_borrador.pop(index)
-    if "pool_opt_g" in st.session_state:
-        for n in equipo_recuperado['eq']:
-            if n not in st.session_state.current_pool:
-                st.session_state.current_pool.append(n)
+    actual = list(st.session_state.get(pool_key(), st.session_state.current_pool))
+    recargar_pool(actual + [n for n in equipo_recuperado['eq'] if n not in actual])
 
 # --- 5. PESTAÑAS: POSTA MANUAL / SIMULADOR POR GRUPO ---
 # Si se llega desde la Agenda con inscriptos, abrir directo en "Por grupo"
@@ -270,14 +274,35 @@ with tab_manual:
 # --- SIMULADOR POR GRUPO (y equipos guardados en borrador) ---
 with tab_grupo:
 
-    with st.container(horizontal=True, horizontal_alignment="right"):
-        if st.button("🔄 Reiniciar todo", help="Vacía el borrador y la selección actual"):
-            st.session_state.equipos_borrador = []
-            st.session_state.current_pool = []
-            if "simulador_pre_pool" in st.session_state:
-                st.session_state.simulador_pre_pool = []
-            st.session_state.last_agenda_pool = []
-            st.rerun()
+    # Si se llegó desde la Agenda, el simulador recuerda la lista de inscriptos del evento:
+    # "Reiniciar" vuelve a cargar esos nadadores (aunque se hayan cambiado o armado equipos).
+    pool_evento = list(st.session_state.get("simulador_pre_pool") or [])
+    evento_nom = st.session_state.get("simulador_evento")
+
+    def reiniciar_pool():
+        st.session_state.equipos_borrador = []
+        recargar_pool(st.session_state.get("simulador_pre_pool") or [])
+
+    def soltar_evento():
+        st.session_state.simulador_pre_pool = []
+        st.session_state.pop("simulador_evento", None)
+        reiniciar_pool()
+
+    if pool_evento:
+        st.markdown(
+            f"<div style='border:1px solid rgba(227,6,19,0.45);background:rgba(227,6,19,0.08);border-radius:12px;"
+            f"padding:10px 14px;margin-bottom:8px;font-size:14px'>📅 Trabajando con los <b>{len(pool_evento)}</b> inscriptos del evento"
+            f"{(' <b>' + str(evento_nom) + '</b>') if evento_nom else ''}. Podés quitar o sumar nadadores: "
+            f"<b>Volver a los inscriptos</b> carga de nuevo la lista original del evento.</div>",
+            unsafe_allow_html=True)
+        with st.container(horizontal=True, horizontal_alignment="right"):
+            st.button("🔄 Volver a los inscriptos", on_click=reiniciar_pool, type="primary",
+                      help="Vacía el borrador y vuelve a cargar los nadadores inscriptos en el evento")
+            st.button("✖ Salir de la lista del evento", on_click=soltar_evento,
+                      help="Deja de usar los inscriptos del evento y vacía la selección")
+    else:
+        with st.container(horizontal=True, horizontal_alignment="right"):
+            st.button("🔄 Reiniciar todo", on_click=reiniciar_pool, help="Vacía el borrador y la selección actual")
 
     with st.container(border=True):
         lista_nadadores_completa = sorted(df_nad['Nombre Completo'].tolist())
@@ -296,7 +321,7 @@ with tab_grupo:
             "Seleccionar nadadores (Los ya asignados en el borrador no aparecerán aquí):", 
             options=lista_nadadores_disponibles, 
             default=valid_default, 
-            key="pool_opt_g",
+            key=pool_key(),
             on_change=sync_pool
         )
 
