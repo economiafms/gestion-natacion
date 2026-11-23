@@ -295,8 +295,7 @@ def dialogo_resumen_anual(id_nadador, nombre, anio):
     if r.get("fechas_detalle"):
         with st.expander(f"📅 Fechas contadas ({r['torneos']})"):
             st.markdown("\n".join(f"- {f}" for f in r["fechas_detalle"]))
-            st.caption("Cada fecha es una sede en un día. Las piletas de un mismo club y los torneos de días seguidos "
-                       "se cuentan una sola vez.")
+            st.caption("Cada fecha es una sede en un día. Si un club tiene varias piletas, el mismo día se cuenta una sola vez.")
     archivo = f"mi_{anio}_en_el_agua.png"
     st.download_button("⬇️ Descargar imagen", data=png, file_name=archivo, mime="image/png",
                        type="primary", use_container_width=True, key="ra_descargar")

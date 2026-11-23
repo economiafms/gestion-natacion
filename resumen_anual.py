@@ -63,7 +63,6 @@ def _club_norm(txt):
 def detalle_fechas(df, clubes=None):
     """Fechas de competencia del nadador: una sede (club) en un día.
     - Piletas distintas del mismo club (p. ej. 25 m y 50 m) cuentan como la misma sede.
-    - Días consecutivos en la misma sede son un mismo torneo (sábado y domingo).
     - Un registro sin pileta se suma a la fecha de ese mismo día.
     Devuelve una lista ordenada de (fecha_inicio, fecha_fin, nombre_sede)."""
     if df.empty:
@@ -86,19 +85,8 @@ def detalle_fechas(df, clubes=None):
             pares.add((d, "SIN SEDE"))
             nombre.setdefault("SIN SEDE", "Sede sin cargar")
             dias_con_sede.add(d)
-    # Unir días consecutivos en la misma sede
-    res = []
-    for clave in {c for _, c in pares}:
-        ds = sorted(d for d, c in pares if c == clave)
-        ini_, fin_ = ds[0], ds[0]
-        for d in ds[1:]:
-            if (d - fin_).days <= 1:
-                fin_ = d
-            else:
-                res.append((ini_, fin_, nombre[clave]))
-                ini_, fin_ = d, d
-        res.append((ini_, fin_, nombre[clave]))
-    return sorted(res)
+    # Cada día en cada sede es una fecha (dos días seguidos en el mismo club son dos fechas)
+    return sorted((d, d, nombre[c]) for d, c in pares)
 
 
 def contar_torneos(df, clubes=None):
