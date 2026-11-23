@@ -4,6 +4,7 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime, date
 import plotly.express as px
+import plotly.graph_objects as go
 import time
 import numpy as np
 import html
@@ -56,6 +57,65 @@ def fmt_mm_ss(seconds):
     c = int(round((seconds - int(seconds)) * 100))
     return f"{m:02d}:{s:02d}.{c:02d}"
 
+@st.dialog("Evolución del test", width="large")
+def dialogo_evolucion_test(df_prueba, estilo, distancia):
+    """Mismo gráfico que la Evolución de Mi Ficha, con los tests de una prueba."""
+    d = df_prueba.copy()
+    d['fecha_dt'] = pd.to_datetime(d['fecha'], errors='coerce')
+    d = d.dropna(subset=['fecha_dt', 'seg_final']).sort_values(['fecha_dt', 'id_entrenamiento'])
+    st.markdown(f'<div class="tst-e" style="font-size:18px">{html.escape(str(estilo))} · {html.escape(str(distancia))}</div>'
+                f'<div class="tst-d" style="margin-bottom:10px">{len(d)} tests</div>', unsafe_allow_html=True)
+    if len(d) < 2:
+        st.info("Hacen falta al menos 2 tests de esta prueba para ver la evolución.")
+        return
+
+    mejor = d['seg_final'].min()
+    promedio = d['seg_final'].mean()
+    mejora = d['seg_final'].iloc[0] - d['seg_final'].iloc[-1]      # positivo = mejoró
+    ultima = d['seg_final'].iloc[-1]
+    dif_ult = ultima - mejor
+    txt_ult = "Último · ¡es su mejor marca!" if dif_ult <= 0 else f"Último · +{dif_ult:.2f}s de la mejor"
+    clase_mejora = 'up' if mejora > 0 else ('down' if mejora < 0 else '')
+    txt_mejora = f'↓ {mejora:.2f}s' if mejora > 0 else (f'-{abs(mejora):.2f}s' if mejora < 0 else '0.00s')
+    clase_ult = 'up' if dif_ult <= 0 else ('down' if ultima > d['seg_final'].iloc[-2] else '')
+    st.markdown(f"""<div class="nob-kpis">
+<div><b>{fmt_mm_ss(mejor)}</b><small>Mejor marca</small></div>
+<div><b>{fmt_mm_ss(promedio)}</b><small>Tiempo promedio</small></div>
+<div><b class="{clase_mejora}">{txt_mejora}</b><small>Mejora desde el 1er test</small></div>
+<div><b class="{clase_ult}">{fmt_mm_ss(ultima)}</b><small>{txt_ult}</small></div>
+</div>""", unsafe_allow_html=True)
+
+    # Eje Y como hora ficticia para mostrar MM:SS
+    base = pd.to_datetime('2024-01-01')
+    d['TimeObj'] = base + pd.to_timedelta(d['seg_final'], unit='s')
+    d['fecha_txt'] = d['fecha_dt'].dt.strftime('%d/%m/%Y')
+    es_pb = d['seg_final'] == mejor
+    custom = d[['tiempo_final', 'fecha_txt']].values
+    cartel = "<b>%{customdata[0]}</b><br>📅 %{customdata[1]}<extra></extra>"
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=d['fecha_dt'], y=d['TimeObj'], mode="lines+markers", customdata=custom,
+        line=dict(color="#E53935", width=3, shape="spline", smoothing=0.6),
+        marker=dict(size=10, color="#E53935", line=dict(color="#fff", width=1.5)),
+        hovertemplate=cartel, showlegend=False))
+    # La mejor marca, resaltada en dorado
+    fig.add_trace(go.Scatter(
+        x=d.loc[es_pb, 'fecha_dt'], y=d.loc[es_pb, 'TimeObj'], mode="markers", customdata=custom[es_pb.values],
+        marker=dict(size=16, color="#FFD54F", symbol="star", line=dict(color="#7a5c00", width=1)),
+        hovertemplate=cartel, showlegend=False))
+    fig.add_hline(y=base + pd.to_timedelta(mejor, unit='s'), line_dash="dot", line_color="#FFD54F", opacity=0.6,
+                  annotation_text=f"Mejor marca {fmt_mm_ss(mejor)}", annotation_position="top left",
+                  annotation_font_color="#FFD54F", annotation_font_size=11)
+    fig.update_yaxes(tickformat="%M:%S", title=None, fixedrange=True, gridcolor="rgba(255,255,255,0.06)", zeroline=False)
+    fig.update_xaxes(tickformat="%d/%m/%y", title=None, fixedrange=True, gridcolor="rgba(255,255,255,0.04)", showspikes=False)
+    fig.update_layout(template="plotly_dark", height=320, margin=dict(t=24, b=10, l=10, r=10),
+                      hovermode="closest", dragmode=False,
+                      paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                      hoverlabel=dict(bgcolor="#1A0204", bordercolor="#E30613", font_size=13))
+    st.plotly_chart(fig, use_container_width=True, config=CONFIG_FIJO)
+
+
 from nob_ui import hero, seccion
 hero("Centro de Entrenamiento", "🏋️")
 
@@ -63,6 +123,14 @@ hero("Centro de Entrenamiento", "🏋️")
 st.markdown("""
 <style>
 /* Promedios y ritmos: tarjetas con el diseño original */
+[class*="st-key-tstcard_"] { position: relative; }
+[class*="st-key-tstcard_"] [class*="st-key-tstbtn_"] { position: absolute !important; left: 0; top: 0; z-index: 2;
+  width: 100% !important; height: 100% !important; }
+[class*="st-key-tstcard_"] [class*="st-key-tstbtn_"] [data-testid="stButton"],
+[class*="st-key-tstcard_"] [class*="st-key-tstbtn_"] .stButton { width: 100% !important; height: 100% !important; }
+[class*="st-key-tstcard_"] [class*="st-key-tstbtn_"] button { width: 100% !important; height: 100% !important;
+  min-height: 0 !important; padding: 0 !important; opacity: 0; cursor: pointer; }
+.tst-ver { color: #FF6B72; font-weight: 700; }
     .test-card { 
         background-color: #262730; 
         border: 1px solid #444; 
@@ -433,8 +501,11 @@ with tab_ver:
                 for idx, row in stats_grouped.iterrows():
                     label_ritmo = f"Ritmo c/{int(row['dist_ritmo'])}m:"
                     texto_registros = f"{row['veces']} registro" if row['veces'] == 1 else f"{row['veces']} registros"
+                    con_grafico = int(row['veces']) >= 2
+                    if con_grafico:
+                        texto_registros += ' · <span class="tst-ver">ver evolución ›</span>'
                     
-                    st.markdown(f"""
+                    tarjeta_html = f"""
                     <div class="test-card">
                         <div class="test-header" style="border-bottom: none; margin-bottom: 0; padding-bottom: 0; align-items: center;">
                             <div>
@@ -454,7 +525,17 @@ with tab_ver:
                             </div>
                         </div>
                     </div>
-                    """, unsafe_allow_html=True)
+                    """
+                    if con_grafico:
+                        with st.container(key=f"tstcard_{idx}"):
+                            st.markdown(tarjeta_html, unsafe_allow_html=True)
+                            if st.button("Ver evolución", key=f"tstbtn_{idx}"):
+                                dialogo_evolucion_test(
+                                    df_stats[(df_stats['descripcion_x'] == row['descripcion_x']) &
+                                             (df_stats['descripcion_y'] == row['descripcion_y'])],
+                                    row['descripcion_x'], row['descripcion_y'])
+                    else:
+                        st.markdown(tarjeta_html, unsafe_allow_html=True)
             else:
                 st.info("Aún no hay suficientes registros de distancia (≥ 50m) para calcular promedios y ritmos.")
 
