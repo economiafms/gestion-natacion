@@ -167,7 +167,10 @@ def barra_movil(principales, nombre, extras, activo=None, web_izq=None, web_der=
             f'.st-key-bn_{activo} button::after {{ color: #FF4D57 !important; font-weight: 800 !important; }}'
             f'.st-key-bn_{activo} button {{ box-shadow: inset 0 2px 0 #E30613 !important; }}'
             if activo != 2 else
-            '.st-key-bn_2 button { box-shadow: 0 0 0 3px rgba(227,6,19,0.35), 0 6px 18px rgba(227,6,19,0.45) !important; }'
+            # Rojo solo cuando se está en Inicio; en las demás secciones el escudo queda neutro
+            '.st-key-nob_bottom_nav .st-key-bn_2 button { border-color: #E30613 !important; '
+            'box-shadow: 0 0 0 3px rgba(227,6,19,0.35), 0 6px 18px rgba(227,6,19,0.45) !important; }'
+            '.st-key-nob_bottom_nav .st-key-bn_2 button::after { color: #FF6A72 !important; }'
         )
     css += [f'.st-key-bnx_{i} button::after {{ content: "{e.replace(chr(34), "")}"; }}'
             for i, (_, e) in enumerate(extras)]
@@ -984,13 +987,13 @@ def aplicar_tema():
                 position: relative; min-height: 76px !important; margin-top: -20px;
                 border-radius: 22px !important;
                 background-color: #1A0204 !important;
-                border: 2px solid #E30613 !important;
-                box-shadow: 0 6px 18px rgba(227,6,19,0.45) !important;
+                border: 2px solid rgba(255,255,255,0.16) !important;
+                box-shadow: 0 6px 16px rgba(0,0,0,0.45) !important;
                 padding-top: 58px !important;
                 background-size: 50px 50px !important;
             }
             .st-key-bn_2 button p { position: absolute; top: 10px; left: 0; right: 0; }
-            .st-key-bn_2 button::after { color: #FF6A72; font-weight: 800; }
+            .st-key-bn_2 button::after { color: #D9D9D9; font-weight: 800; }
             .block-container { padding-bottom: 160px !important; }
         }
 
@@ -1073,12 +1076,12 @@ def aplicar_tema():
                 width: 100% !important; max-width: 78px; margin-left: auto !important; margin-right: auto !important;
                 position: relative; min-height: 70px !important; margin-top: -26px;
                 border-radius: 22px !important; background-color: #1A0204 !important;
-                border: 2px solid #E30613 !important; box-shadow: 0 6px 18px rgba(227,6,19,0.45) !important;
+                border: 2px solid rgba(255,255,255,0.16) !important; box-shadow: 0 6px 16px rgba(0,0,0,0.45) !important;
                 padding-top: 54px !important; background-size: 46px 46px !important;
             }
             .st-key-bn_2 button:hover { background-color: #2A0306 !important; }
             .st-key-bn_2 button p { position: absolute; top: 10px; left: 0; right: 0; }
-            .st-key-bn_2 button::after { color: #FF6A72; font-weight: 800; }
+            .st-key-bn_2 button::after { color: #D9D9D9; font-weight: 800; }
 
             .nob-mas-btn, .st-key-bn_salir button {
                 border-radius: 999px !important; min-width: 48px !important; min-height: 44px !important; padding: 2px 12px !important;
