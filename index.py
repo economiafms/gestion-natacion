@@ -401,7 +401,7 @@ else:
             cerrar_sesion()
 
     # Chip "Guía rápida" arriba del banner de todas las páginas
-    chip_ayuda()
+    chip_ayuda(pg.title)
 
     pg.run()
 

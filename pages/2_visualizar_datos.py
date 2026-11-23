@@ -330,7 +330,6 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
                     </div>""", unsafe_allow_html=True)
                     if st.button(f"Detalle {r['Distancia']} {estilo}", key=f"pbo_btn_{unique_key_suffix}_{target_id}_{ie}_{idist}"):
                         dialogo_marca(target_id, estilo, r['Distancia'])
-        st.caption("Tocá una marca para ver sus registros, cuánto mejoró y cómo está en su categoría.")
 
     tab_evo, tab_his, tab_rel = st.tabs(["📈 Evolución", "📜 Historial", "🏊‍♂️ Mis relevos"])
 
@@ -357,7 +356,8 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
             # Datos de la prueba: mejor marca, promedio y mejora desde la primera carrera
             mejor_seg = df_graph['segundos'].min()
             promedio_seg = df_graph['segundos'].mean()
-            mejora = df_graph['segundos'].iloc[0] - mejor_seg
+            # Última carrera frente a la primera: positivo = mejoró, negativo = empeoró
+            mejora = df_graph['segundos'].iloc[0] - df_graph['segundos'].iloc[-1]
             # Última carrera: cómo viene nadando ahora frente a su mejor marca
             ultima_seg = df_graph['segundos'].iloc[-1]
             dif_ultima = ultima_seg - mejor_seg
@@ -365,8 +365,8 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
             st.markdown(f"""<div class="nob-kpis">
 <div><b>{seg_a_tiempo(mejor_seg)}</b><small>Mejor marca</small></div>
 <div><b>{seg_a_tiempo(promedio_seg)}</b><small>Tiempo promedio</small></div>
-<div><b class="{'up' if mejora > 0 else ''}">{f'↓ {mejora:.2f}s' if mejora > 0 else '—'}</b><small>Mejora desde la 1ª carrera</small></div>
-<div><b class="{'up' if dif_ultima <= 0 else ''}">{seg_a_tiempo(ultima_seg)}</b><small>{txt_ultima}</small></div>
+<div><b class="{'up' if mejora > 0 else ('down' if mejora < 0 else '')}">{f'↓ {mejora:.2f}s' if mejora > 0 else (f'-{abs(mejora):.2f}s' if mejora < 0 else '0.00s')}</b><small>Mejora desde la 1ª carrera</small></div>
+<div><b class="{'up' if dif_ultima <= 0 else ('down' if ultima_seg > df_graph['segundos'].iloc[-2] else '')}">{seg_a_tiempo(ultima_seg)}</b><small>{txt_ultima}</small></div>
 </div>""", unsafe_allow_html=True)
 
             # Calcular categoría histórica para tooltip
@@ -377,23 +377,49 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
             # Eje Y: Tiempo (Fake date para plot)
             df_graph['TimeObj'] = pd.to_datetime('2024-01-01') + pd.to_timedelta(df_graph['segundos'], unit='s')
 
-            fig = px.line(df_graph, x='fecha', y='TimeObj', markers=True, template="plotly_dark",
-                          hover_data={
-                              'fecha': False, 'TimeObj': False,
-                              'sede': True, 'Distancia': True, 'cat_hist': True, 'tiempo': True
-                          })
+            # Datos del cartel de cada punto
+            def _puesto(v):
+                try: v = int(v)
+                except Exception: return "-"
+                return {1: "🥇 1º", 2: "🥈 2º", 3: "🥉 3º"}.get(v, f"{v}º" if v > 0 else "-")
+            df_graph['puesto_txt'] = df_graph['posicion'].apply(_puesto)
+            df_graph['fecha_txt'] = df_graph['fecha_dt'].dt.strftime('%d/%m/%Y').fillna(df_graph['fecha'].astype(str))
+            df_graph['sede_txt'] = df_graph['sede'].astype(str) + " (" + df_graph['medida'].astype(str) + ")"
+            es_pb = df_graph['segundos'] == mejor_seg
+            custom = df_graph[['tiempo', 'fecha_txt', 'sede_txt', 'cat_hist', 'puesto_txt']].values
+            cartel = ("<b>%{customdata[0]}</b><br>📅 %{customdata[1]}<br>📍 %{customdata[2]}"
+                      "<br>🏷️ Cat. %{customdata[3]} · %{customdata[4]}<extra></extra>")
 
-            fig.update_traces(line_color='#E53935', name="Registro",
-                              hovertemplate="<b>%{customdata[3]}</b><br>📅 %{x|%d/%m/%Y}<br>📍 %{customdata[0]}<br>🏷️ %{customdata[2]}")
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(
+                x=df_graph['fecha_dt'], y=df_graph['TimeObj'], mode="lines+markers", customdata=custom,
+                line=dict(color="#E53935", width=3, shape="spline", smoothing=0.6),
+                marker=dict(size=10, color="#E53935", line=dict(color="#fff", width=1.5)),
+                hovertemplate=cartel, showlegend=False))
+            # La mejor marca, resaltada en dorado
+            fig.add_trace(go.Scatter(
+                x=df_graph.loc[es_pb, 'fecha_dt'], y=df_graph.loc[es_pb, 'TimeObj'], mode="markers",
+                customdata=custom[es_pb.values],
+                marker=dict(size=16, color="#FFD54F", symbol="star", line=dict(color="#7a5c00", width=1)),
+                hovertemplate=cartel, showlegend=False))
             # Línea de referencia: mejor marca
             fig.add_hline(y=pd.to_datetime('2024-01-01') + pd.to_timedelta(mejor_seg, unit='s'),
-                          line_dash="dash", line_color="#FFD54F", opacity=0.8,
+                          line_dash="dot", line_color="#FFD54F", opacity=0.6,
                           annotation_text=f"Mejor marca {seg_a_tiempo(mejor_seg)}", annotation_position="top left",
-                          annotation_font_color="#FFD54F")
+                          annotation_font_color="#FFD54F", annotation_font_size=11)
 
-            fig.update_yaxes(tickformat="%M:%S.%f", title="Tiempo")
-            fig.update_layout(height=350, margin=dict(t=20, b=20, l=40, r=20), hovermode="x unified")
-            st.plotly_chart(fig, use_container_width=True, key=f"graf_evo{unique_key_suffix}")
+            fig.update_yaxes(tickformat="%M:%S", title=None, fixedrange=True,
+                             gridcolor="rgba(255,255,255,0.06)", zeroline=False)
+            fig.update_xaxes(tickformat="%d/%m/%y", title=None, fixedrange=True,
+                             gridcolor="rgba(255,255,255,0.04)", showspikes=False)
+            fig.update_layout(template="plotly_dark", height=320, margin=dict(t=24, b=10, l=10, r=10),
+                              hovermode="closest", dragmode=False,
+                              paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                              hoverlabel=dict(bgcolor="#1A0204", bordercolor="#E30613", font_size=13))
+            # Solo para ver: sin zoom, sin arrastre y sin barra de herramientas; el cartel de cada punto sigue activo
+            st.plotly_chart(fig, use_container_width=True, key=f"graf_evo{unique_key_suffix}",
+                            config={"displayModeBar": False, "scrollZoom": False, "doubleClick": False,
+                                    "staticPlot": False, "showTips": False})
         else:
             st.info("Necesitas al menos 2 carreras en la misma prueba para ver la evolución.")
 

@@ -300,18 +300,79 @@ Encontrás las próximas competencias del equipo y podés registrarte de forma s
 """
 
 
+# Ayuda de la página actual (lo que se puede tocar y qué muestra cada pestaña).
+# Clave: título de la página en el menú. "comun" vale para ambos perfiles; "manager" se suma para el manager.
+AYUDA_PAGINAS = {
+    "Inicio": {
+        "comun": """
+- **Tu nombre** abre tu ficha completa.
+- **Medallas (Oro, Plata, Bronce):** tocá una para ver tus podios de esa medalla. Dentro de la ventana podés cambiar de medalla tocando las otras.
+- **Mis estilos frecuentes:** tocá un estilo para ver todos tus registros de ese estilo; si nadaste varias distancias, podés filtrarlas.
+- **Mi entrenamiento de hoy:** marcá **DÍA GANADO** cuando termines la sesión.
+- **El club y vos:** tu aporte a las medallas del club y el top medallistas del año. *Ver más estadísticas* abre los gráficos del club.
+- **Botón central (escudo):** desde Inicio te lleva a tu ficha; desde otras páginas vuelve a Inicio.""",
+        "manager": """
+- **Ver padrón de nadadores** y el **botón central** (desde Inicio) abren el padrón.
+- **Gestión:** con la palabra clave se habilita la carga de competencias.""",
+    },
+    "Fichero": {
+        "comun": """
+**Ficha**
+- **Mejores marcas:** tocá una marca para ver todas las carreras de esa prueba, cuánto mejoraste, el promedio de tu categoría y tu puesto en ella.
+- **📈 Evolución:** elegí estilo y distancia. Arriba: mejor marca, promedio, mejora desde la 1ª carrera (en rojo y negativo si empeoró) y la última carrera. En el gráfico, pasá el dedo o el mouse por cada punto para ver tiempo, fecha, sede, categoría y puesto; la ⭐ dorada es la mejor marca.
+- **📜 Historial:** tus últimas 20 carreras; usá *Filtrar Historial* para elegir estilo y distancia.
+- **🏊‍♂️ Mis relevos:** las postas en las que participaste, con los parciales de cada integrante.""",
+        "nadador": """
+**Compañero**
+- Escribí el DNI de un compañero para ver su ficha.""",
+        "manager": """
+**Padrón**
+- Todos los nadadores ordenados por medallas. Usá el buscador por nombre o apellido; **tocá una tarjeta** para abrir su ficha.
+
+**Ficha**
+- Elegí el atleta en la lista (podés escribir para buscarlo).
+
+**Relevos**
+- Historial de postas del club, con filtros por estilo y género.""",
+    },
+    "Rutinas": {"comun": """
+- **Mes en curso:** las sesiones del mes; marcá **DÍA GANADO** al terminar cada una.
+- **Historial:** tu asistencia de meses anteriores.
+- Abrí el **Glosario de Referencias** para entender las abreviaturas de las rutinas."""},
+    "Entrenamientos": {"comun": """
+- **Historial:** promedios y ritmos de tus tests, gráfico por estilo y registros con parciales.
+- **Cargar Test:** registrá un test nuevo con sus parciales (50 = 1x50 · 100 = 4x25 · 200 = 4x50 · 400 = 4x100)."""},
+    "Mi Categoría": {"comun": """
+- Los nadadores de tu categoría y los tiempos promedio por estilo y distancia, para comparar tu rendimiento."""},
+    "Agenda": {"comun": """
+- Las próximas competencias: inscribite eligiendo tus pruebas antes de la fecha límite, o date de baja si no vas a participar."""},
+    "Ranking": {"comun": """
+- Los mejores tiempos del club por prueba. Filtrá por estilo, distancia y género; en *Relevos*, las mejores postas."""},
+    "Simulador": {"comun": """
+- Armá postas manuales o automáticas para estimar el tiempo del relevo con los tiempos reales de los nadadores."""},
+    "Carga de Datos": {"comun": """
+- Cargá nadadores, tiempos individuales y relevos, y administrá los permisos (Manager / Nadador)."""},
+}
+
+
 @st.dialog("Guía rápida de uso", width="large")
-def dialogo_guia():
+def dialogo_guia(pagina=None):
     es_manager = st.session_state.get("role") in ["M", "P"]
-    st.caption("Perfil Manager" if es_manager else "Perfil Nadador")
-    st.markdown(GUIA_MANAGER if es_manager else GUIA_NADADOR)
+    ayuda = AYUDA_PAGINAS.get(pagina or "")
+    if ayuda:
+        seccion(f"En esta página · {pagina}")
+        texto = ayuda.get("comun", "") + (ayuda.get("manager", "") if es_manager else ayuda.get("nadador", ""))
+        st.markdown(texto)
+        st.write("")
+    with st.expander("Guía general · " + ("Perfil Manager" if es_manager else "Perfil Nadador"), expanded=not ayuda):
+        st.markdown(GUIA_MANAGER if es_manager else GUIA_NADADOR)
 
 
-def chip_ayuda():
-    """Chip "Guía rápida" arriba del banner; abre la guía de uso según el perfil."""
+def chip_ayuda(pagina=None):
+    """Chip "Guía rápida" arriba del banner; abre la ayuda de la página actual y la guía general."""
     with st.container(key="nob_ayuda"):
         if st.button("Guía rápida", key="nob_ayuda_btn", icon=":material/help:"):
-            dialogo_guia()
+            dialogo_guia(pagina)
 
 
 def seccion(texto: str):
@@ -730,6 +791,7 @@ def aplicar_tema():
         .nob-pbr .t small { display: block; margin-top: 2px; font-size: 12.5px; color: rgba(255,255,255,0.65); }
         .nob-pbr .ir { font-size: 22px; color: rgba(255,255,255,0.35); }
         .nob-kpis b.up { color: #6FDB74; }
+        .nob-kpis b.down { color: #FF5A5F; }
 
         /* Pestañas en el celular: siempre todas visibles en una fila (sin tener que deslizar) */
         @media (max-width: 640px) {
