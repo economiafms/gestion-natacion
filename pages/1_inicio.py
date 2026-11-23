@@ -392,8 +392,7 @@ def dialogo_medallas():
         + "</style>"
     )
     with st.container(key="dlg_med_head"):
-        st.markdown(f"""{estilo_sel}<div class="nob-est-name">{MEDALLAS[pos_sel]} {nombre}</div>
-<div class="nob-est-desc">{n_sel} {"podio" if n_sel == 1 else "podios"} de {nombre.lower()} (individuales y relevos)</div>""",
+        st.markdown(f"""{estilo_sel}<div class="nob-est-name">{MEDALLAS[pos_sel]} {nombre}</div>""",
                     unsafe_allow_html=True)
         cols = st.columns(4, gap="small")
         for col, (pos, emo, n) in zip(cols, [(1, "🥇", n1), (2, "🥈", n2), (3, "🥉", n3)]):
