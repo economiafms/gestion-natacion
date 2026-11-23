@@ -656,6 +656,9 @@ def aplicar_tema():
         :has(> .st-key-nob_bottom_nav) { display: contents !important; }
         .st-key-nob_bottom_nav > [data-testid="stElementContainer"]:has(style) { display: none; }
 
+        /* Filtro por distancia en el detalle por estilo: centrado arriba de la ficha */
+        .st-key-dlg_est_filtro { align-items: center; margin-bottom: 4px; }
+
         /* Chip "Guía rápida": fijo arriba de todo a la izquierda, en la franja superior de la página */
         :has(> .st-key-nob_ayuda) { display: contents !important; }
         .st-key-nob_ayuda {

@@ -418,6 +418,17 @@ def dialogo_estilo(estilo):
     # Solo registros individuales: coincide con el número de la tarjeta en Inicio
     ind_e = ind[ind['Estilo'] == estilo].copy()
     ind_e['posicion'] = pd.to_numeric(ind_e['posicion'], errors='coerce').fillna(0).astype(int)
+
+    # Filtro por distancia: solo si el estilo se nadó en más de una distancia (arranca en "Todas")
+    distancias = (ind_e['Distancia'].dropna().astype(str).drop_duplicates()
+                  .sort_values(key=lambda s: pd.to_numeric(s.str.extract(r'(\d+)')[0], errors='coerce')).tolist())
+    if len(distancias) > 1:
+        opciones = ["Todas"] + distancias
+        with st.container(key="dlg_est_filtro"):
+            elegida = st.segmented_control("Distancia", opciones, default="Todas", label_visibility="collapsed")
+        if elegida and elegida != "Todas":
+            ind_e = ind_e[ind_e['Distancia'].astype(str) == elegida]
+
     cuenta = ind_e['posicion'].value_counts()
     n1, n2, n3 = (int(cuenta.get(k, 0)) for k in (1, 2, 3))
     n_reg = len(ind_e)
