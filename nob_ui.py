@@ -313,7 +313,8 @@ AYUDA_PAGINAS = {
 - **Mis estilos frecuentes:** tocá un estilo para ver todos tus registros de ese estilo; si nadaste varias distancias, podés filtrarlas.
 - **Mi entrenamiento de hoy:** marcá **DÍA GANADO** cuando termines la sesión.
 - **El club y vos:** tu aporte a las medallas del club y el top medallistas del año. *Ver más estadísticas* abre los gráficos del club.
-- **Botón central (escudo):** desde Inicio te lleva a tu ficha; desde otras páginas vuelve a Inicio.""",
+- **Botón central (escudo):** desde Inicio te lleva a tu ficha; desde otras páginas vuelve a Inicio.
+- **Tu año en el agua (solo en diciembre):** un resumen de tu año (medallas, torneos, récords) en una imagen para descargar o compartir en Instagram.""",
         "manager": """
 - **Ver padrón de nadadores** y el **botón central** (desde Inicio) abren el padrón.
 - **Gestión:** con la palabra clave se habilita la carga de competencias.""",
@@ -874,6 +875,19 @@ def aplicar_tema():
         .nob-mm-frases b { color: #fff; }
 
         /* Selector de nadador del manager: ← lista →, en una fila */
+        /* Inicio: acceso al resumen del año (solo diciembre) */
+        .nob-wrap-card {
+            margin: 14px 0 8px; padding: 16px 18px; border-radius: 18px; position: relative; overflow: hidden;
+            background: linear-gradient(135deg, #3a0309 0%, #8f0a16 55%, #E30613 100%);
+            box-shadow: 0 10px 26px rgba(227,6,19,0.30);
+        }
+        .nob-wrap-card::after {
+            content: ""; position: absolute; right: -40px; top: -40px; width: 160px; height: 160px; border-radius: 50%;
+            background: radial-gradient(circle, rgba(255,215,0,0.35), transparent 70%);
+        }
+        .nob-wrap-card .k { font-size: 11px; font-weight: 800; letter-spacing: 1.2px; text-transform: uppercase; color: #FFD7DA; }
+        .nob-wrap-card .t { font-size: 24px; font-weight: 900; color: #fff; line-height: 1.1; margin-top: 4px; }
+        .nob-wrap-card .s { font-size: 13px; color: #FFE3E5; margin-top: 6px; }
         /* Inicio: la celda Categoría de la tarjeta de perfil abre Mi Categoría */
         .st-key-nob_idrow { position: relative; gap: 0 !important; }
         .st-key-nob_idrow .st-key-btn_cat_perfil {

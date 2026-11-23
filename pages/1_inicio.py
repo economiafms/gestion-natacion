@@ -8,6 +8,8 @@ import uuid
 import random
 import html
 from nob_ui import hero, seccion
+import base64
+import resumen_anual
 
 # --- CONFIGURACIÓN ---
 st.set_page_config(page_title="Inicio", layout="centered")
@@ -262,6 +264,77 @@ def ir_a_mi_ficha():
     st.session_state.nadador_seleccionado = f"{str(me_row['apellido']).upper()}, {me_row['nombre']}"
     st.session_state.fichero_tab_inicial = "ficha"
     st.switch_page("pages/2_visualizar_datos.py")
+
+
+# ---------------------------------------------------------------------------
+# RESUMEN ANUAL ("Mi año en el agua"): solo en diciembre
+# ---------------------------------------------------------------------------
+def resumen_anual_visible():
+    """Diciembre (hora de Argentina). El manager con la gestión desbloqueada puede verlo antes como vista previa."""
+    ahora = datetime.now(timezone.utc) - timedelta(hours=3)
+    if ahora.month == 12:
+        return True
+    return st.session_state.get("role") in ["M", "P"] and st.session_state.get("admin_unlocked", False)
+
+
+@st.cache_data(ttl="1h", show_spinner=False)
+def _imagen_resumen(claves, nombre, formato):
+    return resumen_anual.generar_imagen(dict(claves), nombre, formato)
+
+
+@st.dialog("Mi año en el agua", width="medium")
+def dialogo_resumen_anual(id_nadador, nombre, anio):
+    r = resumen_anual.calcular_resumen(db, id_nadador, anio, mis_resultados)
+    if not r.get("carreras"):
+        st.info(f"No hay carreras tuyas registradas en {anio}. ¡El año que viene armamos el resumen juntos!")
+        return
+    formato = st.segmented_control("Formato", list(resumen_anual.FORMATOS), default=list(resumen_anual.FORMATOS)[0],
+                                   key="ra_formato", label_visibility="collapsed") or list(resumen_anual.FORMATOS)[0]
+    with st.spinner("Armando tu resumen…"):
+        png = _imagen_resumen(tuple(sorted(r.items())), nombre, formato)
+    st.image(png, use_container_width=True)
+    archivo = f"mi_{anio}_en_el_agua.png"
+    st.download_button("⬇️ Descargar imagen", data=png, file_name=archivo, mime="image/png",
+                       type="primary", use_container_width=True, key="ra_descargar")
+    b64 = base64.b64encode(png).decode()
+    st.html(f"""
+<button id="ra-share" style="width:100%;padding:10px 14px;border-radius:12px;border:1px solid rgba(255,255,255,0.25);
+  background:linear-gradient(90deg,#833AB4,#E1306C,#F77737);color:#fff;font-weight:800;font-size:15px;cursor:pointer">
+  📲 Compartir (Instagram y otras apps)</button>
+<div id="ra-share-msg" style="font-size:12px;color:#bbb;margin-top:6px"></div>
+<script>
+(function() {{
+  const btn = document.getElementById("ra-share"), msg = document.getElementById("ra-share-msg");
+  if (!btn || btn.dataset.ok) return; btn.dataset.ok = "1";
+  btn.addEventListener("click", async () => {{
+    try {{
+      const blob = await (await fetch("data:image/png;base64,{b64}")).blob();
+      const file = new File([blob], "{archivo}", {{ type: "image/png" }});
+      if (navigator.canShare && navigator.canShare({{ files: [file] }})) {{
+        await navigator.share({{ files: [file], title: "Mi {anio} en el agua" }});
+      }} else {{
+        msg.textContent = "Este navegador no permite compartir directo. Descargá la imagen y subila desde Instagram.";
+      }}
+    }} catch (e) {{
+      if (e && e.name !== "AbortError") msg.textContent = "No se pudo compartir. Descargá la imagen y subila desde Instagram.";
+    }}
+  }});
+}})();
+</script>""", unsafe_allow_javascript=True)
+    st.caption("En el celular, *Compartir* abre el menú del teléfono: elegí Instagram (historia o publicación). "
+               "En la computadora, descargá la imagen.")
+
+
+def tarjeta_resumen_anual(me):
+    """Acceso al resumen del año, debajo de los botones de ficha / padrón."""
+    if not resumen_anual_visible():
+        return
+    anio = (datetime.now(timezone.utc) - timedelta(hours=3)).year
+    st.markdown(f"""<div class="nob-wrap-card"><div class="k">Resumen del año</div>
+<div class="t">Tu {anio} en el agua</div>
+<div class="s">Medallas, torneos, récords y más, en una imagen para compartir.</div></div>""", unsafe_allow_html=True)
+    if st.button(f"✨ Ver mi {anio}", key="btn_resumen_anual", use_container_width=True):
+        dialogo_resumen_anual(me['codnadador'], f"{me['nombre']} {me['apellido']}", anio)
 
 
 def mis_resultados(id_nadador):
@@ -572,6 +645,7 @@ if db and st.session_state.user_id:
         if st.button("Ver padrón de nadadores", use_container_width=True,
                      key="btn_padron_inicio_m", icon=":material/groups:"):
             ir_al_padron()
+        tarjeta_resumen_anual(me)
 
     # RESUMEN: OBJETIVO DEL MES + PRÓXIMO TORNEO (solo nadadores)
     if st.session_state.role == "N":
@@ -640,6 +714,7 @@ if db and st.session_state.user_id:
     if st.session_state.role == "N":
         if st.button("Ver Mi Ficha Completa ➝", type="primary", use_container_width=True, key="btn_ficha_inicio"):
             ir_a_mi_ficha()
+        tarjeta_resumen_anual(me)
     
     st.write("") 
 
