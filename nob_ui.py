@@ -132,6 +132,21 @@ def hero(titulo: str, icono: str | None = None, subtitulo: str | None = None,
     )
 
 
+def en_streamlit_cloud() -> bool:
+    """True si la app está publicada en Streamlit Community Cloud (*.streamlit.app).
+
+    Para probar localmente cómo queda, se puede forzar con la variable de entorno NOB_SIMULAR_CLOUD=1.
+    """
+    import os
+    if os.environ.get("NOB_SIMULAR_CLOUD") == "1":
+        return True
+    try:
+        host = (st.context.headers.get("host") or "") + " " + (st.context.url or "")
+    except Exception:
+        return False
+    return "streamlit.app" in host or "share.streamlit.io" in host
+
+
 def barra_movil(items):
     """Barra de navegación fija abajo, SOLO en el celular (en computadora no se muestra).
 
@@ -149,6 +164,17 @@ def barra_movil(items):
             'background-size: 44px 44px !important; background-position: center 6px !important; '
             'background-repeat: no-repeat !important; }'
         )
+    # En Streamlit Cloud aparece el sello de Streamlit abajo a la derecha, por encima de la app
+    # (no se puede ocultar desde el código). Se reserva una franja libre al pie de la barra para
+    # que el sello caiga ahí y no tape los botones.
+    if en_streamlit_cloud():
+        css.append(
+            "@media (max-width: 640px) {"
+            " .st-key-nob_bottom_nav { padding-bottom: calc(46px + env(safe-area-inset-bottom)) !important; }"
+            " .block-container { padding-bottom: 140px !important; }"
+            "}"
+        )
+
     tocado = None
     with st.container(key="nob_bottom_nav"):
         # Los estilos van dentro de la barra fija para no sumar espacio arriba de la página
