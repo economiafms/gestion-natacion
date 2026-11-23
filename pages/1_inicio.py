@@ -295,7 +295,6 @@ def dialogo_resumen_anual(id_nadador, nombre, anio):
     if r.get("fechas_detalle"):
         with st.expander(f"📅 Fechas contadas ({r['torneos']})"):
             st.markdown("\n".join(f"- {f}" for f in r["fechas_detalle"]))
-            st.caption("Cada fecha es una sede en un día. Si un club tiene varias piletas, el mismo día se cuenta una sola vez.")
     archivo = f"mi_{anio}_en_el_agua.png"
     st.download_button("⬇️ Descargar imagen", data=png, file_name=archivo, mime="image/png",
                        type="primary", use_container_width=True, key="ra_descargar")
@@ -303,20 +302,12 @@ def dialogo_resumen_anual(id_nadador, nombre, anio):
     st.html(f"""
 <button id="ra-share" style="width:100%;padding:10px 14px;border-radius:12px;border:1px solid rgba(255,255,255,0.25);
   background:linear-gradient(90deg,#833AB4,#E1306C,#F77737);color:#fff;font-weight:800;font-size:15px;cursor:pointer">
-  📲 Compartir (Instagram y otras apps)</button>
+  📲 Compartir</button>
 <div id="ra-share-msg" style="font-size:12px;color:#bbb;margin-top:6px"></div>
-<button id="ra-story" style="width:100%;margin-top:8px;padding:10px 14px;border-radius:12px;cursor:pointer;
-  border:1px solid rgba(225,48,108,0.6);color:#fff;font-weight:800;font-size:15px;background:rgba(225,48,108,0.12)">
-  ➕ Abrir historias de Instagram</button>
 <script>
 (function() {{
   const btn = document.getElementById("ra-share"), msg = document.getElementById("ra-share-msg");
   if (!btn || btn.dataset.ok) return; btn.dataset.ok = "1";
-  const story = document.getElementById("ra-story");
-  if (story) story.addEventListener("click", () => {{
-    window.location.href = "instagram://story-camera";
-    setTimeout(() => {{ msg.textContent = "Si no se abrió Instagram, abrilo vos y creá una historia eligiendo la imagen guardada."; }}, 1500);
-  }});
   btn.addEventListener("click", async () => {{
     try {{
       const blob = await (await fetch("data:image/png;base64,{b64}")).blob();
@@ -324,19 +315,14 @@ def dialogo_resumen_anual(id_nadador, nombre, anio):
       if (navigator.canShare && navigator.canShare({{ files: [file] }})) {{
         await navigator.share({{ files: [file], title: "Mi {anio} en el agua" }});
       }} else {{
-        msg.textContent = "Este navegador no permite compartir directo. Descargá la imagen y subila desde Instagram.";
+        msg.textContent = "Este navegador no permite compartir. Descargá la imagen.";
       }}
     }} catch (e) {{
-      if (e && e.name !== "AbortError") msg.textContent = "No se pudo compartir. Descargá la imagen y subila desde Instagram.";
+      if (e && e.name !== "AbortError") msg.textContent = "No se pudo compartir. Descargá la imagen.";
     }}
   }});
 }})();
 </script>""", unsafe_allow_javascript=True)
-    st.markdown("""**Para subirla a tu historia:**
-1. Guardá la imagen: *Descargar imagen*, o *Compartir* → **Guardar imagen**.
-2. Tocá **Abrir historias de Instagram** y elegila desde tu galería (deslizá hacia arriba).
-
-Para una publicación o un mensaje, usá *Compartir* → Instagram. En la computadora, descargá la imagen.""")
 
 
 def tarjeta_resumen_anual(me):
