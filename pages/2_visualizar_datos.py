@@ -413,23 +413,23 @@ def render_tab_padron():
                           | df_show['_orden_nombre'].str.contains(busca, regex=False)]
     st.caption(f"{len(df_show)} de {len(df_view)} nadadores")
 
-    # Todos los nadadores (sin límite), con el estilo de las filas del top de Inicio
-    for pos, (_, row) in enumerate(df_show.iterrows(), start=1):
+    # Todos los nadadores (sin límite), con la tarjeta clásica del padrón:
+    # nombre y datos | medallas | total y categoría
+    for _, row in df_show.iterrows():
         try: edad = datetime.now().year - pd.to_datetime(row['fechanac']).year
         except: edad = 0
         cat = asignar_cat(edad)
         o, p, b, t = int(row.get('Oro', 0)), int(row.get('Plata', 0)), int(row.get('Bronce', 0)), int(row.get('Total', 0))
-        meds = " ".join(f"{e}{n}" for e, n in (("🥇", o), ("🥈", p), ("🥉", b)) if n) or "—"
-        es_yo = row['codnadador'] == mi_id
 
         with st.container(key=f"pad_{row['codnadador']}", horizontal=True, vertical_alignment="center"):
-            st.markdown(
-                f'<div class="nob-top nob-pad{" yo" if es_yo else ""}">'
-                f'<span class="p">{pos}</span>'
-                f'<span class="n">{html.escape(f"{row["nombre"]} {row["apellido"]}")}'
-                f'<small>{edad} años · {html.escape(str(row["codgenero"]))} · Cat. {html.escape(str(cat))}</small></span>'
-                f'<span class="m">{meds}</span><span class="t">★ {t}</span></div>',
-                unsafe_allow_html=True)
+            st.markdown(f"""<div class="padron-card nob-pad">
+<div class="p-col-left">
+<div class="p-name">{html.escape(str(row['Nombre Completo']))}</div>
+<div class="p-meta">{edad} años (al 31/12) • {html.escape(str(row['codgenero']))}</div>
+</div>
+<div class="p-col-center"><div class="p-medals"><span>🥇{o}</span> <span>🥈{p}</span> <span>🥉{b}</span></div></div>
+<div class="p-col-right"><div class="p-total">★ {t}</div><div class="p-cat">{html.escape(str(cat))}</div></div>
+</div>""", unsafe_allow_html=True)
             st.button("", key=f"btn_p_{row['codnadador']}", icon=":material/arrow_forward:", help="Ver ficha",
                       on_click=_abrir_ficha_desde_padron, args=(row['Nombre Completo'],))
 
