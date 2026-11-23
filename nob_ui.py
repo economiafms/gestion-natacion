@@ -718,7 +718,8 @@ def aplicar_tema():
             .padron-card .p-col-left { flex: 2 1 0; min-width: 0; padding-right: 8px; }
             /* Edad y género en un solo renglón (letra un poco menor en el celular) */
             .padron-card .p-meta { font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-            .padron-card .p-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+            /* El nombre se ve siempre completo (si es largo, usa dos renglones) */
+            .padron-card .p-name { white-space: normal; overflow-wrap: anywhere; line-height: 1.2; }
             .padron-card .p-medals { gap: 4px; font-size: 14px; }
         }
         /* Celulares muy angostos: se omite "(al 31/12)" para que la edad entre completa */
