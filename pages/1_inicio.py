@@ -987,8 +987,18 @@ if db and st.session_state.user_id:
     pod_r = df_r[(r_f.dt.year == anio) & df_r['posicion'].isin([1, 2, 3])]
     med_club = len(pod_t) + len(pod_r)  # cada relevo cuenta una vez para el club
 
-    st.markdown(f"""<div class="nob-kpis">
+    # Activos: al menos una marca de competencia (individual o relevo) este año o el anterior
+    _anios_act = [anio - 1, anio]
+    _ids_act = set(pd.to_numeric(df_t.loc[t_f.dt.year.isin(_anios_act), 'codnadador'], errors='coerce').dropna())
+    _rel_act = df_r[r_f.dt.year.isin(_anios_act)]
+    for _k in range(1, 5):
+        if f'nadador_{_k}' in _rel_act.columns:
+            _ids_act.update(pd.to_numeric(_rel_act[f'nadador_{_k}'], errors='coerce').dropna())
+    _n_activos = int(pd.to_numeric(db['nadadores']['codnadador'], errors='coerce').isin(_ids_act).sum())
+
+    st.markdown(f"""<div class="nob-kpis tres">
 <div><b>{len(db['nadadores'])}</b><small>Nadadores</small></div>
+<div title="Compitieron en {anio - 1} o {anio}"><b>{_n_activos}</b><small>Activos</small></div>
 <div><b>{len(df_t) + len(df_r)}</b><small>Pruebas registradas</small></div>
 </div>""", unsafe_allow_html=True)
 

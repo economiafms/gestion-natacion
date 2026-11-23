@@ -799,6 +799,7 @@ def aplicar_tema():
         .nob-top .t { font-size: 14px; font-weight: 800; color: #fff; white-space: nowrap; }
         .nob-top-pos { font-size: 12px; color: rgba(255,255,255,0.6); text-align: right; margin-top: 2px; }
         @media (max-width: 520px) { .nob-kpis { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 520px) { .nob-kpis.tres { grid-template-columns: repeat(3, 1fr); } }
 
         /* ---------- Fichero: cabecera de la ficha y padrón, con el estilo de Inicio ---------- */
         .nob-fh {
