@@ -143,7 +143,7 @@ def barra_movil(principales, nombre, extras, activo=None):
       - Panel desplegable con `extras` (se abre/cierra con la flecha junto al nombre).
       - Fila principal fija de 5 botones `principales` (icono, etiqueta); el del medio es el
         botón central elevado y, si su icono es "escudo", muestra el escudo del club.
-      - Franja inferior: nombre del nadador (va a Mi Ficha) + flecha ⌃/⌄. El rincón derecho
+      - Franja inferior: nombre del nadador (va a Mi Ficha) + botón "Más" con flecha. El rincón derecho
         queda libre para el sello de Streamlit Cloud.
 
     `activo`: índice (0-4) de la página actual en la fila principal, o None.
@@ -157,7 +157,7 @@ def barra_movil(principales, nombre, extras, activo=None):
         css.append(
             '.st-key-bn_2 button p { visibility: hidden; }'
             f'.st-key-bn_2 button {{ background-image: url("{ESCUDO_URL}") !important; '
-            'background-size: 44px 44px !important; background-position: center 6px !important; '
+            'background-size: 50px 50px !important; background-position: center 6px !important; '
             'background-repeat: no-repeat !important; }'
         )
     if activo is not None:
@@ -191,10 +191,10 @@ def barra_movil(principales, nombre, extras, activo=None):
                         accion = ("principal", i)
 
         with st.container(key="bn_strip", horizontal=True, vertical_alignment="center"):
-            if st.button(f"👤 {nombre}  ›", key="bn_nombre"):
+            if st.button(nombre, key="bn_nombre"):
                 accion = ("ficha",)
-            st.button("⌄" if abierto else "⌃", key="bn_mas", on_click=_alternar_panel_nav,
-                      help="Más opciones")
+            st.button("Cerrar" if abierto else "Más", key="bn_mas", on_click=_alternar_panel_nav,
+                      icon=":material/keyboard_arrow_down:" if abierto else ":material/keyboard_arrow_up:")
 
     if accion is not None:
         st.session_state.nav_mas_abierto = False
@@ -554,30 +554,32 @@ def aplicar_tema():
             .st-key-bn_row [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; gap: 2px !important; align-items: flex-end; }
             .st-key-bn_row [data-testid="stColumn"] { min-width: 0 !important; }
             .st-key-bn_row button {
-                flex-direction: column !important; gap: 0; min-height: 54px !important; padding: 4px 0 !important;
+                flex-direction: column !important; gap: 2px; min-height: 64px !important; padding: 6px 0 !important;
                 background: transparent !important; border: none !important; box-shadow: none !important; transform: none !important;
             }
-            .st-key-bn_row button p { font-size: 21px !important; line-height: 1.1; }
+            .st-key-bn_row button p { font-size: 26px !important; line-height: 1.1; }
             .st-key-bn_row button::after {
-                font-size: 9.5px; font-weight: 600; color: rgba(255,255,255,0.6); white-space: nowrap;
-                letter-spacing: -0.1px;
+                font-size: 10.5px; font-weight: 600; color: rgba(255,255,255,0.65); white-space: nowrap;
+                letter-spacing: -0.2px;
             }
 
-            /* Franja inferior: nombre (→ Mi Ficha) + flecha para más opciones; el rincón derecho queda libre */
+            /* Franja inferior: nombre (→ Mi Ficha) + botón Más; el rincón derecho queda libre para el sello */
             .st-key-bn_strip {
-                gap: 4px !important; padding: 2px 4px 0; margin-top: 2px;
-                border-top: 1px solid rgba(255,255,255,0.06); min-height: 40px;
+                gap: 10px !important; padding: 4px 6px 0; margin-top: 2px;
+                border-top: 1px solid rgba(255,255,255,0.06); min-height: 48px;
             }
             .st-key-bn_strip button {
-                min-height: 34px !important; padding: 2px 8px !important; border: none !important;
+                min-height: 40px !important; padding: 2px 8px !important; border: none !important;
                 background: transparent !important; box-shadow: none !important; transform: none !important;
             }
-            .st-key-bn_nombre button p { font-size: 14px !important; font-weight: 700 !important; color: #fff; white-space: nowrap; }
+            .st-key-bn_nombre button p { font-size: 16px !important; font-weight: 800 !important; color: #fff; white-space: nowrap; }
             .st-key-bn_mas button {
-                border-radius: 999px !important; min-width: 34px; background: rgba(255,255,255,0.07) !important;
-                border: 1px solid rgba(255,255,255,0.12) !important;
+                border-radius: 999px !important; padding: 2px 14px 2px 10px !important;
+                background: #E30613 !important; border: none !important;
+                box-shadow: 0 4px 12px rgba(227,6,19,0.4) !important;
             }
-            .st-key-bn_mas button p { font-size: 16px !important; font-weight: 800 !important; color: #FF6A72; }
+            .st-key-bn_mas button p { font-size: 14px !important; font-weight: 800 !important; color: #fff; }
+            .st-key-bn_mas button [data-testid="stIconMaterial"] { font-size: 24px !important; color: #fff; }
 
             /* Panel desplegable de más opciones */
             .st-key-bn_panel {
@@ -596,16 +598,17 @@ def aplicar_tema():
             .st-key-bn_panel button::after { font-size: 13px; font-weight: 700; color: #fff; white-space: nowrap; }
             /* Botón central elevado */
             .st-key-bn_2 button {
-                position: relative; min-height: 64px !important; margin-top: -18px;
-                border-radius: 20px !important;
+                position: relative; min-height: 76px !important; margin-top: -20px;
+                border-radius: 22px !important;
                 background-color: #1A0204 !important;
                 border: 2px solid #E30613 !important;
                 box-shadow: 0 6px 18px rgba(227,6,19,0.45) !important;
-                padding-top: 50px !important;
+                padding-top: 58px !important;
+                background-size: 50px 50px !important;
             }
             .st-key-bn_2 button p { position: absolute; top: 10px; left: 0; right: 0; }
             .st-key-bn_2 button::after { color: #FF6A72; font-weight: 800; }
-            .block-container { padding-bottom: 140px !important; }
+            .block-container { padding-bottom: 160px !important; }
         }
 
         /* Ficha superior de la ventana de podios: medallas tocables para cambiar de medalla */
