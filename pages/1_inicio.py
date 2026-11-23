@@ -905,21 +905,27 @@ if db and st.session_state.user_id:
         st.markdown(f'<div class="nob-aporte">{txt}</div>', unsafe_allow_html=True)
 
     # Top 3 medallistas del año
-    if not tabla.empty:
-        _nombres_por_id = {float(r['codnadador']): f"{r['nombre']} {r['apellido']}"
-                           for _, r in db['nadadores'].iterrows() if pd.notna(pd.to_numeric(r['codnadador'], errors='coerce'))}
-        filas_top = []
-        for pos, (cod, r) in enumerate(tabla.head(3).iterrows(), start=1):
-            meds = " ".join(f"{e}{int(r[k])}" for k, e in ((1, "🥇"), (2, "🥈"), (3, "🥉")) if r[k])
-            es_yo = _yo is not None and cod == _yo
-            filas_top.append(
-                f'<div class="nob-top{" yo" if es_yo else ""}"><span class="p">{pos}</span>'
+    _nombres_por_id = {float(r['codnadador']): f"{r['nombre']} {r['apellido']}"
+                       for _, r in db['nadadores'].iterrows() if pd.notna(pd.to_numeric(r['codnadador'], errors='coerce'))}
+
+    def _fila_top(pos, cod, r, es_yo):
+        meds = " ".join(f"{e}{int(r[k])}" for k, e in ((1, "🥇"), (2, "🥈"), (3, "🥉")) if r[k]) if r is not None else ""
+        total = int(r["total"]) if r is not None else 0
+        return (f'<div class="nob-top{" yo" if es_yo else ""}"><span class="p">{pos}</span>'
                 f'<span class="n">{html.escape(_nombres_por_id.get(cod, "-"))}{" · vos" if es_yo else ""}</span>'
-                f'<span class="m">{meds}</span><span class="t">★ {int(r["total"])}</span></div>')
-        extra = ""
-        if _yo is not None and _yo in tabla.index and _yo not in list(tabla.head(3).index):
-            extra = f'<div class="nob-top-pos">Tu posición: {list(tabla.index).index(_yo) + 1}°</div>'
-        st.markdown(f'<div class="nob-top-tit">Top medallistas {anio}</div>{"".join(filas_top)}{extra}',
+                f'<span class="m">{meds}</span><span class="t">★ {total}</span></div>')
+
+    filas_top = [_fila_top(pos, cod, r, _yo is not None and cod == _yo)
+                 for pos, (cod, r) in enumerate(tabla.head(3).iterrows(), start=1)]
+    # El usuario siempre aparece: si no está en el top 3, su fila va al final con su posición
+    # (o "–" si todavía no tiene medallas en el año)
+    if _yo is not None and _yo not in list(tabla.head(3).index):
+        if _yo in tabla.index:
+            filas_top.append(_fila_top(list(tabla.index).index(_yo) + 1, _yo, tabla.loc[_yo], True))
+        else:
+            filas_top.append(_fila_top("–", _yo, None, True))
+    if filas_top:
+        st.markdown(f'<div class="nob-top-tit">Top medallistas {anio}</div>{"".join(filas_top)}',
                     unsafe_allow_html=True)
 
     st.write("")
