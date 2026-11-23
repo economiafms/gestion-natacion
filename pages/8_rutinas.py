@@ -1,7 +1,7 @@
 import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 import time
 import random
 
@@ -10,6 +10,7 @@ from docx import Document
 from docx.shared import Inches, Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 import io
+import html
 
 # ==========================================
 # 1. CONFIGURACIÓN
@@ -117,39 +118,49 @@ def get_periodo_mas_cercano(fecha_actual, registros_disponibles):
 
     return fecha_actual.year, fecha_actual.month
 
+GLOSARIO = [
+    ("Intensidades", [
+        ("T", "Tolerancia: intensidad alta 100–110%"),
+        ("VC", "Velocidad corta: máxima velocidad"),
+        ("VS", "Velocidad sostenida: mantener velocidad alta"),
+        ("F1", "Vo2: intensidad 100%"),
+        ("F2", "Súper aeróbico: 80–90%"),
+        ("F3", "Sub aeróbico: 70%"),
+        ("Prog.", "Progresivo: de menor a mayor"),
+        ("Reg", "Regresivo: de mayor a menor"),
+    ]),
+    ("Activación y entrada en calor", [
+        ("Ec", "Entrada en calor: nado suave inicial"),
+        ("EcT", "Ec tensor: bíceps, tríceps, dorsales, hombros, pecho, antebrazos"),
+        ("EcM", "Ec movilidad, fuera del agua: brazos, cintura, piernas, tobillos, cuello"),
+        ("Act", "Activación, fuera del agua: piernas, brazos, core"),
+    ]),
+    ("Técnica y estilos", [
+        ("B", "Brazada: C (crol), E (espalda), P (pecho), M (mariposa)"),
+        ("Pat Ph", "Patada en posición hidrodinámica"),
+        ("Pat Tabla", "Patada con tabla"),
+        ("PB", "Pull brazada: con pullboy (c/e/p/m)"),
+        ("CT", "Corrección técnica"),
+    ]),
+    ("Otros", [
+        ("m", "Metros"),
+        ("p", "Pausa estática"),
+        ("p act", "Pausa activa"),
+        ("D/", "Dentro del tiempo"),
+        ("C/", "Con tiempo de pausa"),
+    ]),
+]
+
+
 def mostrar_referencias():
-    with st.expander("📖 Glosario de Referencias (Clic para ver)"):
-        st.markdown("""
-        **INTENSIDADES**
-        * **T (Tolerancia):** Intensidad alta 100 – 110%
-        * **VC (Velocidad Corta):** Máxima velocidad
-        * **VS (Velocidad Sostenida):** Mantener velocidad alta
-        * **F1 (Vo2):** Intensidad 100%
-        * **F2 (Super Aeróbico):** Intensidad 80-90%
-        * **F3 (Sub Aeróbico):** Intensidad 70%
-        * **Prog. (Progresivo):** De menor a mayor
-        * **Reg (Regresivo):** De mayor a menor
-
-        **ACTIVACIÓN Y ENTRADA EN CALOR**
-        * **Ec (Entrada en Calor):** Nado suave inicial
-        * **EcT (Ec Tensor):** Bíceps, Tríceps, Dorsales, Hombros, Pecho, Antebrazos
-        * **EcM (Ec Movilidad):** Fuera del agua (Brazos, Cintura, Piernas, Tobillos, Cuello)
-        * **Act (Activación):** Fuera del agua (Piernas, Brazos, Core)
-
-        **TÉCNICA Y ESTILOS**
-        * **B (Brazada):** C (Crol), E (Espalda), P (Pecho), M (Mariposa)
-        * **Pat Ph:** Patada en Posición Hidrodinámica
-        * **Pat Tabla:** Patada con tabla
-        * **PB (Pull Brazada):** Uso de pullboy (c/e/p/m)
-        * **CT:** Corrección Técnica
-        
-        **OTROS**
-        * **m:** Metros
-        * **p:** Pausa estática
-        * **p act:** Pausa Activa
-        * **D/:** Dentro del tiempo
-        * **C/:** Con tiempo de pausa
-        """)
+    """Glosario de siglas de las rutinas, agrupado en tarjetas."""
+    with st.expander("📖 Glosario de referencias"):
+        bloques = []
+        for titulo, items in GLOSARIO:
+            filas = "".join(f'<div class="rut-glo-f"><b>{html.escape(s)}</b><span>{html.escape(d)}</span></div>'
+                            for s, d in items)
+            bloques.append(f'<div class="rut-glo-b"><div class="rut-glo-t">{html.escape(titulo)}</div>{filas}</div>')
+        st.markdown(f'<div class="rut-glo">{"".join(bloques)}</div>', unsafe_allow_html=True)
 
 # --- MANEJO DE RETRYS PARA API ---
 def actualizar_con_retry(worksheet, data, max_retries=5):
@@ -333,252 +344,223 @@ def activar_calculo_auto():
 # 6. COMPONENTES VISUALES
 # ==========================================
 
-def render_tarjeta_individual(row, df_seg, key_suffix):
-    r_id = row['id_rutina']
-    r_sesion = row['nro_sesion']
-    r_texto = row['texto_rutina']
-    r_anio = row.get('anio_rutina', '')
-    r_mes = row.get('mes_rutina', '')
-    
-    check = df_seg[(df_seg['id_rutina'] == r_id) & (df_seg['codnadador'] == mi_id)]
-    esta_realizada = not check.empty
-    fecha_str = ""
-    if esta_realizada:
-        fecha_obj = pd.to_datetime(check.iloc[0]['fecha_realizada'])
-        fecha_str = fecha_obj.strftime("%d/%m")
+CSS_RUTINAS = """<style>
+/* Tarjeta de sesión */
+[class*="st-key-rut_card_"] {
+  position: relative; overflow: hidden; gap: 10px !important; padding: 14px 14px 12px; margin-bottom: 4px;
+  border-radius: 16px; background: linear-gradient(160deg, rgba(255,255,255,0.06), rgba(255,255,255,0.015));
+  border: 1px solid rgba(255,255,255,0.08);
+}
+[class*="st-key-rut_card_"]::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
+  background: rgba(255,255,255,0.18); }
+[class*="st-key-rut_card_prox_"] { border-color: rgba(227,6,19,0.40);
+  background: linear-gradient(160deg, rgba(227,6,19,0.14), rgba(227,6,19,0.02)); box-shadow: 0 8px 22px rgba(0,0,0,0.28); }
+[class*="st-key-rut_card_prox_"]::before { background: linear-gradient(180deg, #E30613, #FF6A72); }
+[class*="st-key-rut_card_done_"]::before { background: linear-gradient(180deg, #2E7D32, #66BB6A); }
+.rut-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.rut-head .t { font-size: 17px; font-weight: 800; color: #fff; }
+.rut-head .s { font-size: 12px; color: rgba(255,255,255,0.55); margin-left: auto; }
+.rut-pill { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 10px; font-weight: 800; letter-spacing: .8px; }
+.rut-pill.prox { background: rgba(227,6,19,0.18); color: #FF6B72; border: 1px solid rgba(227,6,19,0.5); }
+.rut-pill.pend { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.7); border: 1px solid rgba(255,255,255,0.15); }
+.rut-pill.ok   { background: rgba(76,175,80,0.16); color: #7EE083; border: 1px solid rgba(76,175,80,0.5); }
+/* Texto de la rutina */
+[class*="st-key-rut_txt_"] { padding: 10px 12px; border-radius: 12px; background: rgba(0,0,0,0.22);
+  border: 1px solid rgba(255,255,255,0.05); }
+[class*="st-key-rut_txt_"] p, [class*="st-key-rut_txt_"] li { font-size: 14.5px; line-height: 1.55; color: rgba(255,255,255,0.88); }
+[class*="st-key-rut_txt_done_"] p, [class*="st-key-rut_txt_done_"] li { color: rgba(255,255,255,0.55); }
+/* Acciones: botones del mismo ancho */
+[class*="st-key-rut_acc_"] { gap: 8px !important; flex-wrap: nowrap !important; }
+[class*="st-key-rut_acc_"] > div { flex: 1 1 0 !important; min-width: 0 !important; width: auto !important; }
+[class*="st-key-rut_acc_"] button { width: 100%; border-radius: 12px; }
+/* Historial: filas por sesión */
+.rut-row { display: flex; align-items: center; gap: 10px; padding: 9px 12px; margin-bottom: 6px; border-radius: 12px;
+  background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); }
+.rut-row .i { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; flex: 0 0 auto;
+  font-size: 12px; font-weight: 900; background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.6); }
+.rut-row.ok .i { background: rgba(76,175,80,0.22); color: #7EE083; }
+.rut-row .n { flex: 1; font-size: 14px; font-weight: 700; color: #fff; }
+.rut-row .f { font-size: 12px; color: rgba(255,255,255,0.55); min-width: 40px; text-align: right; }
+/* Glosario */
+.rut-glo { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; }
+.rut-glo-b { padding: 10px 12px; border-radius: 12px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); }
+.rut-glo-t { font-size: 10.5px; font-weight: 800; letter-spacing: 1.4px; text-transform: uppercase; color: #FF6B72; margin-bottom: 6px; }
+.rut-glo-f { display: flex; gap: 8px; font-size: 13px; padding: 3px 0; color: rgba(255,255,255,0.75); }
+.rut-glo-f b { flex: 0 0 64px; color: #fff; }
+/* Mes completo */
+.rut-celeb { text-align: center; padding: 18px 16px; margin-bottom: 14px; border-radius: 18px;
+  background: linear-gradient(135deg, rgba(227,6,19,0.35), rgba(0,0,0,0.6)); border: 1px solid rgba(255,215,0,0.45);
+  box-shadow: 0 8px 24px rgba(227,6,19,0.25); }
+.rut-celeb .e { font-size: 38px; }
+.rut-celeb .t { font-size: 20px; font-weight: 900; color: #fff; text-transform: uppercase; letter-spacing: .5px; }
+.rut-celeb .s { font-size: 13.5px; color: rgba(255,255,255,0.8); margin-top: 4px; }
+</style>"""
 
-    if esta_realizada:
-        borde = "#2E7D32" # Verde
-        bg = "#1B2E1B"
-    else:
-        borde = "#444" # Gris
-        bg = "#262730"
-    
-    with st.container():
-        st.markdown(f"""<div style="height: 4px; border-radius: 4px; background: {'linear-gradient(90deg,#2E7D32,#66BB6A)' if esta_realizada else 'linear-gradient(90deg,#E30613,rgba(227,6,19,0.15))'}; margin: 6px 0 10px;"></div>""", unsafe_allow_html=True)
-        
-        if esta_realizada:
-            c_head, c_act = st.columns([8, 1])
-            with c_head:
-                st.markdown(f"#### ✅ Sesión {r_sesion} <span style='font-size:14px; color:#888'>({fecha_str})</span>", unsafe_allow_html=True)
-                st.markdown(f"<div style='text-decoration: line-through; color: #aaa;'>", unsafe_allow_html=True)
-                st.markdown(r_texto)
-                st.markdown("</div>", unsafe_allow_html=True)
-                
-                # Botón de descarga para Word 1/6 hoja
-                doc_buffer = generar_word_sexto_hoja(r_texto, f"{r_mes:02d}/{r_anio}", f"SESIÓN {r_sesion}")
-                st.download_button(
-                    label="🖨️ Imprimir Sesión",
-                    data=doc_buffer,
-                    file_name=f"Rutina_S{r_sesion}_{r_mes}_{r_anio}.docx",
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    key=f"dl_{r_id}_{key_suffix}_done"
-                )
-            with c_act:
-                if st.button("❌", key=f"un_{r_id}_{key_suffix}", help="Desmarcar"):
-                    with st.spinner("Desmarcando..."):
-                        borrar_seguimiento(r_id, mi_id)
-                    st.rerun()
-        else:
-            c_head, c_act = st.columns([5, 2])
-            with c_head:
-                st.markdown(f"#### ⭕ Sesión {r_sesion}")
-                st.markdown(r_texto)
-                
-                # Botón de descarga para Word 1/6 hoja
-                doc_buffer = generar_word_sexto_hoja(r_texto, f"{r_mes:02d}/{r_anio}", f"SESIÓN {r_sesion}")
-                st.download_button(
-                    label="🖨️ Imprimir Sesión",
-                    data=doc_buffer,
-                    file_name=f"Rutina_S{r_sesion}_{r_mes}_{r_anio}.docx",
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    key=f"dl_{r_id}_{key_suffix}_pend"
-                )
-            with c_act:
-                st.write("") 
-                if st.button("🏊 DÍA GANADO", key=f"do_{r_id}_{key_suffix}", type="primary"):
-                    with st.spinner("Guardando..."):
-                        guardar_seguimiento(r_id, mi_id)
-                    st.rerun()
-        
-        st.markdown("</div>", unsafe_allow_html=True)
 
-def render_feed_activo(df_rut, df_seg, anio_ver, mes_ver, key_suffix=""):
-    rutinas_filtradas = df_rut[
-        (df_rut['anio_rutina'] == anio_ver) & 
-        (df_rut['mes_rutina'] == mes_ver)
-    ].copy()
+def sesiones_del_mes(df_rut, anio, mes):
+    return df_rut[(df_rut['anio_rutina'] == anio) & (df_rut['mes_rutina'] == mes)].sort_values('nro_sesion')
 
-    if rutinas_filtradas.empty:
-        st.info(f"No hay sesiones cargadas para {obtener_nombre_mes(mes_ver)} {anio_ver}.")
-        return
 
-    rutinas_filtradas.sort_values(by='nro_sesion', ascending=True, inplace=True)
-    mostrar_referencias()
+def fecha_realizada(df_seg, r_id, id_nadador):
+    """Fecha (dd/mm) en que el nadador marcó la sesión, o None si no la hizo."""
+    check = df_seg[(df_seg['id_rutina'] == r_id) & (df_seg['codnadador'] == id_nadador)]
+    if check.empty:
+        return None
+    f = pd.to_datetime(check.iloc[0]['fecha_realizada'], errors='coerce')
+    return f.strftime("%d/%m") if pd.notna(f) else "-"
 
-    l_pendientes = []
-    l_completadas = []
 
-    for index, row in rutinas_filtradas.iterrows():
-        check = df_seg[(df_seg['id_rutina'] == row['id_rutina']) & (df_seg['codnadador'] == mi_id)]
-        if not check.empty:
-            l_completadas.append(row)
-        else:
-            l_pendientes.append(row)
-
-    if l_completadas:
-        with st.expander(f"✅ Historial Completado ({len(l_completadas)})", expanded=False):
-            for row in reversed(l_completadas):
-                render_tarjeta_individual(row, df_seg, key_suffix)
-        st.write("---")
-
-    if l_pendientes:
-        st.markdown("#### 🚀 Próximas Sesiones")
-        for row in l_pendientes:
-            render_tarjeta_individual(row, df_seg, key_suffix)
-    else:
-        if l_completadas:
-            st.success("¡Excelente! Has completado todas las sesiones del mes. 🏆")
-
-# --- HISTORIAL VISUAL MEJORADO ---
-def render_historial_compacto(df_rut, df_seg, anio, mes, id_usuario_objetivo):
-    rutinas_mes = df_rut[
-        (df_rut['anio_rutina'] == anio) & 
-        (df_rut['mes_rutina'] == mes)
-    ].sort_values('nro_sesion')
-
-    if rutinas_mes.empty:
-        st.info("No hay planificación cargada para este mes.")
-        return
-
-    total_rutinas = len(rutinas_mes)
-    completadas = 0
-    lista_render = []
-
-    for _, r in rutinas_mes.iterrows():
-        r_id = r['id_rutina']
-        check = df_seg[(df_seg['id_rutina'] == r_id) & (df_seg['codnadador'] == id_usuario_objetivo)]
-        hecho = not check.empty
-        fecha_txt = "-"
-        
-        if hecho:
-            completadas += 1
-            fecha_obj = pd.to_datetime(check.iloc[0]['fecha_realizada'])
-            fecha_txt = fecha_obj.strftime("%d/%m")
-        
-        lista_render.append({
-            "nro": r['nro_sesion'],
-            "hecho": hecho,
-            "fecha": fecha_txt
-        })
-
-    porcentaje = int((completadas / total_rutinas) * 100) if total_rutinas > 0 else 0
-    nombre_mes = obtener_nombre_mes(mes).upper()
-    
-    # -------------------------------------------------------------
-    # EFECTO DOPAMINA: Tarjeta de Logro al 100% (Solo Nadador)
-    # -------------------------------------------------------------
-    if st.session_state.role == "N" and porcentaje == 100:
+def tarjeta_progreso(completadas, total, anio, mes):
+    """Asistencia del mes: porcentaje, barra y mensaje. Celebra el 100% (solo nadador)."""
+    porcentaje = int(completadas / total * 100) if total else 0
+    nombre_mes = obtener_nombre_mes(mes)
+    if st.session_state.role == "N" and total and porcentaje == 100:
         celeb_key = f"celeb_{anio}_{mes}"
         if celeb_key not in st.session_state:
             st.balloons()
             st.session_state[celeb_key] = True
-            
-        st.markdown(f"""
-        <div style="
-            background: linear-gradient(135deg, #E30613 0%, #000000 100%);
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 25px;
-            text-align: center;
-            border: 2px solid #fff;
-            box-shadow: 0 4px 15px rgba(227, 6, 19, 0.4);
-        ">
-            <div style="font-size: 40px; margin-bottom: 10px;">🏆</div>
-            <h2 style="color: white; margin: 0; font-weight: 800; text-transform: uppercase; font-style: italic;">¡RUTINA COMPLETADA!</h2>
-            <p style="color: #f0f0f0; font-size: 16px; margin-top: 5px; font-weight: 500;">
-                Lograste el 100% de asistencia en {nombre_mes}.<br>
-                <span style="font-size: 14px; opacity: 0.9; font-style: italic;">"Sumás constancia, sumás mejora"</span>
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-    # -------------------------------------------------------------
+        st.markdown(f"""<div class="rut-celeb"><div class="e">🏆</div><div class="t">¡Mes completo!</div>
+<div class="s">Lograste el 100% de asistencia en {nombre_mes}. Sumás constancia, sumás mejora.</div></div>""",
+                    unsafe_allow_html=True)
+    faltan = max(total - completadas, 0)
+    if completadas == 0: msg = "La primera sesión es la más importante. Hoy es el día."
+    elif porcentaje < 50: msg = f"Buen arranque. Faltan {faltan} sesiones, a sumar."
+    elif porcentaje < 100: msg = f"Pasaste la mitad. Solo {faltan} más para cerrar el mes."
+    else: msg = "Mes completo. Constancia de campeón."
+    st.markdown(f"""<div class="nob-goal">
+<div class="nob-goal-top"><b>Asistencia · {nombre_mes} {anio}</b><span>{completadas} de {total} sesiones</span></div>
+<div class="nob-next-days" style="margin:0 0 10px;">{porcentaje}<small>%</small></div>
+<div class="nob-bar"><div style="width:{max(0, min(100, porcentaje))}%"></div></div>
+<div class="nob-goal-msg">{msg}</div>
+</div>""", unsafe_allow_html=True)
 
-    # SCORECARD DIVIDIDO
-    _faltan = max(total_rutinas - completadas, 0)
-    if completadas == 0: _msg = "¡La primera sesión es la más importante! Hoy es el día. 💪"
-    elif porcentaje < 50: _msg = f"Buen arranque. Faltan {_faltan} sesiones, ¡a sumar! 🔥"
-    elif porcentaje < 100: _msg = f"¡Pasaste la mitad! Solo {_faltan} más para cerrar el mes. 🚀"
-    else: _msg = "¡Mes completo! Constancia de campeón. 🏆"
-    _pct_bar = max(0, min(100, porcentaje))
 
-    st.markdown(f"""
-    <div class="nob-goal">
-        <div class="nob-goal-top">
-            <b>🎯 ASISTENCIA {nombre_mes}</b>
-            <span>{completadas} de {total_rutinas} sesiones</span>
-        </div>
-        <div style="font-size: 40px; font-weight: 900; color: #fff; line-height: 1; margin-bottom: 12px;">{porcentaje}%</div>
-        <div class="nob-bar"><div style="width:{_pct_bar}%"></div></div>
-        <div class="nob-goal-msg">{_msg}</div>
-    </div>
-    """, unsafe_allow_html=True)
+def render_tarjeta_individual(row, df_seg, key_suffix, total, es_proxima=False):
+    r_id = row['id_rutina']
+    r_sesion = int(row['nro_sesion'])
+    r_texto = row['texto_rutina']
+    r_anio = row.get('anio_rutina', '')
+    r_mes = row.get('mes_rutina', '')
+    fecha = fecha_realizada(df_seg, r_id, mi_id)
+    hecha = fecha is not None
+    k = f"{r_id}_{key_suffix}"
+
+    tipo = "done" if hecha else ("prox" if es_proxima else "pend")
+    if hecha:
+        pill = f'<span class="rut-pill ok">NADADA · {fecha}</span>'
+    elif es_proxima:
+        pill = '<span class="rut-pill prox">PRÓXIMA</span>'
+    else:
+        pill = '<span class="rut-pill pend">PENDIENTE</span>'
+
+    with st.container(key=f"rut_card_{tipo}_{k}"):
+        st.markdown(f'<div class="rut-head">{pill}<span class="t">Sesión {r_sesion}</span>'
+                    f'<span class="s">de {total}</span></div>', unsafe_allow_html=True)
+        with st.container(key=f"rut_txt_{'done_' if hecha else ''}{k}"):
+            st.markdown(r_texto)
+        doc_buffer = generar_word_sexto_hoja(r_texto, f"{int(r_mes):02d}/{r_anio}", f"SESIÓN {r_sesion}")
+        with st.container(key=f"rut_acc_{k}", horizontal=True):
+            if hecha:
+                if st.button("Desmarcar", key=f"un_{k}", icon=":material/undo:", use_container_width=True):
+                    with st.spinner("Desmarcando..."):
+                        borrar_seguimiento(r_id, mi_id)
+                    st.rerun()
+            else:
+                if st.button("Día ganado", key=f"do_{k}", type="primary" if es_proxima else "secondary",
+                             icon=":material/check_circle:", use_container_width=True):
+                    with st.spinner("Guardando..."):
+                        if guardar_seguimiento(r_id, mi_id):
+                            st.toast(f"¡Excelente! Sesión {r_sesion} registrada.", icon="🏆")
+                    st.rerun()
+            st.download_button("Imprimir", data=doc_buffer, icon=":material/print:", use_container_width=True,
+                               file_name=f"Rutina_S{r_sesion}_{r_mes}_{r_anio}.docx",
+                               mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                               key=f"dl_{k}")
+
+
+def render_feed_activo(df_rut, df_seg, anio_ver, mes_ver, key_suffix=""):
+    rutinas = sesiones_del_mes(df_rut, anio_ver, mes_ver)
+    if rutinas.empty:
+        st.info(f"No hay sesiones cargadas para {obtener_nombre_mes(mes_ver)} {anio_ver}.")
+        return
+
+    total = len(rutinas)
+    hechas = rutinas['id_rutina'].map(lambda r: fecha_realizada(df_seg, r, mi_id) is not None)
+    pendientes = rutinas[~hechas]
+    completadas = rutinas[hechas]
+
+    tarjeta_progreso(len(completadas), total, anio_ver, mes_ver)
+
+    if not pendientes.empty:
+        seccion("Próxima sesión")
+        render_tarjeta_individual(pendientes.iloc[0], df_seg, key_suffix, total, es_proxima=True)
+        if len(pendientes) > 1:
+            seccion(f"Después ({len(pendientes) - 1})")
+            for _, row in pendientes.iloc[1:].iterrows():
+                render_tarjeta_individual(row, df_seg, key_suffix, total)
+
+    if not completadas.empty:
+        st.write("")
+        with st.expander(f"✅ Sesiones completadas ({len(completadas)})", expanded=pendientes.empty):
+            for _, row in completadas.iloc[::-1].iterrows():
+                render_tarjeta_individual(row, df_seg, key_suffix, total)
+
     st.write("")
+    mostrar_referencias()
 
-    # LISTADO DE SESIONES
-    st.caption(f"DETALLE DE ACTIVIDAD")
 
-    for item in lista_render:
-        if item['hecho']:
-            color = "#2E7D32" # Verde
-            icono = "✅"
-            texto_estado = "NADADO"
-            bg_badge = "#1B5E20"
+def render_historial_compacto(df_rut, df_seg, anio, mes, id_usuario_objetivo):
+    rutinas = sesiones_del_mes(df_rut, anio, mes)
+    if rutinas.empty:
+        st.info("No hay planificación cargada para este mes.")
+        return
+
+    filas, completadas = [], 0
+    for _, r in rutinas.iterrows():
+        nro = int(r["nro_sesion"])
+        fecha = fecha_realizada(df_seg, r['id_rutina'], id_usuario_objetivo)
+        if fecha is not None:
+            completadas += 1
+            filas.append(f'<div class="rut-row ok"><span class="i">✓</span><span class="n">Sesión {nro}</span>'
+                         f'<span class="rut-pill ok">NADADA</span><span class="f">{fecha}</span></div>')
         else:
-            color = "#555" # Gris
-            icono = "⭕"
-            texto_estado = "PENDIENTE"
-            bg_badge = "#444"
+            filas.append(f'<div class="rut-row"><span class="i">{nro}</span><span class="n">Sesión {nro}</span>'
+                         f'<span class="rut-pill pend">PENDIENTE</span><span class="f">–</span></div>')
 
-        st.markdown(f"""
-        <div style="
-            background-color: #262730;
-            border-radius: 6px;
-            padding: 10px 15px;
-            margin-bottom: 8px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-left: 4px solid {color};
-        ">
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <span style="font-size: 16px;">{icono}</span>
-                <span style="font-weight: 500; color: white;">Sesión {item['nro']}</span>
-            </div>
-            <div style="text-align: right;">
-                <span style="
-                    background-color: {bg_badge};
-                    color: white;
-                    padding: 3px 8px;
-                    border-radius: 4px;
-                    font-size: 10px;
-                    font-weight: bold;
-                    letter-spacing: 0.5px;
-                ">{texto_estado}</span>
-                <div style="font-size: 11px; color: #aaa; margin-top: 3px;">{item['fecha']}</div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+    tarjeta_progreso(completadas, len(rutinas), anio, mes)
+    seccion("Detalle de actividad")
+    st.markdown("".join(filas), unsafe_allow_html=True)
+
+
+def selector_periodo(df_rut, def_y, def_m, prefijo, contenedor_a=None, contenedor_m=None, anios_extra=()):
+    """Año y mes con flechas (como en Categorías). Devuelve (año, mes) o (año, None) si no hay meses."""
+    anios = sorted(set(df_rut['anio_rutina'].unique().tolist()) | set(anios_extra), reverse=True) or [datetime.now().year]
+    anio = select_flechas("Año", anios, f"{prefijo}_a", index=anios.index(def_y) if def_y in anios else 0,
+                          contenedor=contenedor_a)
+    meses = sorted(df_rut[df_rut['anio_rutina'] == anio]['mes_rutina'].unique().tolist())
+    if not meses:
+        (contenedor_m or st).warning("Sin datos")
+        return anio, None
+    # Mes por defecto: el elegido si existe en ese año; si no, el más cercano
+    if def_m in meses:
+        idx = meses.index(def_m)
+    else:
+        idx = min(range(len(meses)), key=lambda i: abs(meses[i] - def_m))
+    nombres = [obtener_nombre_mes(m) for m in meses]
+    nombre = select_flechas("Mes", nombres, f"{prefijo}_m", index=idx, contenedor=contenedor_m)
+    return anio, meses[nombres.index(nombre)]
 
 # ==========================================
+
 # 7. LÓGICA PRINCIPAL (MAIN)
 # ==========================================
 
 df_rutinas, df_seguimiento, df_nadadores = cargar_datos_rutinas_view()
 
 # --- INTERFAZ DE USUARIO ---
-from nob_ui import hero
+from nob_ui import hero, seccion, select_flechas
 hero("Sesiones de Entrenamiento", "📝")
+st.markdown(CSS_RUTINAS, unsafe_allow_html=True)
 
 # Nadadores inactivos (sin marcas este año ni el anterior) no ven las rutinas
 import actividad
@@ -589,8 +571,6 @@ if actividad.usuario_inactivo():
 if df_rutinas is None:
     st.error("No se pudieron cargar los datos. Verifica tu conexión.")
     st.stop()
-
-st.write("---")
 
 # ==========================
 # VISTA: PROFESOR (M) / ADMIN
@@ -615,8 +595,7 @@ if rol in ["M", "P"]:
              st.session_state.admin_sesion += 1
         st.session_state.forzar_avance_sesion = False
 
-    with st.expander("⚙️ Gestión de Sesiones (Crear/Editar)", expanded=False):
-        st.markdown("##### Editor de Sesiones")
+    with st.expander("⚙️ Crear o editar sesiones", expanded=False):
         
         c1, c2, c3 = st.columns([1, 1, 1])
         
@@ -639,7 +618,8 @@ if rol in ["M", "P"]:
         texto_previo = row_existente.iloc[0]['texto_rutina'] if es_edicion else ""
         
         estado_txt = "✏️ Editando Existente" if es_edicion else "✨ Nueva Sesión"
-        st.caption(f"ID: {id_busqueda} | {estado_txt}")
+        st.markdown(f'<span class="rut-pill {"ok" if es_edicion else "prox"}">{estado_txt.upper()}</span> '
+                    f'<span style="font-size:12px;color:rgba(255,255,255,0.5)">{id_busqueda}</span>', unsafe_allow_html=True)
         
         with st.form("form_rutina"):
             f_texto = st.text_area("Contenido", value=texto_previo, height=200, key=f"editor_texto_{id_busqueda}")
@@ -677,8 +657,6 @@ if rol in ["M", "P"]:
                     time.sleep(1)
                     st.rerun()
 
-    st.divider()
-
     tab_explorar, tab_seguimiento = st.tabs(["📖 Explorar Sesiones", "📊 Seguimiento Alumnos"])
     
     # --- LOGICA DE DEFAULT (PERFIL M - EXPLORAR) ---
@@ -687,86 +665,29 @@ if rol in ["M", "P"]:
 
     with tab_explorar:
         col_v1, col_v2 = st.columns(2)
-        v_anios = sorted(list(set(df_rutinas['anio_rutina'].unique().tolist() + [datetime.now().year])), reverse=True)
-        
-        idx_y_ex = v_anios.index(def_y_ex) if def_y_ex in v_anios else 0
-        with col_v1: sel_a = st.selectbox("Año", v_anios, index=idx_y_ex, key="adm_v_a")
-        
-        meses_disp_explorar = sorted(df_rutinas[df_rutinas['anio_rutina'] == sel_a]['mes_rutina'].unique().tolist())
-        
-        if not meses_disp_explorar:
-             with col_v2: st.warning("Sin datos")
-             sel_m = None
-        else:
-             mapa_meses_ex = {i: obtener_nombre_mes(i) for i in meses_disp_explorar}
-             
-             # Intentar mantener el mes por defecto si existe en la lista filtrada
-             idx_m_ex = 0
-             if def_m_ex in meses_disp_explorar:
-                 idx_m_ex = meses_disp_explorar.index(def_m_ex)
-             elif meses_disp_explorar:
-                 # Si el mes por defecto no está (ej: cambiamos de año), buscamos el más cercano en la lista
-                 target_dt = datetime(sel_a, def_m_ex, 1)
-                 avail_dt = [datetime(sel_a, m, 1) for m in meses_disp_explorar]
-                 # Reutilizamos logica simple: mas cercano
-                 closest = min(avail_dt, key=lambda x: abs(x - target_dt))
-                 idx_m_ex = meses_disp_explorar.index(closest.month)
-
-             with col_v2: sel_m = st.selectbox("Mes", meses_disp_explorar, format_func=lambda x: mapa_meses_ex[x], index=idx_m_ex, key="adm_v_m")
-        
+        sel_a, sel_m = selector_periodo(df_rutinas, def_y_ex, def_m_ex, "adm_v", col_v1, col_v2,
+                                        anios_extra=[datetime.now().year])
         if sel_m:
             render_feed_activo(df_rutinas, df_seguimiento, sel_a, sel_m, key_suffix="admin_view")
 
     # --- LOGICA DE DEFAULT (PERFIL M - SEGUIMIENTO) ---
     # Usamos la misma logica global para los defaults de tiempo
     with tab_seguimiento:
-        st.info("Seleccione un alumno para ver su cumplimiento histórico.")
-        
-        ids_activos = df_seguimiento['codnadador'].unique()
-        df_nad_activos = df_nadadores[df_nadadores['codnadador'].isin(ids_activos)].copy()
-        
-        if df_nad_activos.empty:
-            st.warning("⚠️ Aún no hay alumnos con sesiones completadas.")
-        else:
-            df_nad_activos['NombreCompleto'] = df_nad_activos['apellido'] + ", " + df_nad_activos['nombre']
-            lista_nads = df_nad_activos[['codnadador', 'NombreCompleto']].sort_values('NombreCompleto')
-            
-            col_s1, col_s2, col_s3 = st.columns([2, 1, 1])
-            with col_s1:
-                sel_nad_id = st.selectbox(
-                    "Alumno", 
-                    lista_nads['codnadador'], 
-                    format_func=lambda x: lista_nads[lista_nads['codnadador'] == x]['NombreCompleto'].values[0]
-                )
-            
-            # Aplicamos defaults calculados previamente (Global Best Period)
-            # Para Año
-            idx_y_seg = v_anios.index(def_y_ex) if def_y_ex in v_anios else 0
-            with col_s2:
-                sel_a_seg = st.selectbox("Año", v_anios, index=idx_y_seg, key="seg_a")
-            
-            meses_disp_seg = sorted(df_rutinas[df_rutinas['anio_rutina'] == sel_a_seg]['mes_rutina'].unique().tolist())
-            
-            if not meses_disp_seg:
-                 with col_s3: st.warning("Sin datos")
-                 sel_m_seg = None
-            else:
-                 mapa_meses_seg = {i: obtener_nombre_mes(i) for i in meses_disp_seg}
-                 
-                 # Lógica de índice para mes
-                 idx_m_seg = 0
-                 if def_m_ex in meses_disp_seg:
-                     idx_m_seg = meses_disp_seg.index(def_m_ex)
-                 elif meses_disp_seg:
-                     # Fallback al más cercano
-                     target_dt = datetime(sel_a_seg, def_m_ex, 1)
-                     avail_dt = [datetime(sel_a_seg, m, 1) for m in meses_disp_seg]
-                     closest = min(avail_dt, key=lambda x: abs(x - target_dt))
-                     idx_m_seg = meses_disp_seg.index(closest.month)
+        ids_con_seg = df_seguimiento['codnadador'].unique()
+        df_nad_activos = df_nadadores[df_nadadores['codnadador'].isin(ids_con_seg)].copy()
 
-                 with col_s3: sel_m_seg = st.selectbox("Mes", meses_disp_seg, format_func=lambda x: mapa_meses_seg[x], index=idx_m_seg, key="seg_m")
-                
-            st.markdown(f"**Reporte para:** {lista_nads[lista_nads['codnadador']==sel_nad_id]['NombreCompleto'].values[0]}")
+        if df_nad_activos.empty:
+            st.info("Aún no hay alumnos con sesiones completadas.")
+        else:
+            df_nad_activos['NombreCompleto'] = df_nad_activos['apellido'].astype(str).str.upper() + ", " + df_nad_activos['nombre'].astype(str)
+            lista_nads = df_nad_activos[['codnadador', 'NombreCompleto']].sort_values('NombreCompleto')
+            nombres_nads = lista_nads['NombreCompleto'].tolist()
+
+            sel_nombre = select_flechas("Alumno", nombres_nads, "seg_alumno")
+            sel_nad_id = lista_nads[lista_nads['NombreCompleto'] == sel_nombre]['codnadador'].values[0]
+            col_s2, col_s3 = st.columns(2)
+            sel_a_seg, sel_m_seg = selector_periodo(df_rutinas, def_y_ex, def_m_ex, "seg", col_s2, col_s3,
+                                                    anios_extra=[datetime.now().year])
             if sel_m_seg:
                 render_historial_compacto(df_rutinas, df_seguimiento, sel_a_seg, sel_m_seg, sel_nad_id)
 
@@ -774,55 +695,17 @@ if rol in ["M", "P"]:
 # VISTA: NADADOR (N)
 # ==========================
 else:
-    tab_curso, tab_hist = st.tabs(["📅 Mes en Curso", "📜 Historial"])
-    
+    tab_curso, tab_hist = st.tabs(["📅 Mes en curso", "📜 Historial"])
+
     with tab_curso:
-        hoy = datetime.now()
-        
-        st.markdown(f"### Sesiones de {obtener_nombre_mes(hoy.month)} {hoy.year}")
+        hoy = datetime.now(timezone.utc) - timedelta(hours=3)  # hora de Argentina, como en Inicio
         render_feed_activo(df_rutinas, df_seguimiento, hoy.year, hoy.month, key_suffix="nad_curso")
-        
+
     with tab_hist:
-        st.markdown("#### Registro de Cumplimiento")
-        
-        # --- LOGICA DE DEFAULT (PERFIL N - HISTORIAL) ---
-        # 1. Obtener períodos disponibles GLOBALMENTE en rutinas
+        # Por defecto: el mes con rutinas más cercano a hoy
         unique_periods_n = df_rutinas[['anio_rutina', 'mes_rutina']].drop_duplicates().values.tolist()
-        
-        # 2. Calcular mejor fecha
         def_y_n, def_m_n = get_periodo_mas_cercano(datetime.now(), unique_periods_n)
-
         c_h1, c_h2 = st.columns(2)
-        anios_disp = sorted(list(set(df_rutinas['anio_rutina'].unique())), reverse=True)
-        if not anios_disp: anios_disp = [datetime.now().year]
-        
-        # Índice año default
-        idx_y_n = anios_disp.index(def_y_n) if def_y_n in anios_disp else 0
-        
-        with c_h1: h_anio = st.selectbox("Año", anios_disp, index=idx_y_n, key="h_a")
-        
-        meses_en_anio = sorted(df_rutinas[df_rutinas['anio_rutina'] == h_anio]['mes_rutina'].unique().tolist())
-        
-        if not meses_en_anio:
-            with c_h2: 
-                st.warning("Sin datos.")
-                h_mes = None
-        else:
-            mapa_meses = {i: obtener_nombre_mes(i) for i in meses_en_anio}
-            
-            # Índice mes default
-            idx_m_n = 0
-            if def_m_n in meses_en_anio:
-                idx_m_n = meses_en_anio.index(def_m_n)
-            elif meses_en_anio:
-                 # Fallback inteligente
-                 target_dt = datetime(h_anio, def_m_n, 1)
-                 avail_dt = [datetime(h_anio, m, 1) for m in meses_en_anio]
-                 closest = min(avail_dt, key=lambda x: abs(x - target_dt))
-                 idx_m_n = meses_en_anio.index(closest.month)
-
-            with c_h2: 
-                h_mes = st.selectbox("Mes", meses_en_anio, format_func=lambda x: mapa_meses[x], index=idx_m_n, key="h_m")
-            
+        h_anio, h_mes = selector_periodo(df_rutinas, def_y_n, def_m_n, "h", c_h1, c_h2)
         if h_mes:
             render_historial_compacto(df_rutinas, df_seguimiento, h_anio, h_mes, mi_id)
