@@ -320,6 +320,84 @@ def aplicar_tema():
         .nob-chip .v { font-size: 22px; font-weight: 800; color: #fff; }
         .nob-chip .l { font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: rgba(255,255,255,0.5); }
 
+        /* ---------- Perfil interactivo (Inicio) ---------- */
+        .st-key-nob_profile {
+            padding: 16px 18px; border-radius: 18px; margin-bottom: 4px;
+            background: linear-gradient(160deg, rgba(255,255,255,0.06), rgba(255,255,255,0.015));
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+        .st-key-nob_profile [data-testid="stHorizontalBlock"],
+        .st-key-nob_medals [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; }
+        .st-key-nob_profile [data-testid="stColumn"],
+        .st-key-nob_medals [data-testid="stColumn"] { min-width: 0 !important; }
+        .st-key-nob_profile [data-testid="stColumn"]:first-child { flex: 0 0 auto !important; width: auto !important; }
+        .st-key-nob_profile [data-testid="stColumn"]:last-child { flex: 0 0 auto !important; width: auto !important; }
+
+        /* Nombre como enlace a la ficha */
+        .st-key-btn_nombre_perfil button {
+            background: none !important; border: none !important; box-shadow: none !important;
+            padding: 0 !important; min-height: 0 !important; justify-content: flex-start !important;
+            transform: none !important;
+        }
+        .st-key-btn_nombre_perfil button p {
+            font-size: 19px !important; font-weight: 800 !important; color: #fff; text-align: left;
+            line-height: 1.2;
+        }
+        .st-key-btn_nombre_perfil button p::after {
+            content: "  →"; color: #FF4D57; font-weight: 700; opacity: .0; transition: opacity .15s;
+        }
+        .st-key-btn_nombre_perfil button:hover p { color: #FF4D57 !important; }
+        .st-key-btn_nombre_perfil button:hover p::after { opacity: 1; }
+        .st-key-btn_nombre_perfil [data-testid="stTooltipHoverTarget"] { justify-content: flex-start; }
+
+        /* Medallas como tarjetas clicables */
+        .st-key-nob_medals button {
+            flex-direction: column !important; gap: 2px;
+            min-height: 74px !important; border-radius: 16px !important;
+        }
+        .st-key-nob_medals button p { font-size: 22px !important; font-weight: 900 !important; color: #fff; }
+        .st-key-nob_medals button::after {
+            font-size: 10px; letter-spacing: 1.4px; font-weight: 700; color: rgba(255,255,255,0.5);
+        }
+        .st-key-med_oro button    { background: rgba(255,215,0,0.07) !important;  border-color: rgba(255,215,0,0.35) !important; }
+        .st-key-med_plata button  { background: rgba(200,200,200,0.06) !important; border-color: rgba(200,200,200,0.30) !important; }
+        .st-key-med_bronce button { background: rgba(205,127,50,0.07) !important; border-color: rgba(205,127,50,0.35) !important; }
+        .st-key-med_total button  { background: rgba(227,6,19,0.10) !important;   border-color: rgba(227,6,19,0.40) !important; }
+        .st-key-med_oro button::after    { content: "OROS"; }
+        .st-key-med_plata button::after  { content: "PLATAS"; }
+        .st-key-med_bronce button::after { content: "BRONCES"; }
+        .st-key-med_total button::after  { content: "PODIOS"; }
+        .st-key-nob_medals button:hover { transform: translateY(-2px); box-shadow: 0 10px 22px rgba(0,0,0,0.35); }
+        .nob-hint { font-size: 11px; color: rgba(255,255,255,0.38); text-align: center; margin: -4px 0 14px; }
+
+        /* Vista rápida: podios y mejores marcas */
+        .nob-rec {
+            display: flex; align-items: center; gap: 12px;
+            padding: 10px 14px; margin-bottom: 8px; border-radius: 14px;
+            background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.07);
+            border-left: 3px solid rgba(255,255,255,0.2);
+        }
+        .nob-rec.m1 { border-left-color: #FFD700; }
+        .nob-rec.m2 { border-left-color: #C8C8C8; }
+        .nob-rec.m3 { border-left-color: #CD7F32; }
+        .nob-rec-med { font-size: 24px; }
+        .nob-rec-body { flex: 1; min-width: 0; }
+        .nob-rec-t { font-size: 15px; font-weight: 700; color: #fff; }
+        .nob-rec-m { font-size: 12px; color: rgba(255,255,255,0.55); margin-top: 2px; }
+        .nob-rec-time { font-family: ui-monospace, 'JetBrains Mono', monospace; font-size: 17px; font-weight: 800; color: #fff; }
+        .nob-rec-tag {
+            margin-left: 6px; padding: 1px 7px; border-radius: 999px; font-size: 10px; font-weight: 700;
+            background: rgba(227,6,19,0.18); color: #FF6A72; border: 1px solid rgba(227,6,19,0.4); vertical-align: middle;
+        }
+        .nob-pb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+        .nob-pb {
+            padding: 12px 14px; border-radius: 14px;
+            background: linear-gradient(160deg, rgba(227,6,19,0.12), rgba(227,6,19,0.02));
+            border: 1px solid rgba(227,6,19,0.25);
+        }
+        .nob-pb .k { font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: rgba(255,255,255,0.6); }
+        .nob-pb .v { font-family: ui-monospace, 'JetBrains Mono', monospace; font-size: 19px; font-weight: 800; color: #fff; margin-top: 4px; }
+
         /* Tarjetas de resumen (Inicio) */
         .nob-duo { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
         .nob-duo .nob-goal { margin-bottom: 0; }
