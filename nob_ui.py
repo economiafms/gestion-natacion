@@ -362,11 +362,45 @@ def aplicar_tema():
         .st-key-med_oro button    { background: rgba(255,215,0,0.07) !important;  border-color: rgba(255,215,0,0.35) !important; }
         .st-key-med_plata button  { background: rgba(200,200,200,0.06) !important; border-color: rgba(200,200,200,0.30) !important; }
         .st-key-med_bronce button { background: rgba(205,127,50,0.07) !important; border-color: rgba(205,127,50,0.35) !important; }
-        .st-key-med_total button  { background: rgba(227,6,19,0.10) !important;   border-color: rgba(227,6,19,0.40) !important; }
         .st-key-med_oro button::after    { content: "OROS"; }
         .st-key-med_plata button::after  { content: "PLATAS"; }
         .st-key-med_bronce button::after { content: "BRONCES"; }
-        .st-key-med_total button::after  { content: "PODIOS"; }
+        /* Total de podios: tarjeta informativa (sin acción) */
+        .nob-med-info {
+            min-height: 74px; border-radius: 16px; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; gap: 2px;
+            background: rgba(227,6,19,0.10); border: 1px dashed rgba(227,6,19,0.40);
+        }
+        .nob-med-info .v { font-size: 22px; font-weight: 900; color: #fff; line-height: 1.3; }
+        .nob-med-info .l { font-size: 10px; letter-spacing: 1.4px; font-weight: 700; color: rgba(255,255,255,0.5); text-transform: uppercase; }
+
+        /* Estilos frecuentes: botón + datos informativos unidos en una tarjeta */
+        .st-key-nob_estilos [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; }
+        .st-key-nob_estilos [data-testid="stColumn"] { min-width: 0 !important; }
+        .st-key-nob_estilos [data-testid="stColumn"] [data-testid="stVerticalBlock"] { gap: 0 !important; }
+        .st-key-nob_estilos button {
+            border-radius: 14px 14px 0 0 !important; min-height: 46px !important;
+            border-bottom: none !important; background: rgba(255,255,255,0.05) !important;
+        }
+        .st-key-nob_estilos button p { font-size: 15px !important; text-transform: uppercase; letter-spacing: 1px; }
+        .st-key-nob_estilos button p::after { content: "  ›"; color: #FF4D57; }
+        .nob-est-chip {
+            display: flex; justify-content: center; gap: 14px;
+            padding: 8px 10px 10px; border-radius: 0 0 14px 14px;
+            background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.12); border-top: 1px dashed rgba(255,255,255,0.08);
+            font-size: 12px; color: rgba(255,255,255,0.55);
+        }
+        .nob-est-chip b { color: #fff; font-size: 14px; }
+
+        /* Encabezado del detalle por estilo */
+        .nob-est-head {
+            padding: 14px 16px; border-radius: 16px; margin-bottom: 6px;
+            background: linear-gradient(135deg, rgba(227,6,19,0.16), rgba(227,6,19,0.03));
+            border: 1px solid rgba(227,6,19,0.30);
+        }
+        .nob-est-name { font-size: 22px; font-weight: 900; color: #fff; text-transform: uppercase; letter-spacing: .5px; }
+        .nob-est-info { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 6px; font-size: 13px; color: rgba(255,255,255,0.65); }
+        .nob-est-info b { color: #fff; }
         .st-key-nob_medals button:hover { transform: translateY(-2px); box-shadow: 0 10px 22px rgba(0,0,0,0.35); }
         .nob-hint { font-size: 11px; color: rgba(255,255,255,0.38); text-align: center; margin: -4px 0 14px; }
 
@@ -388,6 +422,11 @@ def aplicar_tema():
         .nob-rec-tag {
             margin-left: 6px; padding: 1px 7px; border-radius: 999px; font-size: 10px; font-weight: 700;
             background: rgba(227,6,19,0.18); color: #FF6A72; border: 1px solid rgba(227,6,19,0.4); vertical-align: middle;
+        }
+        .nob-rec-tag.pb { background: rgba(255,215,0,0.12); color: #FFD54F; border-color: rgba(255,215,0,0.4); }
+        .nob-rec-pos {
+            display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%;
+            font-size: 12px; font-weight: 800; color: rgba(255,255,255,0.7); background: rgba(255,255,255,0.06);
         }
         .nob-pb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
         .nob-pb {
