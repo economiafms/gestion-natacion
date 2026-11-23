@@ -1,4 +1,4 @@
-streamlit
+streamlit>=1.67
 pandas
 st-gsheets-connection
 plotly

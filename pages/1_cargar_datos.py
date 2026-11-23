@@ -19,7 +19,8 @@ if not st.session_state.get("admin_unlocked", False):
     st.stop()
 # ==========================================
 
-st.title("📥 Panel de Carga y Gestión")
+from nob_ui import hero
+hero("Panel de Carga y Gestión", "⚙️", "Administración de nadadores, tiempos y relevos.", saludar=False)
 
 conn = st.connection("gsheets", type=GSheetsConnection)
 

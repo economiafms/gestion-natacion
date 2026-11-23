@@ -11,7 +11,8 @@ st.set_page_config(page_title="Simulador Pro - NOB", layout="wide")
 if "role" not in st.session_state or not st.session_state.role:
     st.switch_page("index.py")
 
-st.markdown("<h3 style='text-align: center; color: #E30613;'>🔴⚫ SIMULADOR DE ESTRATEGIA - NOB</h3>", unsafe_allow_html=True)
+from nob_ui import hero
+hero("Simulador de Estrategia", "⏱️", "Armá la posta perfecta con datos reales.")
 
 conn = st.connection("gsheets", type=GSheetsConnection)
 

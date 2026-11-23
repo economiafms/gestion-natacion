@@ -387,8 +387,8 @@ if df_tiempos is not None and not df_tiempos.empty:
     df_t_global['segundos'] = df_t_global['tiempo'].apply(lambda x: tiempo_a_seg(x) if pd.notnull(x) else 9999.0)
     df_t_global['codnadador'] = pd.to_numeric(df_t_global['codnadador'], errors='coerce').fillna(0).astype(int)
 
-st.title("📅 Agenda de Torneos")
-st.markdown(f"Usuario: **{mi_nombre}**")
+from nob_ui import hero
+hero("Agenda de Torneos", "📅")
 
 if "flash_msg" in st.session_state:
     msg = st.session_state.flash_msg

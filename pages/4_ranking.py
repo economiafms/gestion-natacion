@@ -11,7 +11,8 @@ if "role" not in st.session_state or st.session_state.role not in ["M", "P"]:
     st.warning("⚠️ Acceso restringido.")
     st.switch_page("pages/1_inicio.py")
 
-st.title("🏆 Ranking Histórico")
+from nob_ui import hero
+hero("Ranking Histórico", "🏆", "Los mejores tiempos de la historia del club.")
 
 conn = st.connection("gsheets", type=GSheetsConnection)
 

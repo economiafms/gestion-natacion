@@ -16,7 +16,8 @@ rol = st.session_state.role
 mi_id = st.session_state.user_id 
 mi_nombre = st.session_state.user_name
 
-st.title("🏆 Ranking por Categoría")
+from nob_ui import hero
+hero("Mi Categoría", "🏅")
 
 # --- CSS PERSONALIZADO ---
 st.markdown("""

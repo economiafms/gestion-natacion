@@ -1,0 +1,12 @@
+# Caché de Python (se genera sola al ejecutar)
+__pycache__/
+*.pyc
+
+# Credenciales de Streamlit / Google Sheets: NUNCA subir
+.streamlit/secrets.toml
+
+# Entornos virtuales y archivos del sistema
+.venv/
+venv/
+.DS_Store
+Thumbs.db

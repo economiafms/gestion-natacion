@@ -42,7 +42,8 @@ def fmt_mm_ss(seconds):
     c = int(round((seconds - int(seconds)) * 100))
     return f"{m:02d}:{s:02d}.{c:02d}"
 
-st.title("⏱️ Centro de Entrenamiento")
+from nob_ui import hero
+hero("Centro de Entrenamiento", "🏋️")
 
 # --- CSS PERSONALIZADO ---
 st.markdown("""
