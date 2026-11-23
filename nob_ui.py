@@ -699,6 +699,32 @@ def aplicar_tema():
         .nob-pb-est { margin: 10px 0 6px; font-size: 12px; font-weight: 800; letter-spacing: 1px;
                       text-transform: uppercase; color: #FF4D57; }
         .nob-pad { margin-bottom: 0 !important; flex: 1; min-width: 0; }
+        /* ---------- Ficha técnica ---------- */
+        /* Mejores marcas: tarjetas tocables (botón invisible encima) con mejora y comparación con su categoría */
+        [class*="st-key-pbgrid_"] { gap: 8px !important; margin-bottom: 4px; }
+        [class*="st-key-pbt_"] { position: relative; width: 168px !important; flex: 0 0 168px !important; gap: 0 !important; }
+        [class*="st-key-pbt_"] > [data-testid="stElementContainer"]:has(button) {
+            position: absolute !important; inset: 0; width: 100% !important; z-index: 2; margin: 0 !important;
+        }
+        [class*="st-key-pbt_"] [data-testid="stButton"], [class*="st-key-pbt_"] button {
+            width: 100% !important; height: 100% !important; min-height: 100% !important;
+        }
+        [class*="st-key-pbt_"] button { opacity: 0 !important; cursor: pointer; }
+        [class*="st-key-pbt_"]:hover .nob-pb { border-color: rgba(227,6,19,0.6); }
+        .nob-pb-x { height: 100%; }
+        .nob-pb-x .f { margin-top: 4px; font-size: 11px; color: rgba(255,255,255,0.55); }
+        .nob-pb-x .f .up { color: #6FDB74; font-weight: 700; margin-left: 4px; }
+        .nob-pb-x .f .eq { color: rgba(255,255,255,0.45); margin-left: 4px; }
+        .nob-pb-x .cmp { display: block; margin-top: 4px; font-size: 11px; color: rgba(255,255,255,0.7); }
+        .nob-kpis b.up { color: #6FDB74; }
+        @media (max-width: 520px) {
+            [class*="st-key-pbt_"] { width: calc(50% - 4px) !important; flex: 0 0 calc(50% - 4px) !important; }
+        }
+        /* Selector de nadador del manager: ← lista →, en una fila */
+        .st-key-ficha_selector { flex-wrap: nowrap !important; margin-bottom: 8px; }
+        .st-key-ficha_selector > [data-testid="stElementContainer"]:has([data-testid="stSelectbox"]) { flex: 1 1 auto; min-width: 0; }
+        .st-key-ficha_selector button { min-height: 42px !important; min-width: 42px; padding: 0 8px !important; border-radius: 12px !important; }
+
         /* Padrón: toda la tarjeta es tocable (un botón invisible la cubre) */
         [class*="st-key-pad_"] { position: relative; margin-bottom: 8px; flex-wrap: nowrap !important; }
         [class*="st-key-pad_"] > [data-testid="stElementContainer"]:first-child { flex: 1 1 auto; min-width: 0; }
