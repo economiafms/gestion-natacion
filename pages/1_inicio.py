@@ -813,38 +813,6 @@ if db and st.session_state.user_id:
                                  help=f"Ver mejores marcas e historial de {estilo}"):
                         dialogo_estilo(estilo)
     
-    # =================================================================
-    # 3. ACCESOS RÁPIDOS (LÓGICA POR ROL)
-    # =================================================================
-    seccion("Accesos rápidos")
-
-    if st.session_state.role == "N":
-        accesos = [
-            ("⏱️ Entrenamientos", "pages/5_entrenamientos.py", "btn_train_N"),
-            ("🏅 Mi Categoría", "pages/6_mi_categoria.py", "btn_cat_N"),
-            ("📝 Rutinas", "pages/8_rutinas.py", "btn_rut_N"),
-            ("📅 Agenda", "pages/7_agenda.py", "btn_ag_N"),
-        ]
-    else:
-        accesos = [
-            ("🗃️ Fichero", "pages/2_visualizar_datos.py", "btn_bd_M"),
-            ("🏆 Ranking", "pages/4_ranking.py", "btn_rk_M"),
-            ("⏱️ Entrenamientos", "pages/5_entrenamientos.py", "btn_train_M"),
-            ("🏅 Mi Categoría", "pages/6_mi_categoria.py", "btn_cat_M"),
-            ("📝 Rutinas", "pages/8_rutinas.py", "btn_rut_M"),
-            ("📅 Agenda", "pages/7_agenda.py", "btn_ag_M"),
-            ("🏊 Simulador Postas", "pages/3_simulador.py", "btn_sim_M"),
-        ]
-
-    for i in range(0, len(accesos), 2):
-        cols = st.columns(2)
-        for col, (label, destino, key) in zip(cols, accesos[i:i + 2]):
-            with col:
-                if st.button(label, use_container_width=True, key=key):
-                    if key == "btn_bd_M":
-                        st.session_state.ver_nadador_especifico = None
-                    st.switch_page(destino)
-
     # // 2️⃣ Estadísticas del club
     seccion("El club en números")
 
