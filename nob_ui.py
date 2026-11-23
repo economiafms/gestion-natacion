@@ -737,6 +737,25 @@ def aplicar_tema():
             [data-testid="stTab"] { flex: 1 1 0 !important; min-width: 0 !important; padding: 6px 4px !important; justify-content: center; }
             [data-testid="stTab"] p { font-size: 12.5px !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         }
+        /* Ficha original: cada mejor marca es tocable (botón invisible encima, mismo aspecto) */
+        [class*="st-key-pbo_"] { position: relative; gap: 0 !important; }
+        [class*="st-key-pbo_"] > [data-testid="stElementContainer"]:has(button) {
+            position: absolute !important; inset: 0; width: 100% !important; z-index: 2; margin: 0 !important;
+        }
+        [class*="st-key-pbo_"] [data-testid="stButton"], [class*="st-key-pbo_"] button {
+            width: 100% !important; height: 100% !important; min-height: 100% !important;
+        }
+        [class*="st-key-pbo_"] button { opacity: 0 !important; cursor: pointer; }
+        [class*="st-key-pbo_"]:hover .pb-row { background: rgba(227,6,19,0.10) !important; }
+        /* Ventana "Detalle de la mejor marca" */
+        .nob-mm-time { margin-top: 6px; font-family: ui-monospace, 'JetBrains Mono', monospace; font-size: 30px; font-weight: 900; color: #fff; }
+        .nob-mm-frases { display: flex; flex-direction: column; gap: 8px; margin: 12px 0 4px; }
+        .nob-mm-frases > div {
+            padding: 10px 12px; border-radius: 12px; font-size: 14px; line-height: 1.4; color: rgba(255,255,255,0.85);
+            background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.07);
+        }
+        .nob-mm-frases b { color: #fff; }
+
         /* Selector de nadador del manager: ← lista →, en una fila */
         .st-key-ficha_selector { flex-wrap: nowrap !important; margin-bottom: 8px; }
         .st-key-ficha_selector > [data-testid="stElementContainer"]:has([data-testid="stSelectbox"]) { flex: 1 1 auto; min-width: 0; }

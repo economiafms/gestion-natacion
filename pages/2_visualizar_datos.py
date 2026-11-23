@@ -184,6 +184,96 @@ df_view['Total'] = df_view['Oro'] + df_view['Plata'] + df_view['Bronce']
 #  FUNCIONES REUTILIZABLES
 # ==============================================================================
 
+def _cat_actual_de(cod):
+    anio = dict_id_anionac.get(cod, 0)
+    return asignar_cat(datetime.now().year - anio) if anio else "-"
+
+
+@st.dialog("Detalle de la mejor marca", width="large")
+def dialogo_marca(target_id, estilo, distancia):
+    """Al tocar una mejor marca: sus registros, cuánto mejoró y cómo está en su categoría."""
+    d = df_full[(df_full['codnadador'] == target_id) & (df_full['Estilo'] == estilo) & (df_full['Distancia'] == distancia)].copy()
+    d['segundos'] = d['tiempo'].apply(tiempo_a_segundos)
+    d['fecha_dt'] = pd.to_datetime(d['fecha'], errors='coerce')
+    d = d.dropna(subset=['segundos']).sort_values('fecha_dt')
+    if d.empty:
+        st.caption("Sin registros.")
+        return
+    pb = d.loc[d['segundos'].idxmin()]
+    sede_pb = f"{pb.get('sede', '-')} ({pb.get('medida', '-')})"
+
+    st.markdown(f"""<div class="nob-est-head">
+<div class="nob-est-name">{html.escape(f"{distancia} {estilo}")}</div>
+<div class="nob-mm-time">{html.escape(str(pb['tiempo']))}</div>
+<div class="nob-est-desc">Mejor marca · {html.escape(_fecha_txt(pb['fecha']))} · {html.escape(sede_pb)}</div>
+</div>""", unsafe_allow_html=True)
+
+    # Progreso del nadador en la prueba (en frases claras)
+    frases = []
+    previas = d[d['fecha_dt'] < pb['fecha_dt']]
+    ant = None
+    if not previas.empty:
+        ant = previas['segundos'].min()
+        frases.append(f"⬇️ Mejoró <b>{ant - pb['segundos']:.2f} s</b> respecto de su marca anterior ({seg_a_tiempo(ant)}).")
+    else:
+        frases.append("⭐ Es su primera marca registrada en esta prueba.")
+    if len(d) > 1:
+        dif_1 = d['segundos'].iloc[0] - pb['segundos']
+        # Solo si aporta algo distinto a la frase anterior (la 1ª carrera no fue la marca anterior)
+        if dif_1 > 0 and (ant is None or d['segundos'].iloc[0] != ant):
+            frases.append(f"📉 Desde su primera carrera ({seg_a_tiempo(d['segundos'].iloc[0])}) bajó <b>{dif_1:.2f} s</b>.")
+        frases.append(f"⏱️ Nadó esta prueba <b>{len(d)}</b> veces, con un promedio de <b>{seg_a_tiempo(d['segundos'].mean())}</b>.")
+
+    # Comparación con su categoría y género (mejores marcas de cada nadador en la misma prueba)
+    todos = df_full[(df_full['Estilo'] == estilo) & (df_full['Distancia'] == distancia)][['codnadador', 'tiempo']].copy()
+    todos['segundos'] = todos['tiempo'].apply(tiempo_a_segundos)
+    todos = todos.dropna(subset=['segundos']).groupby('codnadador', as_index=False)['segundos'].min()
+    mi_cat = _cat_actual_de(target_id)
+    generos = df_nad.set_index('codnadador')['codgenero']
+    mi_gen = generos.get(target_id)
+    gen_txt = {"F": "Femenino", "M": "Masculino"}.get(str(mi_gen).strip().upper(), str(mi_gen))
+    de_cat = todos[todos['codnadador'].map(lambda c: _cat_actual_de(c) == mi_cat and generos.get(c) == mi_gen)]
+    otros = de_cat[de_cat['codnadador'] != target_id]
+    if otros.empty:
+        frases.append(f"👥 No hay otros nadadores de su categoría ({mi_cat} · {gen_txt}) con esta prueba para comparar.")
+    else:
+        prom = otros['segundos'].mean()
+        dif = pb['segundos'] - prom
+        sentido = "más rápido" if dif < 0 else "más lento"
+        frases.append(f"👥 En su categoría ({mi_cat} · {gen_txt}) el promedio de las mejores marcas es "
+                      f"<b>{seg_a_tiempo(prom)}</b>: está <b>{abs(dif):.2f} s {sentido}</b>.")
+        puesto = int((de_cat['segundos'] < pb['segundos']).sum()) + 1
+        frases.append(f"🏅 Es <b>{puesto}° de {len(de_cat)}</b> en su categoría en esta prueba.")
+
+    st.markdown('<div class="nob-mm-frases">' + "".join(f"<div>{f}</div>" for f in frases) + "</div>",
+                unsafe_allow_html=True)
+
+    # Todos los registros de la prueba (el más reciente primero)
+    seccion(f"Registros · {len(d)}")
+    filas = []
+    for _, r in d.sort_values('fecha_dt', ascending=False).iterrows():
+        try: pos = int(r['posicion'])
+        except Exception: pos = 0
+        icono = {1: "🥇", 2: "🥈", 3: "🥉"}.get(pos, f'<span class="nob-rec-pos">{pos}°</span>' if pos > 0 else '<span class="nob-rec-pos">–</span>')
+        tag = '<span class="nob-rec-tag pb">MEJOR MARCA</span>' if r['segundos'] == pb['segundos'] else ""
+        filas.append(
+            f'<div class="nob-rec m{pos if pos in (1, 2, 3) else 0}"><div class="nob-rec-med">{icono}</div>'
+            f'<div class="nob-rec-body"><div class="nob-rec-t">{html.escape(_fecha_txt(r["fecha"]))} {tag}</div>'
+            f'<div class="nob-rec-m">{html.escape(str(r.get("sede", "-")))} ({html.escape(str(r.get("medida", "-")))})</div></div>'
+            f'<div class="nob-rec-time">{html.escape(str(r["tiempo"]))}</div></div>')
+    st.markdown("".join(filas), unsafe_allow_html=True)
+
+    st.write("")
+    with st.container(key="pie_dlg_marca"):
+        if st.button("← Volver", key="dlg_marca_volver", use_container_width=True):
+            st.rerun()
+
+
+def _fecha_txt(valor):
+    try: return pd.to_datetime(valor).strftime('%d/%m/%Y')
+    except Exception: return str(valor)
+
+
 def render_tab_ficha(target_id, unique_key_suffix=""):
     if not target_id: return
 
@@ -222,181 +312,195 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
     """, unsafe_allow_html=True)
 
     mis_t = df_full[df_full['codnadador'] == target_id].copy()
+    mis_t['segundos'] = mis_t['tiempo'].apply(tiempo_a_segundos)
 
-    # --- MEJORES MARCAS ---
+    # --- MEJORES MARCAS (mismo diseño; al tocar una se abre su detalle) ---
     if not mis_t.empty:
         st.subheader("✨ Mejores Marcas (PB)")
-        mis_t['segundos'] = mis_t['tiempo'].apply(tiempo_a_segundos)
-        pbs = mis_t.loc[mis_t.groupby(['Estilo', 'Distancia'])['segundos'].idxmin()].sort_values(['Estilo', 'segundos'])
-        
-        for estilo in pbs['Estilo'].unique():
-            st.markdown(f"<div class='pb-style-header'>{estilo}</div>", unsafe_allow_html=True)
-            for _, r in pbs[pbs['Estilo'] == estilo].iterrows():
-                st.markdown(f"""
-                <div class="pb-row">
-                    <span class="pb-dist">{r['Distancia']}</span>
-                    <span class="pb-time">{r['tiempo']}</span>
-                </div>""", unsafe_allow_html=True)
-        st.divider()
+        pbs = mis_t.loc[mis_t.dropna(subset=['segundos']).groupby(['Estilo', 'Distancia'])['segundos'].idxmin()].sort_values(['Estilo', 'segundos'])
 
-        # --- GRÁFICO (MODIFICADO: Sin Media Móvil, con Promedio en Subtítulo) ---
-        conteo = mis_t.groupby(['Estilo', 'Distancia']).size().reset_index(name='count')
+        for ie, estilo in enumerate(pbs['Estilo'].unique()):
+            st.markdown(f"<div class='pb-style-header'>{estilo}</div>", unsafe_allow_html=True)
+            for idist, (_, r) in enumerate(pbs[pbs['Estilo'] == estilo].iterrows()):
+                with st.container(key=f"pbo_{unique_key_suffix}_{target_id}_{ie}_{idist}"):
+                    st.markdown(f"""
+                    <div class="pb-row">
+                        <span class="pb-dist">{r['Distancia']}</span>
+                        <span class="pb-time">{r['tiempo']}</span>
+                    </div>""", unsafe_allow_html=True)
+                    if st.button(f"Detalle {r['Distancia']} {estilo}", key=f"pbo_btn_{unique_key_suffix}_{target_id}_{ie}_{idist}"):
+                        dialogo_marca(target_id, estilo, r['Distancia'])
+        st.caption("Tocá una marca para ver sus registros, cuánto mejoró y cómo está en su categoría.")
+
+    tab_evo, tab_his, tab_rel = st.tabs(["📈 Evolución", "📜 Historial", "🏊‍♂️ Mis relevos"])
+
+    # --- EVOLUCIÓN ---
+    with tab_evo:
+        conteo = mis_t.dropna(subset=['segundos']).groupby(['Estilo', 'Distancia']).size().reset_index(name='count')
         validos = conteo[conteo['count'] >= 2]
-        
+
         if not validos.empty:
-            st.subheader(f"📈 Evolución de Tiempos - {info['nombre']} {info['apellido']}")
-            
+            # Arranca en la prueba más nadada
+            top = validos.sort_values('count', ascending=False).iloc[0]
             c1, c2 = st.columns(2)
             estilos_ok = sorted(validos['Estilo'].unique())
-            g_est = c1.selectbox("Estilo Gráfico", estilos_ok, key=f"g_est{unique_key_suffix}")
-            
+            g_est = c1.selectbox("Estilo Gráfico", estilos_ok, index=estilos_ok.index(top['Estilo']), key=f"g_est{unique_key_suffix}")
+
             dist_ok = sorted(validos[validos['Estilo'] == g_est]['Distancia'].unique())
-            g_dist = c2.selectbox("Distancia Gráfico", dist_ok, key=f"g_dist{unique_key_suffix}")
-            
-            df_graph = mis_t[(mis_t['Estilo'] == g_est) & (mis_t['Distancia'] == g_dist)].sort_values('fecha')
-            
-            # Calcular Promedio
+            idx_dist = dist_ok.index(top['Distancia']) if (g_est == top['Estilo'] and top['Distancia'] in dist_ok) else 0
+            g_dist = c2.selectbox("Distancia Gráfico", dist_ok, index=idx_dist, key=f"g_dist{unique_key_suffix}")
+
+            df_graph = mis_t[(mis_t['Estilo'] == g_est) & (mis_t['Distancia'] == g_dist)].dropna(subset=['segundos']).copy()
+            df_graph['fecha_dt'] = pd.to_datetime(df_graph['fecha'], errors='coerce')
+            df_graph = df_graph.sort_values('fecha_dt')
+
+            # Datos de la prueba: mejor marca, promedio y mejora desde la primera carrera
+            mejor_seg = df_graph['segundos'].min()
             promedio_seg = df_graph['segundos'].mean()
-            tiempo_promedio = seg_a_tiempo(promedio_seg)
-            
-            st.markdown(f"**⏱️ Tiempo Promedio:** {tiempo_promedio}")
+            mejora = df_graph['segundos'].iloc[0] - mejor_seg
+            st.markdown(f"""<div class="nob-kpis">
+<div><b>{seg_a_tiempo(mejor_seg)}</b><small>Mejor marca</small></div>
+<div><b>{seg_a_tiempo(promedio_seg)}</b><small>Tiempo promedio</small></div>
+<div><b class="{'up' if mejora > 0 else ''}">{f'↓ {mejora:.2f}s' if mejora > 0 else '—'}</b><small>Mejora desde la 1ª carrera</small></div>
+</div>""", unsafe_allow_html=True)
 
             # Calcular categoría histórica para tooltip
-            df_graph['fecha_dt'] = pd.to_datetime(df_graph['fecha'])
             if anio_nacimiento_nadador > 0:
                 df_graph['cat_hist'] = df_graph['fecha_dt'].apply(lambda x: asignar_cat(x.year - anio_nacimiento_nadador))
             else: df_graph['cat_hist'] = "-"
 
             # Eje Y: Tiempo (Fake date para plot)
             df_graph['TimeObj'] = pd.to_datetime('2024-01-01') + pd.to_timedelta(df_graph['segundos'], unit='s')
-            
+
             fig = px.line(df_graph, x='fecha', y='TimeObj', markers=True, template="plotly_dark",
                           hover_data={
                               'fecha': False, 'TimeObj': False,
                               'sede': True, 'Distancia': True, 'cat_hist': True, 'tiempo': True
                           })
-            
+
             fig.update_traces(line_color='#E53935', name="Registro",
                               hovertemplate="<b>%{customdata[3]}</b><br>📅 %{x|%d/%m/%Y}<br>📍 %{customdata[0]}<br>🏷️ %{customdata[2]}")
-            
+            # Línea de referencia: mejor marca
+            fig.add_hline(y=pd.to_datetime('2024-01-01') + pd.to_timedelta(mejor_seg, unit='s'),
+                          line_dash="dash", line_color="#FFD54F", opacity=0.8,
+                          annotation_text=f"Mejor marca {seg_a_tiempo(mejor_seg)}", annotation_position="top left",
+                          annotation_font_color="#FFD54F")
+
             fig.update_yaxes(tickformat="%M:%S.%f", title="Tiempo")
             fig.update_layout(height=350, margin=dict(t=20, b=20, l=40, r=20), hovermode="x unified")
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True, key=f"graf_evo{unique_key_suffix}")
         else:
             st.info("Necesitas al menos 2 carreras en la misma prueba para ver la evolución.")
-        st.divider()
 
     # --- HISTORIAL COMPLETO ---
-    st.subheader("📜 Historial Completo")
-    with st.expander("Filtrar Historial"):
-        h1, h2 = st.columns(2)
-        hf_est = h1.selectbox("Estilo", ["Todos"] + sorted(mis_t['Estilo'].unique().tolist()), key=f"h_est{unique_key_suffix}")
-        hf_dis = h2.selectbox("Distancia", ["Todos"] + sorted(mis_t['Distancia'].unique().tolist()), key=f"h_dis{unique_key_suffix}")
-    
-    df_hist = mis_t.copy()
-    if hf_est != "Todos": df_hist = df_hist[df_hist['Estilo'] == hf_est]
-    if hf_dis != "Todos": df_hist = df_hist[df_hist['Distancia'] == hf_dis]
-    df_hist = df_hist.sort_values('fecha', ascending=False)
-    
-    for _, r in df_hist.head(20).iterrows():
-        try: 
-            pos_val = int(r['posicion'])
-            if pos_val == 1: medal_str = "🥇 1º"
-            elif pos_val == 2: medal_str = "🥈 2º"
-            elif pos_val == 3: medal_str = "🥉 3º"
-            elif pos_val > 0: medal_str = f"Pos: {pos_val}"
-            else: medal_str = "-"
-        except: medal_str = "-"
+    with tab_his:
+        with st.expander("Filtrar Historial"):
+            h1, h2 = st.columns(2)
+            hf_est = h1.selectbox("Estilo", ["Todos"] + sorted(mis_t['Estilo'].unique().tolist()), key=f"h_est{unique_key_suffix}")
+            hf_dis = h2.selectbox("Distancia", ["Todos"] + sorted(mis_t['Distancia'].unique().tolist()), key=f"h_dis{unique_key_suffix}")
 
-        sede_txt = r.get('sede', '-')
-        medida_txt = r.get('medida', '-')
-        
-        # Calcular categoría en esa fecha
-        try:
-            anio_carrera = pd.to_datetime(r['fecha']).year
-            edad_en_carrera = anio_carrera - anio_nacimiento_nadador
-            cat_torneo = asignar_cat(edad_en_carrera)
-        except: cat_torneo = "-"
+        df_hist = mis_t.copy()
+        if hf_est != "Todos": df_hist = df_hist[df_hist['Estilo'] == hf_est]
+        if hf_dis != "Todos": df_hist = df_hist[df_hist['Distancia'] == hf_dis]
+        df_hist = df_hist.sort_values('fecha', ascending=False)
 
-        # MODIFICADO: Fuente 14px en fecha/sede y 13px en categoría
-        st.markdown(f"""
-        <div class="mobile-card" style="padding:10px;">
-            <div style="display:flex; justify-content:space-between; align-items: flex-start;">
-                <div style="flex:1;">
-                    <div style="font-weight:bold; color:white; font-size:15px;">{r['Distancia']} {r['Estilo']}</div>
-                    <div style="font-size:14px; color:#aaa; margin-top:2px;">📅 {r['fecha']} • {sede_txt} ({medida_txt})</div>
-                </div>
-                <div style="text-align: right; min-width: 100px;">
-                    <div style="font-family:monospace; font-weight:bold; color:#4CAF50; font-size:18px;">{r['tiempo']}</div>
-                    <div style="font-size:14px; color:#ddd; font-weight:bold; margin-top:2px;">
-                        {medal_str} <span style="font-size:13px; color:#999; font-weight:normal;">({cat_torneo})</span>
-                    </div>
-                </div>
-            </div>
-        </div>""", unsafe_allow_html=True)
+        for _, r in df_hist.head(20).iterrows():
+            try:
+                pos_val = int(r['posicion'])
+                if pos_val == 1: medal_str = "🥇 1º"
+                elif pos_val == 2: medal_str = "🥈 2º"
+                elif pos_val == 3: medal_str = "🥉 3º"
+                elif pos_val > 0: medal_str = f"Pos: {pos_val}"
+                else: medal_str = "-"
+            except: medal_str = "-"
 
-    # 5. MIS RELEVOS
-    st.subheader("🏊‍♂️ Mis Relevos")
-    mr_base = data['relevos'].copy()
-    cond_rel = (mr_base['nadador_1'] == target_id) | (mr_base['nadador_2'] == target_id) | (mr_base['nadador_3'] == target_id) | (mr_base['nadador_4'] == target_id)
-    mis_relevos = mr_base[cond_rel].copy()
-    
-    if not mis_relevos.empty:
-        mis_relevos = mis_relevos.merge(data['estilos'], on='codestilo', how='left')
-        mis_relevos = mis_relevos.merge(data['distancias'], on='coddistancia', how='left')
-        mis_relevos = mis_relevos.merge(data['piletas'], on='codpileta', how='left')
-        
-        if 'descripcion_x' in mis_relevos.columns: mis_relevos = mis_relevos.rename(columns={'descripcion_x': 'Estilo'})
-        elif 'descripcion' in mis_relevos.columns: mis_relevos = mis_relevos.rename(columns={'descripcion': 'Estilo'})
-        
-        if 'descripcion_y' in mis_relevos.columns: mis_relevos = mis_relevos.rename(columns={'descripcion_y': 'Distancia'})
-        
-        if 'club' in mis_relevos.columns: mis_relevos = mis_relevos.rename(columns={'club': 'sede'})
-        else: mis_relevos['sede'] = '-'
-        if 'medida' not in mis_relevos.columns: mis_relevos['medida'] = '-'
+            sede_txt = r.get('sede', '-')
+            medida_txt = r.get('medida', '-')
 
-        mis_relevos = mis_relevos.sort_values('fecha', ascending=False)
-        
-        for _, r in mis_relevos.iterrows():
-            grupo_txt = calcular_grupo_relevo(r, data['cat_relevos'])
-            html_grid = ""
-            for k in range(1, 5):
-                nid = r[f'nadador_{k}']
-                nom = dict_id_nombre.get(nid, "??").split(',')[0]
-                t = str(r[f'tiempo_{k}']).strip()
-                if t and t not in ["00.00", "0", "None", "nan"]: nom += f" <b>({t})</b>"
-                border_style = "border: 1px solid #E91E63;" if nid == target_id else ""
-                html_grid += f"<div class='swimmer-item' style='{border_style}'>{k}. {nom}</div>"
+            # Calcular categoría en esa fecha
+            try:
+                anio_carrera = pd.to_datetime(r['fecha']).year
+                edad_en_carrera = anio_carrera - anio_nacimiento_nadador
+                cat_torneo = asignar_cat(edad_en_carrera)
+            except: cat_torneo = "-"
 
-            try: p_rel = int(r['posicion'])
-            except: p_rel = 0
-            if p_rel == 1: pos_icon = "🥇 1º"
-            elif p_rel == 2: pos_icon = "🥈 2º"
-            elif p_rel == 3: pos_icon = "🥉 3º"
-            elif p_rel > 0: pos_icon = f"Pos: {p_rel}"
-            else: pos_icon = ""
-
-            sede_r = r.get('sede', '-')
-
-            # MODIFICADO: Aumentada fuente por CSS (.relay-meta ahora es 14px)
             st.markdown(f"""
-            <div class="mobile-card" style="border-left: 4px solid #E91E63;">
-                <div class="relay-header">
-                    <div>
-                        <div class="relay-title">{r['Distancia']} {r['Estilo']}</div>
-                        <div style="font-size:11px; color:#aaa;">{grupo_txt} ({r['codgenero']})</div>
+            <div class="mobile-card" style="padding:10px;">
+                <div style="display:flex; justify-content:space-between; align-items: flex-start;">
+                    <div style="flex:1;">
+                        <div style="font-weight:bold; color:white; font-size:15px;">{r['Distancia']} {r['Estilo']}</div>
+                        <div style="font-size:14px; color:#aaa; margin-top:2px;">📅 {r['fecha']} • {sede_txt} ({medida_txt})</div>
                     </div>
-                    <div style="text-align:right;">
-                        <div class="relay-time">{r['tiempo_final']}</div>
-                        <div style="font-size:12px; color:#ddd; font-weight:bold;">{pos_icon}</div>
+                    <div style="text-align: right; min-width: 100px;">
+                        <div style="font-family:monospace; font-weight:bold; color:#4CAF50; font-size:18px;">{r['tiempo']}</div>
+                        <div style="font-size:14px; color:#ddd; font-weight:bold; margin-top:2px;">
+                            {medal_str} <span style="font-size:13px; color:#999; font-weight:normal;">({cat_torneo})</span>
+                        </div>
                     </div>
                 </div>
-                <div class="relay-meta" style="margin-top:-3px; margin-bottom:8px;">
-                    <span>📅 {r['fecha']} • {sede_r} ({r['medida']})</span>
-                </div>
-                <div class="swimmer-grid">{html_grid}</div>
             </div>""", unsafe_allow_html=True)
-    else: st.info("Sin relevos.")
+
+    # --- MIS RELEVOS ---
+    with tab_rel:
+        mr_base = data['relevos'].copy()
+        cond_rel = (mr_base['nadador_1'] == target_id) | (mr_base['nadador_2'] == target_id) | (mr_base['nadador_3'] == target_id) | (mr_base['nadador_4'] == target_id)
+        mis_relevos = mr_base[cond_rel].copy()
+
+        if not mis_relevos.empty:
+            mis_relevos = mis_relevos.merge(data['estilos'], on='codestilo', how='left')
+            mis_relevos = mis_relevos.merge(data['distancias'], on='coddistancia', how='left')
+            mis_relevos = mis_relevos.merge(data['piletas'], on='codpileta', how='left')
+
+            if 'descripcion_x' in mis_relevos.columns: mis_relevos = mis_relevos.rename(columns={'descripcion_x': 'Estilo'})
+            elif 'descripcion' in mis_relevos.columns: mis_relevos = mis_relevos.rename(columns={'descripcion': 'Estilo'})
+
+            if 'descripcion_y' in mis_relevos.columns: mis_relevos = mis_relevos.rename(columns={'descripcion_y': 'Distancia'})
+
+            if 'club' in mis_relevos.columns: mis_relevos = mis_relevos.rename(columns={'club': 'sede'})
+            else: mis_relevos['sede'] = '-'
+            if 'medida' not in mis_relevos.columns: mis_relevos['medida'] = '-'
+
+            mis_relevos = mis_relevos.sort_values('fecha', ascending=False)
+
+            for _, r in mis_relevos.iterrows():
+                grupo_txt = calcular_grupo_relevo(r, data['cat_relevos'])
+                html_grid = ""
+                for k in range(1, 5):
+                    nid = r[f'nadador_{k}']
+                    nom = dict_id_nombre.get(nid, "??").split(',')[0]
+                    t = str(r[f'tiempo_{k}']).strip()
+                    if t and t not in ["00.00", "0", "None", "nan"]: nom += f" <b>({t})</b>"
+                    border_style = "border: 1px solid #E91E63;" if nid == target_id else ""
+                    html_grid += f"<div class='swimmer-item' style='{border_style}'>{k}. {nom}</div>"
+
+                try: p_rel = int(r['posicion'])
+                except: p_rel = 0
+                if p_rel == 1: pos_icon = "🥇 1º"
+                elif p_rel == 2: pos_icon = "🥈 2º"
+                elif p_rel == 3: pos_icon = "🥉 3º"
+                elif p_rel > 0: pos_icon = f"Pos: {p_rel}"
+                else: pos_icon = ""
+
+                sede_r = r.get('sede', '-')
+
+                st.markdown(f"""
+                <div class="mobile-card" style="border-left: 4px solid #E91E63;">
+                    <div class="relay-header">
+                        <div>
+                            <div class="relay-title">{r['Distancia']} {r['Estilo']}</div>
+                            <div style="font-size:11px; color:#aaa;">{grupo_txt} ({r['codgenero']})</div>
+                        </div>
+                        <div style="text-align:right;">
+                            <div class="relay-time">{r['tiempo_final']}</div>
+                            <div style="font-size:12px; color:#ddd; font-weight:bold;">{pos_icon}</div>
+                        </div>
+                    </div>
+                    <div class="relay-meta" style="margin-top:-3px; margin-bottom:8px;">
+                        <span>📅 {r['fecha']} • {sede_r} ({r['medida']})</span>
+                    </div>
+                    <div class="swimmer-grid">{html_grid}</div>
+                </div>""", unsafe_allow_html=True)
+        else: st.info("Sin relevos.")
 
 
 def _sin_tildes(texto):
