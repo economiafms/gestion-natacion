@@ -300,9 +300,6 @@ with tab_grupo:
                       help="Vacía el borrador y vuelve a cargar los nadadores inscriptos en el evento")
             st.button("✖ Salir de la lista del evento", on_click=soltar_evento,
                       help="Deja de usar los inscriptos del evento y vacía la selección")
-    else:
-        with st.container(horizontal=True, horizontal_alignment="right"):
-            st.button("🔄 Reiniciar todo", on_click=reiniciar_pool, help="Vacía el borrador y la selección actual")
 
     with st.container(border=True):
         lista_nadadores_completa = sorted(df_nad['Nombre Completo'].tolist())

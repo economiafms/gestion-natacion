@@ -413,7 +413,12 @@ st.markdown("""
     padding: 4px 2px 10px; scroll-snap-type: x proximity; scrollbar-width: thin;
 }
 .st-key-ag_reel > div { flex: 0 0 auto !important; width: auto !important; }
-[class*="st-key-agc_"] { position: relative; width: 138px !important; min-width: 138px; max-width: 138px; overflow: hidden;
+/* Altura fija: el texto de Streamlit trae margen negativo abajo y recortaba el estado de la tarjeta */
+[class*="st-key-agc_"] [data-testid="stElementContainer"], [class*="st-key-agc_"] [data-testid="stMarkdown"],
+[class*="st-key-agc_"] [data-testid="stMarkdownContainer"] { margin: 0 !important; }
+.st-key-ag_reel > div { height: 150px !important; min-height: 150px; }
+[class*="st-key-agc_"] { height: 150px !important; min-height: 150px;
+    position: relative; width: 138px !important; min-width: 138px; max-width: 138px; overflow: hidden;
     scroll-snap-align: start; gap: 0 !important; border-radius: 16px; }
 [class*="st-key-agc_"] > [data-testid="stElementContainer"]:has(button) {
     position: absolute !important; inset: 0; width: 100% !important; z-index: 2; margin: 0 !important;
