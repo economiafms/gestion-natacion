@@ -167,7 +167,7 @@ else:
 ANIO_REF = date.today().year - 1
 ACTIVOS = ids_activos(db, ANIO_REF)
 df_nad['activo'] = df_nad['codnadador'].apply(lambda x: _id_txt(x) in ACTIVOS)
-COLOR_ACTIVO = "#4FC3F7"
+COLOR_ACTIVO = "#8B1A1A"
 COLOR_INACTIVO = "#555555"
 
 # --- LÓGICA DE ROLES ---
