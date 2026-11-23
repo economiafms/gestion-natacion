@@ -14,8 +14,32 @@ if "role" not in st.session_state or (st.session_state.role not in ["M", "P"] an
     st.warning("⚠️ Acceso restringido.")
     st.switch_page("pages/1_inicio.py")
 
-from nob_ui import hero
+from nob_ui import hero, seccion, select_flechas
 hero("Ranking Histórico", "🏆", "Los mejores tiempos de la historia del club.")
+
+# Estilos de las tarjetas del ranking (una sola vez para ambas pestañas)
+st.markdown("""
+            <style>
+                .rank-card {
+                    border-radius: 10px;
+                    padding: 10px 15px;
+                    margin-bottom: 8px;
+                    display: flex;
+                    align-items: center;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+                }
+                .rank-pos { font-size: 24px; font-weight: bold; width: 50px; text-align: center; margin-right: 10px; }
+                .rank-info { flex-grow: 1; }
+                .rank-name { font-weight: bold; font-size: 16px; margin-bottom: 2px; }
+                .rank-meta { font-size: 12px; opacity: 0.8; }
+                .rank-time { font-family: monospace; font-weight: bold; font-size: 20px; text-align: right; }
+                .tag-pool { 
+                    font-size: 10px; padding: 2px 6px; border-radius: 4px; 
+                    margin-left: 8px; font-weight: normal; 
+                    vertical-align: middle;
+                }
+            </style>
+""", unsafe_allow_html=True)
 
 conn = st.connection("gsheets", type=GSheetsConnection)
 
@@ -82,15 +106,14 @@ with tab_indiv:
     # 4. Cálculo de campos finales
     df['Nadador'] = df['Apellido'].astype(str).str.upper() + ", " + df['Nombre'].astype(str)
     df['Segundos'] = df['tiempo'].apply(tiempo_a_seg)
-    df['Año'] = pd.to_datetime(df['fecha']).dt.year
+    df['Año'] = pd.to_datetime(df['fecha'], errors='coerce').dt.year.astype('Int64').astype(str).replace('<NA>', '-')
 
     # Asegurar valores por defecto para que no falle la tarjeta
     if 'sede' not in df.columns: df['sede'] = 'Sede desconocida'
     if 'medida' not in df.columns: df['medida'] = '-'
 
     # --- 5. FILTROS ---
-    st.markdown("### 🔍 Filtrar Ranking")
-
+    seccion("Filtrar ranking")
     c1, c2, c3 = st.columns(3)
 
     lista_estilos = sorted(df['Estilo'].unique()) if 'Estilo' in df.columns else []
@@ -105,9 +128,9 @@ with tab_indiv:
     for i, d in enumerate(lista_distancias):
         if "50" in str(d): idx_distancia = i; break
 
-    with c1: f_estilo = st.selectbox("Estilo", lista_estilos, index=idx_estilo)
-    with c2: f_distancia = st.selectbox("Distancia", lista_distancias, index=idx_distancia)
-    with c3: f_genero = st.selectbox("Género", lista_generos)
+    f_estilo = select_flechas("Estilo", lista_estilos, "rk_est", index=idx_estilo, contenedor=c1)
+    f_distancia = select_flechas("Distancia", lista_distancias, "rk_dist", index=idx_distancia, contenedor=c2)
+    f_genero = select_flechas("Género", lista_generos, "rk_gen", contenedor=c3)
 
     # Aplicar filtros básicos
     if 'Estilo' in df.columns and 'Distancia' in df.columns:
@@ -132,7 +155,7 @@ with tab_indiv:
     df_ranking = df_filtrado.head(50).reset_index(drop=True)
 
     # --- 6. VISUALIZACIÓN ---
-    st.divider()
+    seccion(f"Top {len(df_ranking)}" if not df_ranking.empty else "Ranking")
 
     if df_ranking.empty:
         st.info("No hay registros para esta selección.")
@@ -155,26 +178,7 @@ with tab_indiv:
             pileta_badge = "25m" if "25" in medida_val else ("50m" if "50" in medida_val else medida_val)
 
             st.markdown(f"""
-            <style>
-                .rank-card {{
-                    border-radius: 10px;
-                    padding: 10px 15px;
-                    margin-bottom: 8px;
-                    display: flex;
-                    align-items: center;
-                    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-                }}
-                .rank-pos {{ font-size: 24px; font-weight: bold; width: 50px; text-align: center; margin-right: 10px; }}
-                .rank-info {{ flex-grow: 1; }}
-                .rank-name {{ font-weight: bold; font-size: 16px; margin-bottom: 2px; }}
-                .rank-meta {{ font-size: 12px; opacity: 0.8; }}
-                .rank-time {{ font-family: monospace; font-weight: bold; font-size: 20px; text-align: right; }}
-                .tag-pool {{ 
-                    font-size: 10px; padding: 2px 6px; border-radius: 4px; 
-                    margin-left: 8px; font-weight: normal; 
-                    vertical-align: middle;
-                }}
-            </style>
+
             
             <div class="rank-card" style="background: {bg_color}; color: {text_color};">
                 <div class="rank-pos">{icono}</div>
@@ -232,7 +236,7 @@ with tab_relevos:
         df_rel['Distancia'] = df_rel['coddistancia'].astype(str).map(dict_dist).fillna(df_rel['coddistancia'])
         df_rel['Sede'] = df_rel['codpileta'].astype(str).map(dict_pil).fillna('Sede desconocida')
         df_rel['Medida'] = df_rel['codpileta'].astype(str).map(dict_med).fillna('-')
-        df_rel['Año'] = pd.to_datetime(df_rel['fecha']).dt.year
+        df_rel['Año'] = pd.to_datetime(df_rel['fecha'], errors='coerce').dt.year.astype('Int64')
         df_rel['Segundos'] = df_rel['tiempo_final'].apply(tiempo_a_seg)
         
         # Mapear nombres de los 4 nadadores
@@ -269,18 +273,19 @@ with tab_relevos:
         df_rel['Categoria_Posta'] = df_rel.apply(obtener_categoria_relevo, axis=1)
 
         # --- 3. FILTROS ---
-        st.markdown("### 🔍 Filtrar Relevos")
-        cr1, cr2, cr3, cr4 = st.columns(4)
+        seccion("Filtrar relevos")
+        cr1, cr2 = st.columns(2)
+        cr3, cr4 = st.columns(2)
         
         lista_reg_rel = ["Todos"] + sorted(df_rel['tipo_reglamento'].dropna().unique().tolist()) if 'tipo_reglamento' in df_rel else ["Todos"]
         lista_gen_rel = ["Todos"] + sorted(df_rel['codgenero'].dropna().unique().tolist()) if 'codgenero' in df_rel else ["Todos"]
         lista_est_rel = sorted(df_rel['Estilo'].dropna().unique().tolist())
         lista_dist_rel = sorted(df_rel['Distancia'].dropna().unique().tolist())
 
-        with cr1: f_reg_rel = st.selectbox("Reglamento", lista_reg_rel)
-        with cr2: f_gen_rel = st.selectbox("Género", lista_gen_rel)
-        with cr3: f_est_rel = st.selectbox("Estilo", ["Todos"] + lista_est_rel)
-        with cr4: f_dist_rel = st.selectbox("Distancia", ["Todas"] + lista_dist_rel)
+        f_reg_rel = select_flechas("Reglamento", lista_reg_rel, "rk_rel_reg", contenedor=cr1)
+        f_gen_rel = select_flechas("Género", lista_gen_rel, "rk_rel_gen", contenedor=cr2)
+        f_est_rel = select_flechas("Estilo", ["Todos"] + lista_est_rel, "rk_rel_est", contenedor=cr3)
+        f_dist_rel = select_flechas("Distancia", ["Todas"] + lista_dist_rel, "rk_rel_dist", contenedor=cr4)
 
         # Aplicar Filtros
         df_r_filt = df_rel.copy()
@@ -289,7 +294,7 @@ with tab_relevos:
         if f_est_rel != "Todos": df_r_filt = df_r_filt[df_r_filt['Estilo'] == f_est_rel]
         if f_dist_rel != "Todas": df_r_filt = df_r_filt[df_r_filt['Distancia'] == f_dist_rel]
 
-        st.divider()
+        seccion("Formaciones")
 
         # --- 4. AGRUPAMIENTO INTELIGENTE DE EQUIPOS (HISTORIAL) ---
         if not df_r_filt.empty:
@@ -365,7 +370,7 @@ with tab_relevos:
 <div class="rank-pos">{icono}</div>
 <div class="rank-info">
 <div class="rank-name">{row['Estilo']} {row['Distancia']} <span style="font-weight: normal; opacity: 0.85; font-size: 0.9em;">{row['Categoria_Posta']}</span></div>
-<div class="rank-meta">{row['Sede']} • {row['Año']} <span class="tag-pool" style="border: 1px solid {text_color};">{pileta_badge}</span></div>
+<div class="rank-meta">{row['Sede']} • {row['Año'] if pd.notna(row['Año']) else '-'} <span class="tag-pool" style="border: 1px solid {text_color};">{pileta_badge}</span></div>
 {grid_nadadores}
 {row['html_historial']}
 </div>
