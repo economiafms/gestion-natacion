@@ -94,6 +94,20 @@ def calcular_resumen(db, id_nadador, anio, mis_resultados):
         r["estilo_fav"] = str(est.idxmax())
         r["estilo_fav_n"] = int(est.max())
 
+    # Pruebas que nadó por primera vez este año (y si estrenó un estilo completo)
+    # (solo si ya nadaba antes de este año: en la primera temporada todo sería "nuevo")
+    hist_ind = ind.dropna(subset=['_f'])
+    if not hist_ind.empty and (hist_ind['_f'].dt.year < anio).any():
+        primera_prueba = hist_ind.groupby(['Estilo', 'Distancia'])['_f'].min()
+        nuevas = primera_prueba[primera_prueba.dt.year == anio].sort_values()
+        primer_estilo = hist_ind.groupby('Estilo')['_f'].min()
+        estilos_nuevos = [str(e) for e in primer_estilo[primer_estilo.dt.year == anio].sort_values().index]
+        if not nuevas.empty:
+            # Primero las pruebas de un estilo estrenado este año
+            orden = sorted(nuevas.index, key=lambda k: (str(k[0]) not in estilos_nuevos, nuevas[k]))
+            r["animo_pruebas"] = [f"{dist} {est}" for est, dist in orden]
+            r["animo_estilos"] = estilos_nuevos
+
     # Récords personales batidos en el año (mejoran una marca anterior) y la mayor mejora
     records, mejor = 0, None
     for (e, d), g in ind.dropna(subset=['_s', '_f']).sort_values('_f').groupby(['Estilo', 'Distancia']):
@@ -231,15 +245,15 @@ def generar_imagen(r, nombre, formato="Historia (1080×1920)"):
     for i, (col, n, et) in enumerate(((ORO, r.get("oro", 0), "ORO"), (PLATA, r.get("plata", 0), "PLATA"),
                                        (BRONCE, r.get("bronce", 0), "BRONCE"))):
         _medalla(d, W * (i + 1) / 4, cy, rad, col, n, et)
-    y = cy + rad + (90 if historia else 70)
+    y = cy + rad + (78 if historia else 70)
 
     # Tarjetas de datos
     gap = 24
     cw = (W - 2 * M - gap) / 2
-    ch = 200 if historia else 168
+    ch = 184 if historia else 168
     datos = [
         ("Carreras", str(r.get("carreras", 0)), f"{r.get('relevos', 0)} en relevos" if r.get("relevos") else "individuales"),
-        ("Torneos", str(r.get("torneos", 0)), f"más activo: {r['mes_activo']}" if r.get("mes_activo") else ""),
+        ("Fechas", str(r.get("torneos", 0)), f"más activo: {r['mes_activo']}" if r.get("mes_activo") else ""),
         ("Metros", f"{r.get('metros', 0):,}".replace(",", ".") + " m", "en competencia"),
         ("Récords personales", str(r.get("records", 0)), "marcas mejoradas"),
     ]
@@ -247,10 +261,21 @@ def generar_imagen(r, nombre, formato="Historia (1080×1920)"):
         x0 = M + (i % 2) * (cw + gap)
         y0 = y + (i // 2) * (ch + gap)
         _tarjeta(d, x0, y0, cw, ch, t, v, s)
-    y += 2 * ch + gap + (40 if historia else 28)
+    y += 2 * ch + gap + (30 if historia else 28)
 
     # Destacados en una lista
     destacados = []
+    if r.get("animo_pruebas"):
+        pr = r["animo_pruebas"]
+        txt = " · ".join(pr[:2]) + (f" y {len(pr) - 2} más" if len(pr) > 2 else "")
+        n_est = len(r.get("animo_estilos") or [])
+        if n_est > 1:
+            titulo = f"Me animé a {n_est} estilos nuevos"
+        elif n_est == 1:
+            titulo = f"Me animé a un estilo nuevo: {r['animo_estilos'][0]}"
+        else:
+            titulo = "Me animé a pruebas nuevas" if len(pr) > 1 else "Me animé a una prueba nueva"
+        destacados.append((titulo, txt))
     if r.get("estilo_fav"):
         destacados.append(("Estilo favorito", f"{r['estilo_fav']} ({r['estilo_fav_n']} carreras)"))
     if r.get("mejor_mejora"):
@@ -262,11 +287,11 @@ def generar_imagen(r, nombre, formato="Historia (1080×1920)"):
     if not historia:
         destacados = destacados[:1]   # el posteo es más bajo: solo el destacado principal
     for t, v in destacados:
-        d.rounded_rectangle((M, y, W - M, y + 96), radius=28, fill=(0, 0, 0, 90))
-        d.rectangle((M, y + 18, M + 8, y + 78), fill=ROJO)
-        d.text((M + 32, y + 12), t.upper(), font=_f("Bold", 23), fill=(255, 140, 146))
-        d.text((M + 32, y + 40), v, font=_ajustar(d, v, "Bold", 38, W - 2 * M - 64), fill=(255, 255, 255))
-        y += 112
+        d.rounded_rectangle((M, y, W - M, y + 88), radius=26, fill=(0, 0, 0, 90))
+        d.rectangle((M, y + 16, M + 8, y + 72), fill=ROJO)
+        d.text((M + 32, y + 10), t.upper(), font=_f("Bold", 22), fill=(255, 140, 146))
+        d.text((M + 32, y + 36), v, font=_ajustar(d, v, "Bold", 36, W - 2 * M - 64), fill=(255, 255, 255))
+        y += 100
 
     # Pie
     pie = f"#NOB{r['anio']} · Natación Newell's"

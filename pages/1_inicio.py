@@ -331,7 +331,7 @@ def tarjeta_resumen_anual(me):
     anio = (datetime.now(timezone.utc) - timedelta(hours=3)).year
     st.markdown(f"""<div class="nob-wrap-card"><div class="k">Resumen del año</div>
 <div class="t">Tu {anio} en el agua</div>
-<div class="s">Medallas, torneos, récords y más, en una imagen para compartir.</div></div>""", unsafe_allow_html=True)
+<div class="s">Medallas, fechas, récords, pruebas nuevas y más, en una imagen para compartir.</div></div>""", unsafe_allow_html=True)
     if st.button(f"✨ Ver mi {anio}", key="btn_resumen_anual", use_container_width=True):
         dialogo_resumen_anual(me['codnadador'], f"{me['nombre']} {me['apellido']}", anio)
 
