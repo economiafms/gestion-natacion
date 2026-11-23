@@ -1165,6 +1165,10 @@ if db and st.session_state.user_id:
     elif filas_top:
         st.markdown(f'<div class="nob-top-tit">Top medallistas {anio}</div>{"".join(filas_top)}',
                     unsafe_allow_html=True)
+    # Entrenador: acceso al ranking completo debajo del top
+    if es_entrenador:
+        if st.button("Ver ranking total", key="btn_ranking_ent", icon=":material/leaderboard:", use_container_width=True):
+            st.switch_page("pages/4_ranking.py")
 
     st.write("")
     if st.button("Ver más estadísticas", key="btn_club_stats", icon=":material/bar_chart:", use_container_width=True):

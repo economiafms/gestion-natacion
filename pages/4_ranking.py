@@ -7,7 +7,9 @@ from datetime import datetime
 st.set_page_config(page_title="Ranking NOB", layout="centered", initial_sidebar_state="collapsed")
 
 # --- 2. SEGURIDAD (SOLO PERFIL M o P) ---
-if "role" not in st.session_state or st.session_state.role not in ["M", "P"]:
+# El entrenador (socio 253973) también puede ver el ranking aunque su perfil no sea M/P
+_es_entrenador = str(st.session_state.get("nro_socio") or "").strip() == "253973"
+if "role" not in st.session_state or (st.session_state.role not in ["M", "P"] and not _es_entrenador):
     st.warning("⚠️ Acceso restringido.")
     st.switch_page("pages/1_inicio.py")
 
