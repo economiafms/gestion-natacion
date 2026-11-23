@@ -762,8 +762,6 @@ if db and st.session_state.user_id:
             ir_a_mi_ficha()
         if not inactivo and not es_entrenador:
             tarjeta_resumen_anual(me)
-    
-    st.write("") 
 
     # // ATAJO RUTINA DIARIA
     if st.session_state.role == "N":
@@ -831,7 +829,6 @@ if db and st.session_state.user_id:
                                     st.rerun()
                         else:
                             st.info("🏅 ¡Mes completo! No tengo más rutinas pendientes.")
-        st.write("") 
 
         # // =========================================================
         # // WIDGET INSCRIPCIÓN RÁPIDA (CON INFO DEL TORNEO Y TIEMPOS)
@@ -991,8 +988,8 @@ if db and st.session_state.user_id:
                                  help=f"Ver mejores marcas e historial de {estilo}"):
                         dialogo_estilo(estilo)
     
-    # Nadador: chip de su categoría (mismos rivales que la página Mi Categoría: categoría y género)
-    if st.session_state.role == "N" and not es_entrenador and cat not in (None, "-"):
+    # Nadador y manager: chip de su categoría (mismos rivales que la página Mi Categoría: categoría y género)
+    if st.session_state.role in ["N", "M", "P"] and not es_entrenador and cat not in (None, "-"):
         _dc = db['categorias'].copy()
         _dc.columns = _dc.columns.str.strip().str.lower()
         _rc = _dc[_dc['nombre_cat'] == cat]
