@@ -201,27 +201,6 @@ def _cat_actual_de(cod):
     return asignar_cat(datetime.now().year - anio) if anio else "-"
 
 
-@st.cache_data(ttl="15m", show_spinner=False)
-def _mejores_por_nadador(_df, firma):
-    """Mejor tiempo de cada nadador en cada prueba (para comparar con su categoría)."""
-    d = _df[['codnadador', 'Estilo', 'Distancia', 'tiempo']].copy()
-    d['segundos'] = d['tiempo'].apply(tiempo_a_segundos)
-    d = d.dropna(subset=['segundos'])
-    return d.groupby(['codnadador', 'Estilo', 'Distancia'], as_index=False)['segundos'].min()
-
-
-def _promedio_categoria(target_id, estilo, distancia):
-    """Promedio de las mejores marcas de los nadadores de su misma categoría y género (sin él)."""
-    pbs = _mejores_por_nadador(df_full, len(df_full))
-    pbs = pbs[(pbs['Estilo'] == estilo) & (pbs['Distancia'] == distancia) & (pbs['codnadador'] != target_id)]
-    if pbs.empty: return None
-    mi_cat = _cat_actual_de(target_id)
-    mi_gen = df_nad.loc[df_nad['codnadador'] == target_id, 'codgenero'].iloc[0]
-    gen = df_nad.set_index('codnadador')['codgenero']
-    pbs = pbs[pbs['codnadador'].map(lambda c: _cat_actual_de(c) == mi_cat and gen.get(c) == mi_gen)]
-    return float(pbs['segundos'].mean()) if not pbs.empty else None
-
-
 def _filas_resultados(df, pbs_set, con_estilo=True, cat_por_fecha=None):
     filas = []
     for _, r in df.iterrows():
@@ -345,31 +324,17 @@ def render_tab_ficha(target_id, unique_key_suffix=""):
                 with st.container(key=f"pbcard_{sfx}_{ie}"):
                     st.markdown(f'<div class="nob-pbc-tit">{html.escape(str(estilo))}</div>', unsafe_allow_html=True)
                     for idist, (_, r) in enumerate(pbs[pbs['Estilo'] == estilo].iterrows()):
-                        # Mejora respecto de la mejor marca anterior a esta
-                        prev = validas[(validas['Estilo'] == estilo) & (validas['Distancia'] == r['Distancia'])
-                                       & (validas['_f'] < r['_f'])]
-                        if not prev.empty:
-                            dif = r['segundos'] - prev['segundos'].min()
-                            mejora = f'<span class="up">↓ {abs(dif):.2f}s</span>' if dif < 0 else '<span class="eq">=</span>'
-                        else:
-                            mejora = '<span class="eq">1ª marca</span>'
-                        # Comparación con el promedio de su categoría
-                        prom = _promedio_categoria(target_id, estilo, r['Distancia'])
-                        if prom is None:
-                            comp = '<span class="cmp">⚪ sin ref.</span>'
-                        else:
-                            dc = r['segundos'] - prom
-                            comp = f'<span class="cmp">{"🟢" if dc <= 0 else "🔴"} {"-" if dc <= 0 else "+"}{abs(dc):.2f}s cat.</span>'
+                        # Fila simple: distancia | mejor marca y fecha en que se logró
                         with st.container(key=f"pbr_{sfx}_{ie}_{idist}"):
                             st.markdown(
                                 f'<div class="nob-pbr"><div class="d">{html.escape(str(r["Distancia"]))}</div>'
-                                f'<div class="t"><b>{html.escape(str(r["tiempo"]))}</b><small>{_fecha_txt(r["fecha"])}</small></div>'
-                                f'<div class="x">{mejora}{comp}</div><div class="ir">›</div></div>',
+                                f'<div class="t"><b>{html.escape(str(r["tiempo"]))}</b>'
+                                f'<small>Mejor marca · {_fecha_txt(r["fecha"])}</small></div>'
+                                f'<div class="ir">›</div></div>',
                                 unsafe_allow_html=True)
                             if st.button(f"Detalle {estilo} {r['Distancia']}", key=f"pbb_{sfx}_{ie}_{idist}"):
                                 dialogo_estilo_ficha(target_id, estilo, str(r['Distancia']))
-            st.caption("🟢 / 🔴: mejor o peor que el promedio de las mejores marcas de su categoría y género. "
-                       "Tocá una marca para ver el detalle del estilo.")
+            st.caption("Tocá una marca para ver todas las carreras de ese estilo.")
 
     # --------------------------------------------------------------- EVOLUCIÓN
     with t_evo:

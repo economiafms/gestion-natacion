@@ -721,15 +721,14 @@ def aplicar_tema():
         [class*="st-key-pbr_"] button { opacity: 0 !important; cursor: pointer; }
         [class*="st-key-pbr_"]:hover .nob-pbr { background: rgba(227,6,19,0.08); }
         .nob-pbr { display: flex; align-items: center; gap: 12px; padding: 10px 14px; }
-        .nob-pbr .d { flex: 0 0 52px; font-size: 14px; font-weight: 800; color: rgba(255,255,255,0.75); }
+        .nob-pbr .d {
+            flex: 0 0 auto; min-width: 54px; text-align: center; padding: 6px 8px; border-radius: 10px;
+            font-size: 14px; font-weight: 800; color: #fff; background: rgba(227,6,19,0.14); border: 1px solid rgba(227,6,19,0.35);
+        }
         .nob-pbr .t { flex: 1 1 auto; min-width: 0; }
-        .nob-pbr .t b { display: block; font-family: ui-monospace, 'JetBrains Mono', monospace; font-size: 18px; font-weight: 800; color: #fff; }
-        .nob-pbr .t small { font-size: 11px; color: rgba(255,255,255,0.45); }
-        .nob-pbr .x { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; font-size: 11px; white-space: nowrap; }
-        .nob-pbr .x .up { color: #6FDB74; font-weight: 700; }
-        .nob-pbr .x .eq { color: rgba(255,255,255,0.45); }
-        .nob-pbr .x .cmp { color: rgba(255,255,255,0.75); }
-        .nob-pbr .ir { font-size: 20px; color: rgba(255,255,255,0.3); }
+        .nob-pbr .t b { display: block; font-family: ui-monospace, 'JetBrains Mono', monospace; font-size: 20px; font-weight: 800; color: #fff; line-height: 1.2; }
+        .nob-pbr .t small { display: block; margin-top: 2px; font-size: 12.5px; color: rgba(255,255,255,0.65); }
+        .nob-pbr .ir { font-size: 22px; color: rgba(255,255,255,0.35); }
         .nob-kpis b.up { color: #6FDB74; }
 
         /* Pestañas en el celular: siempre todas visibles en una fila (sin tener que deslizar) */
