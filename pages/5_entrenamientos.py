@@ -191,20 +191,24 @@ else:
 #  CARGA DE TEST
 # ==============================================================================
 with tab_cargar:
-    with st.container(key=f"carga_container_{st.session_state.form_reset_id}"):
+    # Confirmación del último guardado (se muestra una vez, ya con el formulario en blanco)
+    if st.session_state.get("test_guardado"):
+        st.success(f"✅ Test guardado: {st.session_state.pop('test_guardado')}. Podés cargar otro.")
+    rid = st.session_state.form_reset_id  # cambia al guardar: los campos vuelven a quedar vacíos
+    with st.container(key=f"carga_container_{rid}"):
         
         # --- PASO 1 ---
         seccion("1 · Prueba")
         c1, c2 = st.columns([1, 2])
-        f_val = c1.date_input("Fecha", date.today(), format="DD/MM/YYYY")
+        f_val = c1.date_input("Fecha", date.today(), format="DD/MM/YYYY", key=f"t_fecha_{rid}")
         
         # En la carga usamos lista_noms completa (todos los nadadores)
-        n_in = c2.selectbox("Nadador", [mi_nom_comp] if rol=="N" else lista_noms, index=0 if rol=="N" else None)
+        n_in = c2.selectbox("Nadador", [mi_nom_comp] if rol=="N" else lista_noms, index=0 if rol=="N" else None, key=f"t_nad_{rid}")
         id_nad_target = mi_id if rol=="N" else (df_nad[(df_nad['apellido'].str.upper() + ", " + df_nad['nombre']) == n_in].iloc[0]['codnadador'] if n_in else None)
         
         c3, c4 = st.columns(2)
-        est_val = c3.selectbox("Estilo", df_est['descripcion'].unique(), index=None)
-        dist_t_val = c4.selectbox("Distancia TOTAL", list_dist_total, index=None)
+        est_val = c3.selectbox("Estilo", df_est['descripcion'].unique(), index=None, key=f"t_est_{rid}")
+        dist_t_val = c4.selectbox("Distancia total", list_dist_total, index=None, key=f"t_dist_{rid}")
 
         mostrar_paso_2 = False
         
@@ -225,7 +229,12 @@ with tab_cargar:
                 if not existe.empty: duplicado = True
             
             if duplicado:
-                st.error(f"⛔ Ya existe un registro de {est_val} {dist_t_val} para esta fecha.")
+                # Se permite un solo registro por prueba y día: se muestra el que ya está cargado
+                _t_prev = str(existe.iloc[0].get('tiempo_final', '')).strip()
+                st.warning(f"Ya hay un test de **{dist_t_val} {est_val}** el **{f_val.strftime('%d/%m/%Y')}**"
+                           f"{f' con **{_t_prev}**' if _t_prev and _t_prev.lower() != 'nan' else ''}. "
+                           "Se permite uno por prueba y día: elegí otra fecha o prueba, o miralo en Historial.",
+                           icon=":material/info:")
             else:
                 mostrar_paso_2 = True
                 m_tot = int(dist_t_val.split(" ")[0])
@@ -244,7 +253,7 @@ with tab_cargar:
         if mostrar_paso_2:
             seccion("2 · Tiempos")
             
-            with st.form("form_reg", clear_on_submit=False):
+            with st.form(f"form_reg_{rid}", clear_on_submit=False):
                 st.markdown(f'<div class="nob-top-tit">Tiempo final · {dist_t_val}</div>', unsafe_allow_html=True)
                 
                 tf1, tf2, tf3 = st.columns(3)
@@ -258,9 +267,9 @@ with tab_cargar:
                     for i in range(1, 5):
                         px1, px2, px3, px4 = st.columns([1.2, 1, 1, 1], vertical_alignment="center")
                         px1.markdown(f'<div class="tst-plab">P{i}<small>{m_par * (i - 1)}–{m_par * i} m</small></div>', unsafe_allow_html=True)
-                        pm = px2.number_input("M", 0, 59, 0, key=f"pm_{i}_{m_tot}", label_visibility="collapsed")
-                        ps = px3.number_input("S", 0, 59, 0, key=f"ps_{i}_{m_tot}", label_visibility="collapsed")
-                        pc = px4.number_input("C", 0, 99, 0, key=f"pc_{i}_{m_tot}", label_visibility="collapsed")
+                        pm = px2.number_input("M", 0, 59, 0, key=f"pm_{i}_{m_tot}_{rid}", label_visibility="collapsed")
+                        ps = px3.number_input("S", 0, 59, 0, key=f"ps_{i}_{m_tot}_{rid}", label_visibility="collapsed")
+                        pc = px4.number_input("C", 0, 99, 0, key=f"pc_{i}_{m_tot}_{rid}", label_visibility="collapsed")
                         lp.append(f"{pm:02d}:{ps:02d}.{pc:02d}" if (pm+ps+pc)>0 else "")
                 
                 submitted = st.form_submit_button("Guardar registro", type="primary", icon=":material/save:", use_container_width=True)
@@ -361,6 +370,8 @@ with tab_cargar:
                                     "observaciones": ""
                                 }])
                                 conn.update(worksheet="Entrenamientos", data=pd.concat([df_fresco, row], ignore_index=True))
+                                st.session_state.test_guardado = (f"{dist_t_val} {est_val} · {mf:02d}:{sf:02d}.{cf:02d} · "
+                                                                   f"{f_val.strftime('%d/%m/%Y')}" + (f" · {n_in}" if rol != "N" else ""))
                                 st.success("✅ Guardado."); time.sleep(1); reset_carga(); datos.invalidar("Entrenamientos"); st.rerun()  # la pausa es a propósito: deja terminar la escritura en Google
                             except Exception as e: st.error(f"Error: {e}")
 
