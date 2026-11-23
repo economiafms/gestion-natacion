@@ -10,6 +10,7 @@ import html
 from nob_ui import hero, seccion
 import base64
 import resumen_anual
+import actividad
 
 # --- CONFIGURACIÓN ---
 st.set_page_config(page_title="Inicio", layout="centered")
@@ -615,6 +616,9 @@ if "flash_msg" in st.session_state:
 if db and st.session_state.user_id:
     user_id = st.session_state.user_id
     me = db['nadadores'][db['nadadores']['codnadador'] == user_id].iloc[0]
+    # Nadador inactivo (sin marcas este año ni el anterior): sin rutinas ni resumen del año
+    inactivo = st.session_state.role == "N" and actividad.id_txt(user_id) not in actividad.ids_activos(
+        db.get('tiempos'), db.get('relevos'))
     
     try: edad = datetime.now().year - pd.to_datetime(me['fechanac']).year
     except: edad = 0
@@ -682,7 +686,7 @@ if db and st.session_state.user_id:
         # Objetivo del mes (rutinas completadas)
         try:
             _hoy = datetime.now(timezone.utc) - timedelta(hours=3)
-            _rut = db.get('rutinas'); _seg = db.get('seguimiento')
+            _rut = None if inactivo else db.get('rutinas'); _seg = db.get('seguimiento')
             if _rut is not None and _seg is not None:
                 _mes = _rut[(_rut['anio_rutina'] == _hoy.year) & (_rut['mes_rutina'] == _hoy.month)]
                 _total = len(_mes)
@@ -742,12 +746,13 @@ if db and st.session_state.user_id:
     if st.session_state.role == "N":
         if st.button("Ver Mi Ficha Completa ➝", type="primary", use_container_width=True, key="btn_ficha_inicio"):
             ir_a_mi_ficha()
-        tarjeta_resumen_anual(me)
+        if not inactivo:
+            tarjeta_resumen_anual(me)
     
     st.write("") 
 
     # // ATAJO RUTINA DIARIA
-    if st.session_state.role == "N":
+    if st.session_state.role == "N" and not inactivo:
         hoy_arg = datetime.now(timezone.utc) - timedelta(hours=3)
         df_rut = db.get('rutinas')
         df_seg = db.get('seguimiento')
@@ -999,7 +1004,7 @@ if db and st.session_state.user_id:
     st.markdown(f"""<div class="nob-kpis tres">
 <div><b>{len(db['nadadores'])}</b><small>Nadadores</small></div>
 <div title="Compitieron en {anio - 1} o {anio}"><b>{_n_activos}</b><small>Activos</small></div>
-<div><b>{len(df_t) + len(df_r)}</b><small>Pruebas registradas</small></div>
+<div><b>{len(df_t) + len(df_r)}</b><small>Registros</small></div>
 </div>""", unsafe_allow_html=True)
 
     # Medallero total (histórico) del club

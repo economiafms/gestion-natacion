@@ -580,6 +580,12 @@ df_rutinas, df_seguimiento, df_nadadores = cargar_datos_rutinas_view()
 from nob_ui import hero
 hero("Sesiones de Entrenamiento", "📝")
 
+# Nadadores inactivos (sin marcas este año ni el anterior) no ven las rutinas
+import actividad
+if actividad.usuario_inactivo():
+    actividad.aviso_inactivo("Rutinas")
+    st.stop()
+
 if df_rutinas is None:
     st.error("No se pudieron cargar los datos. Verifica tu conexión.")
     st.stop()
