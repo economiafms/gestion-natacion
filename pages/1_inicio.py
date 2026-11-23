@@ -1005,6 +1005,8 @@ if db and st.session_state.user_id:
             st.markdown("""<style>
 .st-key-mi_cat_chip { position: relative; }
 .st-key-mi_cat_chip .st-key-mi_cat_btn { position: absolute !important; left: 0; right: 0; top: 0; bottom: 6px; z-index: 2; }
+.st-key-mi_cat_chip .st-key-mi_cat_btn [data-testid="stButton"], .st-key-mi_cat_chip .st-key-mi_cat_btn .stButton {
+  width: 100% !important; height: 100% !important; }
 .st-key-mi_cat_chip .st-key-mi_cat_btn button { width: 100% !important; height: 100% !important; min-height: 0 !important;
   padding: 0 !important; opacity: 0; cursor: pointer; }
 </style>""", unsafe_allow_html=True)
@@ -1135,7 +1137,8 @@ if db and st.session_state.user_id:
 .st-key-ent_tops { position: relative; }
 .st-key-ent_topbtns { position: absolute !important; left: 0; right: 0; bottom: 6px; z-index: 2;
   height: var(--ent-top-h); display: flex; flex-direction: column; gap: 6px !important; }
-.st-key-ent_topbtns > div { flex: 1 1 0 !important; min-height: 0 !important; }
+.st-key-ent_topbtns > div { flex: 1 1 0 !important; min-height: 0 !important; width: 100% !important; }
+.st-key-ent_topbtns [data-testid="stButton"], .st-key-ent_topbtns .stButton { width: 100% !important; height: 100% !important; }
 .st-key-ent_topbtns button { width: 100% !important; height: 100% !important; min-height: 0 !important;
   padding: 0 !important; opacity: 0; cursor: pointer; }
 </style>""", unsafe_allow_html=True)
