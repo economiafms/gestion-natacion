@@ -78,21 +78,10 @@ def calcular_resumen(db, id_nadador, anio, mis_resultados):
     if mejor:
         r["mejor_mejora"] = f"{mejor[0]} {mejor[1]} · -{_fmt_seg(mejor[2])} s"
 
-    # Puesto en el medallero del club del año (individual + relevos)
-    try:
-        t = db['tiempos'].assign(_f=pd.to_datetime(db['tiempos']['fecha'], errors='coerce'))
-        t = t[(t['_f'].dt.year == anio) & (pd.to_numeric(t['posicion'], errors='coerce').between(1, 3))]
-        conteo = t['codnadador'].value_counts().to_dict()
-        rel = db['relevos'].assign(_f=pd.to_datetime(db['relevos']['fecha'], errors='coerce'))
-        rel = rel[(rel['_f'].dt.year == anio) & (pd.to_numeric(rel['posicion'], errors='coerce').between(1, 3))]
-        for k in range(1, 5):
-            for cod in rel.get(f'nadador_{k}', pd.Series(dtype=object)).dropna():
-                conteo[cod] = conteo.get(cod, 0) + 1
-        if r["podios"] > 0 and conteo:
-            mio = conteo.get(id_nadador, 0)
-            r["puesto_club"] = 1 + sum(1 for v in conteo.values() if v > mio)
-    except Exception:
-        pass
+    # Medallas totales con NOB (toda su historia en el club, individuales + relevos)
+    hist = todos[todos['posicion'].between(1, 3)]
+    r["medallas_nob"] = int(len(hist))
+    r["oros_nob"] = int((hist['posicion'] == 1).sum())
     return r
 
 
@@ -235,8 +224,10 @@ def generar_imagen(r, nombre, formato="Historia (1080×1920)"):
         destacados.append(("Estilo favorito", f"{r['estilo_fav']} ({r['estilo_fav_n']} carreras)"))
     if r.get("mejor_mejora"):
         destacados.append(("Mayor mejora", r["mejor_mejora"]))
-    if r.get("puesto_club"):
-        destacados.append(("Medallero del club", f"{r['puesto_club']}° del club · {r['podios']} podios"))
+    if r.get("medallas_nob"):
+        n, o = r["medallas_nob"], r.get("oros_nob", 0)
+        txt = f"{n} medalla{'s' if n != 1 else ''}" + (f" · {o} de oro" if o else "")
+        destacados.append(("Medallas totales en NOB", txt))
     if not historia:
         destacados = destacados[:1]   # el posteo es más bajo: solo el destacado principal
     for t, v in destacados:
