@@ -34,11 +34,43 @@ def _fmt_seg(s):
     return f"{s:.2f}".replace(".", ",")
 
 
+def _fechas(serie):
+    """Fechas con formatos mezclados (con o sin hora) sin perder registros."""
+    return pd.to_datetime(serie, errors='coerce', format='mixed')
+
+
+def _pileta_norm(v):
+    """'3', 3, 3.0 y ' 3 ' son la misma pileta; vacío -> None."""
+    if v is None or (isinstance(v, float) and pd.isna(v)):
+        return None
+    s_ = str(v).strip()
+    if s_ == "" or s_.lower() in ("nan", "none"):
+        return None
+    try:
+        f = float(s_)
+        return str(int(f)) if f.is_integer() else s_
+    except ValueError:
+        return s_.upper()
+
+
+def contar_torneos(df):
+    """Un torneo = una pileta en una fecha (día). Normaliza formatos de fecha y de pileta,
+    y un registro sin pileta se suma al torneo de esa misma fecha (si lo hay)."""
+    if df.empty:
+        return 0
+    dias = _fechas(df['fecha']).dt.date
+    piletas = df['codpileta'].map(_pileta_norm) if 'codpileta' in df.columns else pd.Series([None] * len(df), index=df.index)
+    pares = {(d, p) for d, p in zip(dias, piletas) if pd.notna(d) and pd.notna(p)}
+    dias_con_pileta = {d for d, _ in pares}
+    sin_pileta = {d for d, p in zip(dias, piletas) if pd.notna(d) and pd.isna(p) and d not in dias_con_pileta}
+    return len(pares) + len(sin_pileta)
+
+
 def calcular_resumen(db, id_nadador, anio, mis_resultados):
     """Estadísticas del año a partir de los registros de la ficha (individuales y relevos)."""
     ind, todos = mis_resultados(id_nadador)
-    todos = todos.assign(_f=pd.to_datetime(todos['fecha'], errors='coerce'))
-    ind = ind.assign(_f=pd.to_datetime(ind['fecha'], errors='coerce'), _s=ind['tiempo'].map(_seg))
+    todos = todos.assign(_f=_fechas(todos['fecha']))
+    ind = ind.assign(_f=_fechas(ind['fecha']), _s=ind['tiempo'].map(_seg))
     del_anio = todos[todos['_f'].dt.year == anio]
     ind_anio = ind[ind['_f'].dt.year == anio]
 
@@ -47,7 +79,7 @@ def calcular_resumen(db, id_nadador, anio, mis_resultados):
     if del_anio.empty:
         return r
 
-    r["torneos"] = del_anio[['_f', 'codpileta']].drop_duplicates().shape[0]
+    r["torneos"] = contar_torneos(del_anio)
     r["oro"] = int((del_anio['posicion'] == 1).sum())
     r["plata"] = int((del_anio['posicion'] == 2).sum())
     r["bronce"] = int((del_anio['posicion'] == 3).sum())
