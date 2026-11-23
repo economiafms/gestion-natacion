@@ -143,11 +143,11 @@ def barra_movil(principales, nombre, extras, activo=None):
       - Panel desplegable con `extras` (se abre/cierra con la flecha junto al nombre).
       - Fila principal fija de 5 botones `principales` (icono, etiqueta); el del medio es el
         botón central elevado y, si su icono es "escudo", muestra el escudo del club.
-      - Franja inferior: nombre del nadador (va a Mi Ficha) + botón "Más" con flecha. El rincón derecho
-        queda libre para el sello de Streamlit Cloud.
+      - Franja inferior: nombre del nadador (va a Mi Ficha), botón "+" (solo si hay `extras`) y
+        botón de cerrar sesión (siempre). El rincón derecho queda libre para el sello de Streamlit Cloud.
 
     `activo`: índice (0-4) de la página actual en la fila principal, o None.
-    Devuelve ("principal", i) | ("ficha",) | ("extra", i) | None.
+    Devuelve ("principal", i) | ("ficha",) | ("extra", i) | ("salir",) | None.
     """
     abierto = st.session_state.get("nav_mas_abierto", False)
 
@@ -175,7 +175,7 @@ def barra_movil(principales, nombre, extras, activo=None):
         # Los estilos van dentro de la barra fija para no sumar espacio arriba de la página
         st.html(f"<style>{''.join(css)}</style>")
 
-        if abierto and len(extras) > 1:
+        if abierto and extras:
             with st.container(key="bn_panel"):
                 for fila in range(0, len(extras), 2):
                     for col, (j, (icono, _)) in zip(st.columns(2, gap="small"),
@@ -193,14 +193,12 @@ def barra_movil(principales, nombre, extras, activo=None):
         with st.container(key="bn_strip", horizontal=True, vertical_alignment="center"):
             if st.button(nombre, key="bn_nombre"):
                 accion = ("ficha",)
-            if len(extras) == 1:
-                # Una sola opción extra (hoy, para el nadador: Cerrar sesión): botón directo, sin panel
-                if st.button("", key="bn_mas", icon=":material/logout:", help=extras[0][1]):
-                    accion = ("extra", 0)
-            elif extras:
+            if extras:
                 st.button("", key="bn_mas", on_click=_alternar_panel_nav,
                           icon=":material/close:" if abierto else ":material/add:",
                           help="Cerrar" if abierto else "Más opciones")
+            if st.button("", key="bn_salir", icon=":material/logout:", help="Cerrar sesión"):
+                accion = ("salir",)
 
     if accion is not None:
         st.session_state.nav_mas_abierto = False
@@ -578,13 +576,29 @@ def aplicar_tema():
                 min-height: 40px !important; padding: 2px 8px !important; border: none !important;
                 background: transparent !important; box-shadow: none !important; transform: none !important;
             }
-            .st-key-bn_nombre button p { font-size: 16px !important; font-weight: 800 !important; color: #fff; white-space: nowrap; }
-            .st-key-bn_mas button {
-                border-radius: 999px !important; min-width: 64px !important; padding: 2px 16px !important;
+            .st-key-bn_nombre button p { font-size: 16px !important; font-weight: 800 !important; color: #fff; white-space: nowrap;
+                overflow: hidden; text-overflow: ellipsis; }
+            /* Botones a la derecha del nombre, medidos desde el borde derecho para quedar siempre
+               fuera del sello de Streamlit (~130 px): salir termina a 140 px del borde, + a su izquierda */
+            .st-key-bn_strip { position: relative; }
+            .st-key-bn_salir, .st-key-bn_mas {
+                position: absolute !important; top: 50%; transform: translateY(-40%); width: auto !important;
+            }
+            .st-key-bn_salir { right: 140px; }
+            .st-key-bn_mas   { right: 198px; }
+            /* El nombre no debe llegar a los botones */
+            .st-key-bn_nombre { max-width: calc(100% - 204px) !important; }
+            .st-key-nob_bottom_nav:has(.st-key-bn_mas) .st-key-bn_nombre { max-width: calc(100% - 262px) !important; }
+            .st-key-nob_bottom_nav:has(.st-key-bn_mas) .st-key-bn_nombre button { padding-left: 4px !important; padding-right: 4px !important; }
+            .st-key-nob_bottom_nav:has(.st-key-bn_mas) .st-key-bn_nombre button p { font-size: 14px !important; }
+            .st-key-bn_nombre button { max-width: 100%; }
+            .st-key-bn_mas button, .st-key-bn_salir button {
+                border-radius: 999px !important; min-width: 52px !important; padding: 2px 12px !important;
                 background: rgba(255,255,255,0.08) !important; border: 1px solid rgba(255,255,255,0.16) !important;
                 box-shadow: none !important;
             }
-            .st-key-bn_mas button [data-testid="stIconMaterial"] { font-size: 26px !important; color: #fff; margin: 0 !important; }
+            .st-key-bn_mas button [data-testid="stIconMaterial"],
+            .st-key-bn_salir button [data-testid="stIconMaterial"] { font-size: 26px !important; color: #fff; margin: 0 !important; }
 
             /* Panel desplegable de más opciones */
             .st-key-bn_panel {

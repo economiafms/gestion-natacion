@@ -304,8 +304,8 @@ else:
 
     # --- BARRA INFERIOR (SOLO CELULAR) ---
     # Fila fija: [Rutinas][Entrenamientos][ INICIO (escudo) ][Mi Categoría][Agenda]
-    # Debajo: nombre del nadador (→ Mi Ficha) y flecha ⌃ que despliega el resto:
-    # herramientas del manager y Cerrar sesión.
+    # Debajo: nombre del nadador (→ Mi Ficha), botón + (solo manager: Ranking, Simulador, Carga)
+    # y botón fijo de cerrar sesión, ubicado para que no lo tape el sello de Streamlit.
     principales = [("📝", "Rutinas", pg_rutinas), ("⏱️", "Entrenamientos", pg_entrenamientos),
                    ("escudo", "Inicio", pg_inicio),
                    ("🏅", "Mi Categoría", pg_categoria), ("📅", "Agenda", pg_agenda)]
@@ -316,7 +316,7 @@ else:
         extras += [("🏆", "Ranking", pg_ranking), ("⏱️", "Simulador", pg_simulador)]
         if st.session_state.admin_unlocked:
             extras.append(("⚙️", "Carga de Datos", pg_carga))
-    extras.append(("🚪", "Cerrar sesión", "salir"))
+    # Cerrar sesión no va en el panel: tiene su propio botón fijo en la franja
 
     accion = barra_movil([(i, e) for i, e, _ in principales], st.session_state.user_name or "Mi Ficha",
                          [(i, e) for i, e, _ in extras], activo)
@@ -326,11 +326,9 @@ else:
         elif accion[0] == "ficha":
             ir_a_mi_ficha_nav()
         elif accion[0] == "extra":
-            destino = extras[accion[1]][2]
-            if destino == "salir":
-                cerrar_sesion()
-            else:
-                st.switch_page(destino)
+            st.switch_page(extras[accion[1]][2])
+        elif accion[0] == "salir":
+            cerrar_sesion()
 
     with st.sidebar:
         st.write("") 
