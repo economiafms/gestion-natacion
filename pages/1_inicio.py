@@ -455,7 +455,8 @@ if db and st.session_state.user_id:
         if df_rut is not None and df_seg is not None:
             rutinas_mes = df_rut[(df_rut['anio_rutina'] == hoy_arg.year) & (df_rut['mes_rutina'] == hoy_arg.month)].copy()
             if not rutinas_mes.empty:
-                with st.expander("🏊‍♂️ ¿Hice mi rutina de hoy?", expanded=False):
+                seccion("Mi entrenamiento de hoy")
+                with st.container(border=True):
                     hoy_str_corto = hoy_arg.strftime("%Y-%m-%d")
                     rutina_hoy_completada = None
                     
@@ -497,7 +498,10 @@ if db and st.session_state.user_id:
                             r_nro = int(prox_sesion['nro_sesion']) 
                             r_texto = prox_sesion['texto_rutina']
                             
-                            st.markdown(f"#### ⚡ Mi entrenamiento de hoy: Sesión {r_nro}")
+                            st.markdown(f"""<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+<span class="nob-tag warn" style="margin:0;">PENDIENTE</span>
+<span style="font-size:18px;font-weight:800;color:#fff;">Sesión {r_nro} de {len(rutinas_mes)}</span>
+</div>""", unsafe_allow_html=True)
                             st.markdown(r_texto)
                             st.write("") 
                             
@@ -661,64 +665,40 @@ if db and st.session_state.user_id:
         )
         st.markdown(f'<div class="nob-chip-row">{chips}</div>', unsafe_allow_html=True)
     
-    st.divider()
+    # =================================================================
+    # 3. ACCESOS RÁPIDOS (LÓGICA POR ROL)
+    # =================================================================
+    seccion("Accesos rápidos")
 
-    # =================================================================
-    # 3. BOTONERA PRINCIPAL (LÓGICA POR ROL)
-    # =================================================================
-    
-    # --- ROL NADADOR (N) ---
     if st.session_state.role == "N":
-        c1, c2 = st.columns(2)
-        with c1:
-            if st.button("⏱️ Entrenamientos", type="primary", use_container_width=True, key="btn_train_N"): 
-                st.switch_page("pages/5_entrenamientos.py")
-        with c2:
-            if st.button("🏅 Mi Categoría", type="primary", use_container_width=True, key="btn_cat_N"): 
-                st.switch_page("pages/6_mi_categoria.py")
-        
-        c3, c4 = st.columns(2)
-        with c3:
-            if st.button("📝 Rutinas", type="primary", use_container_width=True, key="btn_rut_N"):
-                st.switch_page("pages/8_rutinas.py")
-        with c4:
-            if st.button("📅 Agenda", type="primary", use_container_width=True, key="btn_ag_N"):
-                st.switch_page("pages/7_agenda.py")
-
-    # --- ROL MAESTRO (M) ---
+        accesos = [
+            ("⏱️ Entrenamientos", "pages/5_entrenamientos.py", "btn_train_N"),
+            ("🏅 Mi Categoría", "pages/6_mi_categoria.py", "btn_cat_N"),
+            ("📝 Rutinas", "pages/8_rutinas.py", "btn_rut_N"),
+            ("📅 Agenda", "pages/7_agenda.py", "btn_ag_N"),
+        ]
     else:
-        c1, c2 = st.columns(2)
-        with c1: 
-            if st.button("🗃️ Fichero", use_container_width=True, key="btn_bd_M"): 
-                st.session_state.ver_nadador_especifico = None
-                st.switch_page("pages/2_visualizar_datos.py")
-        with c2: 
-            if st.button("🏆 Ver Ranking", use_container_width=True, key="btn_rk_M"): 
-                st.switch_page("pages/4_ranking.py")
-        
-        c3, c4 = st.columns(2)
-        with c3:
-            if st.button("⏱️ Entrenamientos", type="primary", use_container_width=True, key="btn_train_M"): 
-                st.switch_page("pages/5_entrenamientos.py")
-        with c4:
-            if st.button("🏅 Mi Categoría", type="primary", use_container_width=True, key="btn_cat_M"): 
-                st.switch_page("pages/6_mi_categoria.py")
+        accesos = [
+            ("🗃️ Fichero", "pages/2_visualizar_datos.py", "btn_bd_M"),
+            ("🏆 Ranking", "pages/4_ranking.py", "btn_rk_M"),
+            ("⏱️ Entrenamientos", "pages/5_entrenamientos.py", "btn_train_M"),
+            ("🏅 Mi Categoría", "pages/6_mi_categoria.py", "btn_cat_M"),
+            ("📝 Rutinas", "pages/8_rutinas.py", "btn_rut_M"),
+            ("📅 Agenda", "pages/7_agenda.py", "btn_ag_M"),
+            ("🏊 Simulador Postas", "pages/3_simulador.py", "btn_sim_M"),
+        ]
 
-        c5, c6 = st.columns(2)
-        with c5:
-            if st.button("📝 Rutinas", type="primary", use_container_width=True, key="btn_rut_M"):
-                st.switch_page("pages/8_rutinas.py")
-        with c6:
-            if st.button("📅 Agenda", type="primary", use_container_width=True, key="btn_ag_M"):
-                st.switch_page("pages/7_agenda.py")
-
-        if st.button("🏊‍♂️ Simulador Postas", use_container_width=True, key="btn_sim_M"): 
-            st.switch_page("pages/3_simulador.py")
-
-    st.write("")
+    for i in range(0, len(accesos), 2):
+        cols = st.columns(2)
+        for col, (label, destino, key) in zip(cols, accesos[i:i + 2]):
+            with col:
+                if st.button(label, use_container_width=True, key=key):
+                    if key == "btn_bd_M":
+                        st.session_state.ver_nadador_especifico = None
+                    st.switch_page(destino)
 
     # // 2️⃣ Estadísticas del club
-    seccion("Estadísticas del club")
+    seccion("El club en números")
 
     total_nadadores = len(db['nadadores'])
     total_pruebas_reg = len(df_t) + len(df_r)
@@ -760,7 +740,7 @@ if db and st.session_state.user_id:
 
     # --- 6. GESTIÓN (Perfil M) ---
     if st.session_state.role == "M":
-        st.write(""); st.write("")
+        seccion("Gestión")
         label_btn = "⚙️ CARGAR COMPETENCIAS" if not st.session_state.admin_unlocked else "🔒 BLOQUEAR GESTIÓN"
         
         if st.button(label_btn, use_container_width=True, key="btn_lock_toggle_m"):
