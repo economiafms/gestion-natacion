@@ -53,20 +53,59 @@ def _pileta_norm(v):
         return s_.upper()
 
 
-def contar_torneos(df):
-    """Un torneo = una pileta en una fecha (día). Normaliza formatos de fecha y de pileta,
-    y un registro sin pileta se suma al torneo de esa misma fecha (si lo hay)."""
+def _club_norm(txt):
+    """Nombre de club comparable: sin tildes, mayúsculas y espacios de más."""
+    import unicodedata
+    t = unicodedata.normalize("NFKD", str(txt)).encode("ascii", "ignore").decode()
+    return " ".join(t.upper().split())
+
+
+def detalle_fechas(df, clubes=None):
+    """Fechas de competencia del nadador: una sede (club) en un día.
+    - Piletas distintas del mismo club (p. ej. 25 m y 50 m) cuentan como la misma sede.
+    - Días consecutivos en la misma sede son un mismo torneo (sábado y domingo).
+    - Un registro sin pileta se suma a la fecha de ese mismo día.
+    Devuelve una lista ordenada de (fecha_inicio, fecha_fin, nombre_sede)."""
     if df.empty:
-        return 0
+        return []
+    clubes = {(_pileta_norm(k)): v for k, v in (clubes or {}).items() if _pileta_norm(k) is not None}
     dias = _fechas(df['fecha']).dt.date
-    piletas = df['codpileta'].map(_pileta_norm) if 'codpileta' in df.columns else pd.Series([None] * len(df), index=df.index)
-    pares = {(d, p) for d, p in zip(dias, piletas) if pd.notna(d) and pd.notna(p)}
-    dias_con_pileta = {d for d, _ in pares}
-    sin_pileta = {d for d, p in zip(dias, piletas) if pd.notna(d) and pd.isna(p) and d not in dias_con_pileta}
-    return len(pares) + len(sin_pileta)
+    pil = df['codpileta'].map(_pileta_norm) if 'codpileta' in df.columns else pd.Series([None] * len(df), index=df.index)
+    nombre = {}
+    pares = set()
+    for d, p in zip(dias, pil):
+        if pd.isna(d) or pd.isna(p):
+            continue
+        club = clubes.get(p, f"Pileta {p}")
+        clave = _club_norm(club)
+        nombre.setdefault(clave, str(club))
+        pares.add((d, clave))
+    dias_con_sede = {d for d, _ in pares}
+    for d, p in zip(dias, pil):
+        if pd.notna(d) and pd.isna(p) and d not in dias_con_sede:
+            pares.add((d, "SIN SEDE"))
+            nombre.setdefault("SIN SEDE", "Sede sin cargar")
+            dias_con_sede.add(d)
+    # Unir días consecutivos en la misma sede
+    res = []
+    for clave in {c for _, c in pares}:
+        ds = sorted(d for d, c in pares if c == clave)
+        ini_, fin_ = ds[0], ds[0]
+        for d in ds[1:]:
+            if (d - fin_).days <= 1:
+                fin_ = d
+            else:
+                res.append((ini_, fin_, nombre[clave]))
+                ini_, fin_ = d, d
+        res.append((ini_, fin_, nombre[clave]))
+    return sorted(res)
 
 
-def calcular_resumen(db, id_nadador, anio, mis_resultados):
+def contar_torneos(df, clubes=None):
+    return len(detalle_fechas(df, clubes))
+
+
+def calcular_resumen(db, id_nadador, anio, mis_resultados, clubes=None):
     """Estadísticas del año a partir de los registros de la ficha (individuales y relevos)."""
     ind, todos = mis_resultados(id_nadador)
     todos = todos.assign(_f=_fechas(todos['fecha']))
@@ -79,7 +118,11 @@ def calcular_resumen(db, id_nadador, anio, mis_resultados):
     if del_anio.empty:
         return r
 
-    r["torneos"] = contar_torneos(del_anio)
+    fechas = detalle_fechas(del_anio, clubes)
+    r["torneos"] = len(fechas)
+    r["fechas_detalle"] = [
+        (f"{a.strftime('%d/%m')}" + (f" al {b.strftime('%d/%m')}" if b != a else "")) + f" · {sede}"
+        for a, b, sede in fechas]
     r["oro"] = int((del_anio['posicion'] == 1).sum())
     r["plata"] = int((del_anio['posicion'] == 2).sum())
     r["bronce"] = int((del_anio['posicion'] == 3).sum())

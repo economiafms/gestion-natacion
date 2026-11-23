@@ -283,15 +283,20 @@ def _imagen_resumen(claves, nombre, formato):
 
 @st.dialog("Mi año en el agua", width="medium")
 def dialogo_resumen_anual(id_nadador, nombre, anio):
-    r = resumen_anual.calcular_resumen(db, id_nadador, anio, mis_resultados)
+    r = resumen_anual.calcular_resumen(db, id_nadador, anio, mis_resultados, mapa_clubes())
     if not r.get("carreras"):
         st.info(f"No hay carreras tuyas registradas en {anio}. ¡El año que viene armamos el resumen juntos!")
         return
     formato = st.segmented_control("Formato", list(resumen_anual.FORMATOS), default=list(resumen_anual.FORMATOS)[0],
                                    key="ra_formato", label_visibility="collapsed") or list(resumen_anual.FORMATOS)[0]
     with st.spinner("Armando tu resumen…"):
-        png = _imagen_resumen(tuple(sorted(r.items())), nombre, formato)
+        png = _imagen_resumen(tuple(sorted((k, v) for k, v in r.items() if k != "fechas_detalle")), nombre, formato)
     st.image(png, use_container_width=True)
+    if r.get("fechas_detalle"):
+        with st.expander(f"📅 Fechas contadas ({r['torneos']})"):
+            st.markdown("\n".join(f"- {f}" for f in r["fechas_detalle"]))
+            st.caption("Cada fecha es una sede en un día. Las piletas de un mismo club y los torneos de días seguidos "
+                       "se cuentan una sola vez.")
     archivo = f"mi_{anio}_en_el_agua.png"
     st.download_button("⬇️ Descargar imagen", data=png, file_name=archivo, mime="image/png",
                        type="primary", use_container_width=True, key="ra_descargar")
@@ -364,6 +369,19 @@ def mis_resultados(id_nadador):
 
 
 MEDALLAS = {1: "🥇", 2: "🥈", 3: "🥉"}
+
+
+def mapa_clubes():
+    """codpileta -> nombre del club (sin la medida), para agrupar fechas por sede."""
+    clubes = {}
+    try:
+        _, _, df_pil = cargar_datos_inscripcion_inicio()
+        if df_pil is not None and not df_pil.empty:
+            for _, p in df_pil.iterrows():
+                clubes[p.get('codpileta')] = str(p.get('club', '-'))
+    except Exception:
+        pass
+    return clubes
 
 
 def mapa_sedes():
