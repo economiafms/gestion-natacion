@@ -244,7 +244,7 @@ Puedo consultar la ficha técnica completa de todos mis nadadores, incluyendo hi
 **📝 Rutinas**
 Permite crear, editar y asignar rutinas a mis nadadores, y verificar quiénes cumplen con los entrenamientos planificados.
 
-**🏋️ Entrenamientos**
+**🏋️ Test**
 Visualización de los tiempos de test de todos los nadadores para evaluar evolución y rendimiento.
 
 **🏅 Mi categoría**
@@ -279,7 +279,7 @@ También podés consultar la ficha de un compañero si conocés su DNI.
 **📝 Rutinas**
 Accedés a las rutinas mensuales del entrenador, con una barra de progreso para saber en qué sesión estás y llevar un registro ordenado de tus entrenamientos.
 
-**🏋️ Entrenamientos**
+**🏋️ Test**
 Este módulo se utiliza para cargar los test de rendimiento.
 Los test pueden incluir parciales, divididos en cuatro tramos según la distancia de la prueba. Recordá anotar los parciales según esta tabla.
 
@@ -339,7 +339,7 @@ AYUDA_PAGINAS = {
 - **Mes en curso:** las sesiones del mes; marcá **DÍA GANADO** al terminar cada una.
 - **Historial:** tu asistencia de meses anteriores.
 - Abrí el **Glosario de Referencias** para entender las abreviaturas de las rutinas."""},
-    "Entrenamientos": {"comun": """
+    "Test": {"comun": """
 - **Historial:** promedios y ritmos de tus tests, gráfico por estilo y registros con parciales.
 - **Cargar Test:** registrá un test nuevo con sus parciales (50 = 1x50 · 100 = 4x25 · 200 = 4x50 · 400 = 4x100)."""},
     "Mi Categoría": {"comun": """
