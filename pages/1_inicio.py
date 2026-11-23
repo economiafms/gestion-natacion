@@ -613,17 +613,15 @@ if "flash_msg" in st.session_state:
     del st.session_state.flash_type
 
 
-# Números de socio de los entrenadores (no nadadores)
-SOCIOS_ENTRENADOR = {"364604"}
-
 if db and st.session_state.user_id:
     user_id = st.session_state.user_id
     me = db['nadadores'][db['nadadores']['codnadador'] == user_id].iloc[0]
     # Nadador inactivo (sin marcas este año ni el anterior): sin rutinas ni resumen del año
     # El entrenador tiene ficha en Nadadores pero no compite: su Inicio no muestra datos de nadador
-    es_entrenador = str(st.session_state.get("nro_socio") or "").strip() in SOCIOS_ENTRENADOR
-    inactivo = st.session_state.role == "N" and actividad.id_txt(user_id) not in actividad.ids_activos(
-        db.get('tiempos'), db.get('relevos'))
+    es_entrenador = actividad.es_entrenador()
+    # El entrenador tampoco tiene rutinas: se trata como inactivo para esas tarjetas
+    inactivo = es_entrenador or (st.session_state.role == "N" and actividad.id_txt(user_id) not in actividad.ids_activos(
+        db.get('tiempos'), db.get('relevos')))
     
     try: edad = datetime.now().year - pd.to_datetime(me['fechanac']).year
     except: edad = 0
@@ -647,18 +645,16 @@ if db and st.session_state.user_id:
                      help="Ver padrón de nadadores" if es_entrenador else "Ver mi ficha completa"):
             ir_al_padron() if es_entrenador else ir_a_mi_ficha()
         # La celda Categoría lleva a Mi Categoría (botón invisible encima de la celda).
-        # Entrenador: la celda dice "Entrenador" y lleva al padrón.
-        _celda = ('<small>Perfil</small><b class="cat">Entrenador</b>' if es_entrenador
-                  else f'<small>Categoría</small><b class="cat">{html.escape(str(cat))}</b>')
+        # Entrenador: la celda dice "Entrenador" y es solo lectura.
+        _celda = ('<div><small>Categoría</small><b class="cat">Entrenador</b></div>' if es_entrenador
+                  else f'<div class="cat-link"><small>Categoría</small><b class="cat">{html.escape(str(cat))}</b></div>')
         with st.container(key="nob_idrow"):
             st.markdown(f"""<div class="nob-id-row">
-<div class="cat-link">{_celda}</div>
+{_celda}
 <div><small>Edad</small><b>{edad}</b></div>
 <div><small>Género</small><b>{html.escape(genero_txt)}</b></div>
 </div>""", unsafe_allow_html=True)
-            if st.button("Categoría", key="btn_cat_perfil"):
-                if es_entrenador:
-                    ir_al_padron()
+            if not es_entrenador and st.button("Categoría", key="btn_cat_perfil"):
                 # Manager: la página Categorías abre directamente en su categoría y género
                 st.session_state["cat_sel"] = cat
                 st.session_state["cat_gen"] = str(me['codgenero']).strip()
@@ -732,7 +728,9 @@ if db and st.session_state.user_id:
                     _dias = (_ev['fecha_evento'].date() - date.today()).days
                     _inscripto = _ins is not None and not _ins.empty and not _ins[
                         (_ins['id_competencia'] == _ev['id_competencia']) & (_ins['codnadador'] == user_id)].empty
-                    if _inscripto:
+                    if es_entrenador:
+                        _tag = ""
+                    elif _inscripto:
                         _tag = '<span class="nob-tag ok">INSCRIPTO</span>'
                     elif pd.notnull(_ev['fecha_limite']) and _ev['fecha_limite'].date() >= date.today():
                         _cierre = (_ev['fecha_limite'].date() - date.today()).days
@@ -765,9 +763,9 @@ if db and st.session_state.user_id:
     st.write("") 
 
     # // ATAJO RUTINA DIARIA
-    if st.session_state.role == "N" and not inactivo:
+    if st.session_state.role == "N":
         hoy_arg = datetime.now(timezone.utc) - timedelta(hours=3)
-        df_rut = db.get('rutinas')
+        df_rut = None if inactivo else db.get('rutinas')  # inactivos y entrenador: sin rutina del día
         df_seg = db.get('seguimiento')
         
         if df_rut is not None and df_seg is not None:
@@ -836,7 +834,7 @@ if db and st.session_state.user_id:
         # // WIDGET INSCRIPCIÓN RÁPIDA (CON INFO DEL TORNEO Y TIEMPOS)
         # // =========================================================
         df_comp, df_ins, df_piletas = cargar_datos_inscripcion_inicio()
-        if df_comp is not None and not df_comp.empty:
+        if df_comp is not None and not df_comp.empty and not es_entrenador:  # el entrenador no se inscribe
             hoy = date.today()
             df_view = df_comp.copy()
             df_view = df_view.sort_values(by='fecha_evento', ascending=True, na_position='last')

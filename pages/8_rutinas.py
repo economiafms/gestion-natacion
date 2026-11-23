@@ -582,6 +582,9 @@ hero("Sesiones de Entrenamiento", "📝")
 
 # Nadadores inactivos (sin marcas este año ni el anterior) no ven las rutinas
 import actividad
+if actividad.es_entrenador():
+    st.info("🔒 Las rutinas son para los nadadores.")
+    st.stop()
 if actividad.usuario_inactivo():
     actividad.aviso_inactivo("Rutinas")
     st.stop()

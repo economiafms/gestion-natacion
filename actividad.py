@@ -7,6 +7,15 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 
 
+# Números de socio de los entrenadores: tienen ficha en Nadadores pero no compiten,
+# así que no ven funciones de nadador (rutinas, inscripción, medallero, resumen del año).
+SOCIOS_ENTRENADOR = {"364604"}
+
+
+def es_entrenador():
+    return str(st.session_state.get("nro_socio") or "").strip() in SOCIOS_ENTRENADOR
+
+
 def anios_activos():
     hoy = date.today().year
     return [hoy - 1, hoy]
