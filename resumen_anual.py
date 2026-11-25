@@ -302,7 +302,7 @@ def generar_imagen(r, nombre, formato="Historia (1080×1920)"):
     ch = 184 if historia else 168
     datos = [
         ("Carreras", str(r.get("carreras", 0)), f"{r.get('relevos', 0)} en relevos" if r.get("relevos") else "individuales"),
-        ("Fechas", str(r.get("torneos", 0)), f"más activo: {r['mes_activo']}" if r.get("mes_activo") else ""),
+        ("Fechas", str(r.get("torneos", 0)), "de competencia"),
         ("Metros", f"{r.get('metros', 0):,}".replace(",", ".") + " m", "en competencia"),
         ("Récords personales", str(r.get("records", 0)), "marcas mejoradas"),
     ]
