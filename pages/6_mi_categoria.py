@@ -153,8 +153,7 @@ else:
     st.stop()
 
 # 3. Activos: compitieron este año o el anterior. El resto se considera inactivo.
-ANIO_ACT = date.today().year
-ANIO_REF = ANIO_ACT - 1
+ANIO_REF, ANIO_ACT = actividad.anios_activos()   # el mismo criterio de toda la app
 PERIODO = f"{ANIO_REF} o {ANIO_ACT}"
 ACTIVOS = actividad.ids_activos(db['tiempos'], db['relevos'], [ANIO_REF, ANIO_ACT])
 df_nad['activo'] = df_nad['codnadador'].apply(lambda x: actividad.id_txt(x) in ACTIVOS)
