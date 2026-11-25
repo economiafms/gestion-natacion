@@ -566,6 +566,78 @@ def dialogo_estilo(estilo):
     pie_dialogo("dlg_est")
 
 
+def ranking_50_activos():
+    """Mejor marca individual en 50 m de cada nadador activo (mismo criterio que el resto de Inicio),
+    por estilo. El entrenador no figura. Devuelve {estilo: DataFrame ordenado del más rápido al más lento}."""
+    t = db['tiempos'].copy()
+    if t.empty:
+        return {}
+    est = db['estilos'].rename(columns={'descripcion': 'Estilo'})[['codestilo', 'Estilo']]
+    dis = db['distancias'].rename(columns={'descripcion': 'Distancia'})[['coddistancia', 'Distancia']]
+    t = t.merge(est, on='codestilo', how='left').merge(dis, on='coddistancia', how='left')
+    t = t[pd.to_numeric(t['Distancia'].astype(str).str.extract(r'(\d+)')[0], errors='coerce') == 50]
+
+    ids_act = actividad.ids_activos(db.get('tiempos'), db.get('relevos'))
+    nad = entrenador.sin_entrenador(db['nadadores']).copy()
+    nad['_id'] = nad['codnadador'].map(actividad.id_txt)
+    nad = nad[nad['_id'].isin(ids_act)].drop_duplicates('_id')
+    t['_id'] = t['codnadador'].map(actividad.id_txt)
+    t = t.merge(nad[['_id', 'nombre', 'apellido', 'codgenero']], on='_id', how='inner')
+    if t.empty:
+        return {}
+    t['_s'] = t['tiempo'].apply(tiempo_a_seg)
+    t = t[t['_s'] < 999999].sort_values('_s').drop_duplicates(['Estilo', '_id'])
+    t['_gen'] = t['codgenero'].astype(str).str.strip().str.upper()
+    return {e: g.reset_index(drop=True) for e, g in t.dropna(subset=['Estilo']).groupby('Estilo')}
+
+
+def html_ranking(df, sedes):
+    """Filas del ranking con el mismo diseño que los registros (medalla para el podio, posición para el resto)."""
+    filas = []
+    for i, r in enumerate(df.itertuples(index=False), start=1):
+        f = pd.to_datetime(r.fecha, errors='coerce')
+        fecha = f.strftime('%d/%m/%Y') if pd.notnull(f) else "-"
+        sede = html.escape(str(sedes.get(r.codpileta, r.codpileta if pd.notna(r.codpileta) else '-')))
+        nombre = html.escape(f"{str(r.apellido).upper()}, {r.nombre}")
+        icono = MEDALLAS.get(i, f'<span class="nob-rec-pos">{i}°</span>')
+        filas.append(
+            f'<div class="nob-rec m{i}">'
+            f'<div class="nob-rec-med">{icono}</div>'
+            f'<div class="nob-rec-body"><div class="nob-rec-t">{nombre}</div>'
+            f'<div class="nob-rec-m">{fecha} · {sede}</div></div>'
+            f'<div class="nob-rec-time">{html.escape(str(r.tiempo))}</div></div>'
+        )
+    return "".join(filas)
+
+
+@st.dialog("Ranking 50 m · activos", width="large")
+def dialogo_ranking_estilo(estilo):
+    rk = ranking_50_activos().get(estilo, pd.DataFrame())
+    anios = actividad.anios_activos()
+
+    # Filtro por género (arranca en Todos)
+    with st.container(key="dlg_rk_filtro"):
+        gen = st.segmented_control("Género", ["Todos", "Femenino", "Masculino"], default="Todos",
+                                   label_visibility="collapsed")
+    if not rk.empty and gen in ("Femenino", "Masculino"):
+        rk = rk[rk['_gen'] == gen[0]]
+
+    st.markdown(f"""<div class="nob-est-head">
+<div class="nob-est-name">50 m {html.escape(str(estilo))}</div>
+<div class="nob-est-desc">Mejor marca de cada nadador activo (con marcas en {anios[0]} o {anios[1]})</div>
+</div>""", unsafe_allow_html=True)
+
+    seccion(f"Ranking · {len(rk)}")
+    if rk.empty:
+        st.caption("No hay marcas de nadadores activos en esta prueba.")
+    else:
+        st.markdown(html_ranking(rk, mapa_sedes()), unsafe_allow_html=True)
+
+    st.write("")
+    if st.button("← Volver", key="dlg_rk_volver", use_container_width=True):
+        st.rerun()
+
+
 @st.dialog("Estadísticas del club", width="large")
 def dialogo_club(df_t, df_r):
     """Gráficos de nadadores por categoría y género (los totales y el medallero quedan en Inicio)."""
@@ -1052,6 +1124,25 @@ if db and st.session_state.user_id:
                     if st.button(str(cantidad), key=f"est_{i}", use_container_width=True,
                                  help=f"Ver mejores marcas e historial de {estilo}"):
                         dialogo_estilo(estilo)
+
+    # Entrenador: las mismas tarjetas de estilos, con la cantidad de nadadores activos que tienen marca
+    # en 50 m de ese estilo. Al tocarlas se abre el ranking de 50 m de los activos.
+    if es_entrenador:
+        _rk = ranking_50_activos()
+        if _rk:
+            seccion("Ranking 50 m por estilo")
+            items = sorted(((e, len(g)) for e, g in _rk.items()), key=lambda x: -x[1])
+            nombres_css = "".join(
+                f'.st-key-estr_{i} button::after {{ content: "{str(estilo).upper().replace(chr(34), "")}"; }}'
+                for i, (estilo, _) in enumerate(items)
+            )
+            st.markdown(f"<style>{nombres_css}</style>", unsafe_allow_html=True)
+            with st.container(key="nob_estilos"):
+                for i, (col, (estilo, cantidad)) in enumerate(zip(st.columns(len(items), gap="small"), items)):
+                    with col:
+                        if st.button(str(cantidad), key=f"estr_{i}", use_container_width=True,
+                                     help=f"Ver ranking de 50 m {estilo} (nadadores activos)"):
+                            dialogo_ranking_estilo(estilo)
 
     # Nadador y manager: chip de su categoría (mismos rivales que la página Mi Categoría: categoría y género)
     if st.session_state.role in ["N", "M", "P"] and not es_entrenador and cat not in (None, "-"):
