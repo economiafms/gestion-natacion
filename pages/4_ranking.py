@@ -1,6 +1,7 @@
 import streamlit as st
 import datos
 import entrenador
+import actividad
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime
@@ -134,6 +135,14 @@ with tab_indiv:
     f_distancia = select_flechas("Distancia", lista_distancias, "rk_dist", index=idx_distancia, contenedor=c2)
     f_genero = select_flechas("Género", lista_generos, "rk_gen", contenedor=c3)
 
+    # Perfil M: elegir entre nadadores activos (por defecto) o todos. Activos: con alguna marca de
+    # competencia (individual o relevo) el año anterior o el corriente, igual que en el resto de la app.
+    solo_activos = False
+    if st.session_state.get("role") == "M":
+        _anios = actividad.anios_activos()
+        solo_activos = st.toggle("Solo nadadores activos", value=True, key="rk_activos",
+                                 help=f"Activos: con marcas en {_anios[0]} o {_anios[1]}. Apagalo para ver a todos.")
+
     # Aplicar filtros básicos
     if 'Estilo' in df.columns and 'Distancia' in df.columns:
         df_filtrado = df[
@@ -145,6 +154,10 @@ with tab_indiv:
 
     if f_genero != "Todos":
         df_filtrado = df_filtrado[df_filtrado['codgenero'] == f_genero]
+
+    if solo_activos:
+        _ids_act = actividad.ids_activos(data['tiempos'], data['relevos'])
+        df_filtrado = df_filtrado[df_filtrado['codnadador'].map(actividad.id_txt).isin(_ids_act)]
 
     # --- LÓGICA DE RANKING (MEJORES MARCAS ÚNICAS) ---
     # 1. Ordenamos por tiempo (el más rápido primero)
