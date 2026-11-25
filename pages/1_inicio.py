@@ -1216,20 +1216,20 @@ if db and st.session_state.user_id:
             # Dentro de cada tarjeta, ♂ / ♀ (colores de las tarjetas de categorías): abren el ranking ya filtrado
             gen_css = """
 .st-key-nob_estilos [class*="st-key-rkcard_"] {
-  gap: 0 !important; padding: 0 6px 8px; border-radius: 14px;
+  gap: 0 !important; padding: 0 6px 10px; border-radius: 14px;
   background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.08);
   transition: border-color .12s ease, transform .12s ease; }
 .st-key-nob_estilos [class*="st-key-rkcard_"]:hover { border-color: rgba(227,6,19,0.5); transform: translateY(-2px); }
 .st-key-nob_estilos [class*="st-key-rkcard_"] [class*="st-key-estr_"] button {
-  background: transparent !important; border: none !important; box-shadow: none !important; min-height: 64px !important; }
+  background: transparent !important; border: none !important; box-shadow: none !important; min-height: 60px !important; }
 .st-key-nob_estilos [class*="st-key-rkcard_"] [class*="st-key-estr_"] button:hover { transform: none; }
-.st-key-nob_estilos [class*="st-key-rkgen_"] { gap: 4px !important; flex-wrap: nowrap !important; }
-.st-key-nob_estilos [class*="st-key-rkgen_"] > div { flex: 1 1 0 !important; min-width: 0 !important; }
+.st-key-nob_estilos [class*="st-key-rkgen_"] { gap: 6px !important; flex-wrap: nowrap !important; justify-content: center !important; margin-top: -4px; }
+.st-key-nob_estilos [class*="st-key-rkgen_"] > div { flex: 0 0 auto !important; width: auto !important; min-width: 0 !important; }
 .st-key-nob_estilos [class*="st-key-rkm_"] button, .st-key-nob_estilos [class*="st-key-rkf_"] button {
-  width: 100%; min-height: 28px !important; padding: 0 4px !important; border-radius: 9px !important;
-  flex-direction: row !important; transition: transform .12s ease, background .12s ease; }
+  width: 30px !important; height: 22px !important; min-height: 0 !important; padding: 0 !important; border-radius: 999px !important;
+  flex-direction: row !important; line-height: 1 !important; transition: transform .12s ease, background .12s ease; }
 .st-key-nob_estilos [class*="st-key-rkm_"] button p, .st-key-nob_estilos [class*="st-key-rkf_"] button p {
-  font-size: 15px !important; font-weight: 800 !important; color: inherit; }
+  font-size: 12px !important; font-weight: 800 !important; line-height: 1 !important; margin: 0 !important; color: inherit; }
 .st-key-nob_estilos [class*="st-key-rkm_"] button::after, .st-key-nob_estilos [class*="st-key-rkf_"] button::after { content: none !important; }
 .st-key-nob_estilos [class*="st-key-rkm_"] button { background: rgba(227,6,19,0.16) !important; border: 1px solid rgba(227,6,19,0.55) !important; color: #FF6B72 !important; }
 .st-key-nob_estilos [class*="st-key-rkf_"] button { background: rgba(240,98,146,0.16) !important; border: 1px solid rgba(240,98,146,0.55) !important; color: #F8A5C2 !important; }
