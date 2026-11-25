@@ -340,7 +340,8 @@ def dialogo_resumen_anual(id_nadador, nombre, anio):
 
 
 @st.cache_data(ttl="1h", show_spinner=False)
-def _imagen_resumen_club(claves, formato):
+def _imagen_resumen_club(claves, formato, version):
+    # `version` es parte de la clave de la caché: al cambiar el diseño se genera la imagen nueva
     return resumen_anual.generar_imagen_club(dict(claves), formato)[0]
 
 
@@ -386,7 +387,7 @@ def dialogo_resumen_club(anio):
     with st.spinner("Armando el resumen del equipo…"):
         claves = tuple(sorted((k, tuple(v) if isinstance(v, list) else v)
                               for k, v in r.items() if k != "fechas_detalle"))
-        png = _imagen_resumen_club(claves, formato)
+        png = _imagen_resumen_club(claves, formato, resumen_anual.VERSION_IMAGEN_CLUB)
     st.image(png, use_container_width=True)
     if r.get("fechas_detalle"):
         filas = "".join(

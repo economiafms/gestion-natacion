@@ -353,6 +353,8 @@ def generar_imagen(r, nombre, formato="Historia (1080×1920)"):
 
 # ================================================================ resumen del club (entrenador)
 PROFE = "Profe. Franco Minacori"
+# Subir este número al cambiar el diseño de la imagen del equipo: así no se sirve una imagen vieja de la caché
+VERSION_IMAGEN_CLUB = 2
 
 # Logros del equipo por año, que no salen de las planillas: (línea 1, línea 2, puesto, total de clubes)
 LOGROS_CLUB = {
