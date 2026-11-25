@@ -376,7 +376,7 @@ def botones_imagen_club(png, archivo, titulo, key="ra"):
 </script>""", unsafe_allow_javascript=True)
 
 
-@st.dialog("Natación Master · resumen del año", width="medium")
+@st.dialog("Resumen del año", width="medium")
 def dialogo_resumen_club(anio):
     r = resumen_anual.calcular_resumen_club(db, anio, mapa_clubes(), entrenador.ids_entrenador(db['nadadores']))
     if not r.get("carreras"):
