@@ -481,16 +481,8 @@ def generar_imagen_club(r, formato="Historia (1080×1920)"):
     d.text((M, y), "NUESTRO", font=_f("Black", 120 if historia else 96), fill=(255, 255, 255))
     d.text((M, y + (112 if historia else 90)), str(r["anio"]), font=_f("Black", 230 if historia else 170), fill=ROJO)
     y += 360 if historia else 270
-    if historia:
-        d.text((M, y), "en el agua", font=_f("SemiBold", 46), fill=(235, 235, 235))
-        y += 70
-        d.text((M, y), "Natación Master", font=_f("Bold", 44), fill=(255, 205, 210))
-        y += 90
-    else:   # el posteo es más bajo: una sola línea
-        fe = _f("SemiBold", 38)
-        d.text((M, y), "en el agua · ", font=fe, fill=(235, 235, 235))
-        d.text((M + d.textlength("en el agua · ", font=fe), y), "Natación Master", font=_f("Bold", 38), fill=(255, 205, 210))
-        y += 68
+    d.text((M, y), "Natación Master", font=_f("Bold", 52 if historia else 40), fill=(255, 205, 210))
+    y += 100 if historia else 68
 
     rad = 78 if historia else 62
     cy = y + rad + 10

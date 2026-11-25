@@ -408,7 +408,7 @@ def tarjeta_resumen_club():
         return
     anio = (datetime.now(timezone.utc) - timedelta(hours=3)).year
     st.markdown(f"""<div class="nob-wrap-card"><div class="k">Resumen del año · Natación Master</div>
-<div class="t">Nuestro {anio} en el agua</div>
+<div class="t">Nuestro {anio}</div>
 <div class="s">Podios, fechas, récords y logros del equipo, en una imagen para compartir.<br>{resumen_anual.PROFE}</div></div>""",
                 unsafe_allow_html=True)
     if st.button(f"✨ Ver el {anio} del equipo", key="btn_resumen_club", use_container_width=True):
