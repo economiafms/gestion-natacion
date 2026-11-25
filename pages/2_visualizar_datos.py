@@ -1,6 +1,7 @@
 import streamlit as st
 import datos
 import entrenador
+import actividad
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime
@@ -551,14 +552,23 @@ def _abrir_ficha_desde_padron(nombre_completo):
 def render_tab_padron():
     seccion("Padrón y medallero")
     filtro = st.text_input("Buscar nadador", placeholder="Buscar por nombre o apellido...", label_visibility="collapsed")
-    df_show = df_view.copy()
+    # Solo activos: mismo criterio de toda la app (marca el año anterior o el corriente).
+    # Desde Inicio, la cifra "Activos" abre el padrón con este filtro ya encendido.
+    _anios = actividad.anios_activos()
+    solo_activos = st.toggle("Solo nadadores activos", key="pad_solo_activos",
+                             help=f"Activos: con marcas en {_anios[0]} o {_anios[1]}.")
+    df_base = df_view
+    if solo_activos:
+        _ids = actividad.ids_activos(data['tiempos'], data['relevos'], _anios)
+        df_base = df_view[df_view['codnadador'].map(actividad.id_txt).isin(_ids)]
+    df_show = df_base.copy()
     df_show['_orden_nombre'] = df_show['Nombre Completo'].map(_sin_tildes)
     df_show = df_show.sort_values(['Total', 'Oro', 'Plata', '_orden_nombre'], ascending=[False, False, False, True])
     if filtro.strip():
         busca = _sin_tildes(filtro.strip())
         df_show = df_show[(df_show['nombre'].map(_sin_tildes) + " " + df_show['apellido'].map(_sin_tildes)).str.contains(busca, regex=False)
                           | df_show['_orden_nombre'].str.contains(busca, regex=False)]
-    st.caption(f"{len(df_show)} de {len(df_view)} nadadores")
+    st.caption(f"{len(df_show)} de {len(df_base)} nadadores" + (" activos" if solo_activos else ""))
 
     # Todos los nadadores (sin límite), con la tarjeta clásica del padrón:
     # nombre y datos | medallas | total y categoría

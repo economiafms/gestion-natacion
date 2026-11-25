@@ -1297,10 +1297,12 @@ if db and st.session_state.user_id:
             _kc = st.columns(3, gap="small")
             for _col, (_v, _key, _ayuda) in zip(_kc, [
                     (len(_nad_club), "kpi_nad", "Ver padrón de nadadores"),
-                    (_n_activos, "kpi_act", f"Compitieron en {_anios_act[0]} o {_anios_act[1]} · Ver padrón"),
+                    (_n_activos, "kpi_act", f"Compitieron en {_anios_act[0]} o {_anios_act[1]} · Ver padrón de activos"),
                     (len(df_t) + len(df_r), "kpi_reg", "Ver padrón de nadadores")]):
                 with _col:
                     if st.button(str(_v), key=_key, use_container_width=True, help=_ayuda):
+                        # Activos abre el padrón filtrado; Nadadores y Registros, el padrón completo
+                        st.session_state["pad_solo_activos"] = _key == "kpi_act"
                         ir_al_padron()
     else:
         st.markdown(f"""<div class="nob-kpis tres">
