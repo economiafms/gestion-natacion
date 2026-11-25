@@ -1276,7 +1276,34 @@ if db and st.session_state.user_id:
     _nad_club = entrenador.sin_entrenador(db['nadadores'])   # el entrenador no cuenta como nadador
     _n_activos = int(pd.to_numeric(_nad_club['codnadador'], errors='coerce').isin(_ids_act).sum())
 
-    st.markdown(f"""<div class="nob-kpis tres">
+    if st.session_state.role == "M":
+        # Manager: las tres cifras se ven igual, pero al tocarlas abren el padrón
+        st.markdown("""<style>
+.st-key-nob_kpis_m [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; gap: 8px !important; }
+.st-key-nob_kpis_m [data-testid="stColumn"] { min-width: 0 !important; }
+.st-key-nob_kpis_m button {
+  flex-direction: column !important; gap: 4px; min-height: 70px !important; padding: 12px 6px !important;
+  border-radius: 14px !important; background: rgba(255,255,255,0.035) !important; border: 1px solid rgba(255,255,255,0.07) !important;
+}
+.st-key-nob_kpis_m button p { font-size: 24px !important; font-weight: 900 !important; color: #fff; line-height: 1.1; }
+.st-key-nob_kpis_m button::after { font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+  color: rgba(255,255,255,0.5); }
+.st-key-nob_kpis_m button:hover { border-color: rgba(227,6,19,0.5) !important; transform: translateY(-2px); }
+.st-key-kpi_nad button::after { content: "Nadadores"; }
+.st-key-kpi_act button::after { content: "Activos"; }
+.st-key-kpi_reg button::after { content: "Registros"; }
+</style>""", unsafe_allow_html=True)
+        with st.container(key="nob_kpis_m"):
+            _kc = st.columns(3, gap="small")
+            for _col, (_v, _key, _ayuda) in zip(_kc, [
+                    (len(_nad_club), "kpi_nad", "Ver padrón de nadadores"),
+                    (_n_activos, "kpi_act", f"Compitieron en {_anios_act[0]} o {_anios_act[1]} · Ver padrón"),
+                    (len(df_t) + len(df_r), "kpi_reg", "Ver padrón de nadadores")]):
+                with _col:
+                    if st.button(str(_v), key=_key, use_container_width=True, help=_ayuda):
+                        ir_al_padron()
+    else:
+        st.markdown(f"""<div class="nob-kpis tres">
 <div><b>{len(_nad_club)}</b><small>Nadadores</small></div>
 <div title="Compitieron en {_anios_act[0]} o {_anios_act[1]}"><b>{_n_activos}</b><small>Activos</small></div>
 <div><b>{len(df_t) + len(df_r)}</b><small>Registros</small></div>
