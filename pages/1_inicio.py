@@ -691,10 +691,9 @@ def dialogo_ranking_estilo(estilo):
     rk = ranking_50_activos().get(estilo, pd.DataFrame())
     anios = actividad.anios_activos()
 
-    # Filtro por género: arranca en el que se tocó en Inicio (tarjeta = Todos, ♂ = Masculino, ♀ = Femenino)
+    # Filtro por género (arranca en Todos)
     with st.container(key="dlg_rk_filtro"):
-        gen = st.segmented_control("Género", ["Todos", "Femenino", "Masculino"], key="dlg_rk_gen",
-                                   default=None if "dlg_rk_gen" in st.session_state else "Todos",
+        gen = st.segmented_control("Género", ["Todos", "Femenino", "Masculino"], default="Todos",
                                    label_visibility="collapsed")
     if not rk.empty and gen in ("Femenino", "Masculino"):
         rk = rk[rk['_gen'] == gen[0]]
@@ -1213,46 +1212,13 @@ if db and st.session_state.user_id:
                 f'.st-key-estr_{i} button::after {{ content: "{str(estilo).upper().replace(chr(34), "")}"; }}'
                 for i, (estilo, _) in enumerate(items)
             )
-            # Dentro de cada tarjeta, ♂ / ♀ (colores de las tarjetas de categorías): abren el ranking ya filtrado
-            gen_css = """
-.st-key-nob_estilos [class*="st-key-rkcard_"] {
-  gap: 0 !important; padding: 0 6px 10px; border-radius: 14px;
-  background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.08);
-  transition: border-color .12s ease, transform .12s ease; }
-.st-key-nob_estilos [class*="st-key-rkcard_"]:hover { border-color: rgba(227,6,19,0.5); transform: translateY(-2px); }
-.st-key-nob_estilos [class*="st-key-rkcard_"] [class*="st-key-estr_"] button {
-  background: transparent !important; border: none !important; box-shadow: none !important; min-height: 60px !important; }
-.st-key-nob_estilos [class*="st-key-rkcard_"] [class*="st-key-estr_"] button:hover { transform: none; }
-.st-key-nob_estilos [class*="st-key-rkgen_"] { gap: 6px !important; flex-wrap: nowrap !important; justify-content: center !important; margin-top: -4px; }
-.st-key-nob_estilos [class*="st-key-rkgen_"] > div { flex: 0 0 auto !important; width: auto !important; min-width: 0 !important; }
-.st-key-nob_estilos [class*="st-key-rkm_"] button, .st-key-nob_estilos [class*="st-key-rkf_"] button {
-  width: 30px !important; height: 22px !important; min-height: 0 !important; padding: 0 !important; border-radius: 999px !important;
-  flex-direction: row !important; line-height: 1 !important; transition: transform .12s ease, background .12s ease; }
-.st-key-nob_estilos [class*="st-key-rkm_"] button p, .st-key-nob_estilos [class*="st-key-rkf_"] button p {
-  font-size: 12px !important; font-weight: 800 !important; line-height: 1 !important; margin: 0 !important; color: inherit; }
-.st-key-nob_estilos [class*="st-key-rkm_"] button::after, .st-key-nob_estilos [class*="st-key-rkf_"] button::after { content: none !important; }
-.st-key-nob_estilos [class*="st-key-rkm_"] button { background: rgba(227,6,19,0.16) !important; border: 1px solid rgba(227,6,19,0.55) !important; color: #FF6B72 !important; }
-.st-key-nob_estilos [class*="st-key-rkf_"] button { background: rgba(240,98,146,0.16) !important; border: 1px solid rgba(240,98,146,0.55) !important; color: #F8A5C2 !important; }
-.st-key-nob_estilos [class*="st-key-rkm_"] button:hover { background: rgba(227,6,19,0.32) !important; transform: translateY(-1px); }
-.st-key-nob_estilos [class*="st-key-rkf_"] button:hover { background: rgba(240,98,146,0.32) !important; transform: translateY(-1px); }
-.st-key-nob_estilos [class*="st-key-rkm_"] button:disabled, .st-key-nob_estilos [class*="st-key-rkf_"] button:disabled { opacity: .3; transform: none; }
-"""
-            st.markdown(f"<style>{nombres_css}{gen_css}</style>", unsafe_allow_html=True)
+            st.markdown(f"<style>{nombres_css}</style>", unsafe_allow_html=True)
             with st.container(key="nob_estilos"):
                 for i, (col, (estilo, cantidad)) in enumerate(zip(st.columns(len(items), gap="small"), items)):
-                    with col, st.container(key=f"rkcard_{i}"):
+                    with col:
                         if st.button(str(cantidad), key=f"estr_{i}", use_container_width=True,
                                      help=f"Ver ranking de 50 m {estilo} (nadadores activos)"):
-                            st.session_state["dlg_rk_gen"] = "Todos"
                             dialogo_ranking_estilo(estilo)
-                        _g = _rk[estilo]['_gen']
-                        with st.container(key=f"rkgen_{i}", horizontal=True):
-                            for _gk, _ico, _nom in (("M", "♂", "Masculino"), ("F", "♀", "Femenino")):
-                                _n = int((_g == _gk).sum())
-                                if st.button(_ico, key=f"rk{_gk.lower()}_{i}", disabled=_n == 0,
-                                             help=f"Ver ranking de 50 m {estilo} {_nom.lower()} ({_n})"):
-                                    st.session_state["dlg_rk_gen"] = _nom
-                                    dialogo_ranking_estilo(estilo)
 
     # Nadador y manager: chip de su categoría (mismos rivales que la página Mi Categoría: categoría y género)
     if st.session_state.role in ["N", "M", "P"] and not es_entrenador and cat not in (None, "-"):
