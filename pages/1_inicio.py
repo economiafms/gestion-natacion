@@ -309,25 +309,29 @@ def dialogo_resumen_anual(id_nadador, nombre, anio):
 .ra-fecha b {{ display: block; font-size: 13.5px; color: #fff; margin-bottom: 2px; }}
 .ra-prueba {{ font-size: 13px; color: #ccc; }}
 </style><div class="ra-fechas"><h4>📅 Fechas contadas ({r['torneos']})</h4>{filas}</div>""", unsafe_allow_html=True)
-    archivo = f"mi_{anio}_en_el_agua.png"
+    botones_imagen(png, f"mi_{anio}_en_el_agua.png", f"Mi {anio} en el agua")
+
+
+def botones_imagen(png, archivo, titulo, key="ra"):
+    """Descargar la imagen y compartirla (en el celular abre el menú para compartir, p. ej. Instagram)."""
     st.download_button("⬇️ Descargar imagen", data=png, file_name=archivo, mime="image/png",
-                       type="primary", use_container_width=True, key="ra_descargar")
+                       type="primary", use_container_width=True, key=f"{key}_descargar")
     b64 = base64.b64encode(png).decode()
     st.html(f"""
-<button id="ra-share" style="width:100%;padding:10px 14px;border-radius:12px;border:1px solid rgba(255,255,255,0.25);
+<button id="{key}-share" style="width:100%;padding:10px 14px;border-radius:12px;border:1px solid rgba(255,255,255,0.25);
   background:linear-gradient(90deg,#833AB4,#E1306C,#F77737);color:#fff;font-weight:800;font-size:15px;cursor:pointer">
   📲 Compartir</button>
-<div id="ra-share-msg" style="font-size:12px;color:#bbb;margin-top:6px"></div>
+<div id="{key}-share-msg" style="font-size:12px;color:#bbb;margin-top:6px"></div>
 <script>
 (function() {{
-  const btn = document.getElementById("ra-share"), msg = document.getElementById("ra-share-msg");
+  const btn = document.getElementById("{key}-share"), msg = document.getElementById("{key}-share-msg");
   if (!btn || btn.dataset.ok) return; btn.dataset.ok = "1";
   btn.addEventListener("click", async () => {{
     try {{
       const blob = await (await fetch("data:image/png;base64,{b64}")).blob();
       const file = new File([blob], "{archivo}", {{ type: "image/png" }});
       if (navigator.canShare && navigator.canShare({{ files: [file] }})) {{
-        await navigator.share({{ files: [file], title: "Mi {anio} en el agua" }});
+        await navigator.share({{ files: [file], title: "{titulo}" }});
       }} else {{
         msg.textContent = "Este navegador no permite compartir. Descargá la imagen.";
       }}
@@ -337,6 +341,51 @@ def dialogo_resumen_anual(id_nadador, nombre, anio):
   }});
 }})();
 </script>""", unsafe_allow_javascript=True)
+
+
+@st.cache_data(ttl="1h", show_spinner=False)
+def _imagen_resumen_club(claves, formato):
+    return resumen_anual.generar_imagen_club(dict(claves), formato)[0]
+
+
+@st.dialog("Natación Master · resumen del año", width="medium")
+def dialogo_resumen_club(anio):
+    r = resumen_anual.calcular_resumen_club(db, anio, mapa_clubes(), entrenador.ids_entrenador(db['nadadores']))
+    if not r.get("carreras"):
+        st.info(f"No hay carreras del equipo registradas en {anio}.")
+        return
+    formato = st.segmented_control("Formato", list(resumen_anual.FORMATOS), default=list(resumen_anual.FORMATOS)[0],
+                                   key="rc_formato", label_visibility="collapsed") or list(resumen_anual.FORMATOS)[0]
+    with st.spinner("Armando el resumen del equipo…"):
+        claves = tuple(sorted((k, tuple(v) if isinstance(v, list) else v)
+                              for k, v in r.items() if k != "fechas_detalle"))
+        png = _imagen_resumen_club(claves, formato)
+    st.image(png, use_container_width=True)
+    if r.get("fechas_detalle"):
+        filas = "".join(
+            f"<div class='ra-fecha'><b>{html.escape(t)}</b><div class='ra-prueba'>{n} carrera{'s' if n != 1 else ''}"
+            + (f" · {p} podio{'s' if p != 1 else ''}" if p else "") + "</div></div>"
+            for t, n, p in r["fechas_detalle"])
+        st.markdown(f"""<style>
+.ra-fechas h4 {{ font-size: 15px; font-weight: 800; margin: 10px 0 6px; }}
+.ra-fecha {{ background: rgba(255,255,255,0.04); border-left: 3px solid #E30613; border-radius: 8px; padding: 7px 10px; margin-bottom: 6px; }}
+.ra-fecha b {{ display: block; font-size: 13.5px; color: #fff; margin-bottom: 2px; }}
+.ra-prueba {{ font-size: 13px; color: #ccc; }}
+</style><div class="ra-fechas"><h4>📅 Fechas del equipo ({r['torneos']})</h4>{filas}</div>""", unsafe_allow_html=True)
+    botones_imagen(png, f"natacion_master_{anio}.png", f"Natación Master {anio}", key="rc")
+
+
+def tarjeta_resumen_club():
+    """Entrenador: acceso al resumen del año del equipo (mismas fechas que el resumen del nadador)."""
+    if not resumen_anual_visible():
+        return
+    anio = (datetime.now(timezone.utc) - timedelta(hours=3)).year
+    st.markdown(f"""<div class="nob-wrap-card"><div class="k">Resumen del año · Natación Master</div>
+<div class="t">Nuestro {anio} en el agua</div>
+<div class="s">Podios, fechas, récords y logros del equipo, en una imagen para compartir.<br>{resumen_anual.PROFE}</div></div>""",
+                unsafe_allow_html=True)
+    if st.button(f"✨ Ver el {anio} del equipo", key="btn_resumen_club", use_container_width=True):
+        dialogo_resumen_club(anio)
 
 
 def tarjeta_resumen_anual(me):
@@ -1415,6 +1464,10 @@ if db and st.session_state.user_id:
                                 if st.button(f"{_ico} {_cnt[_gen]}", key=f"ent_{_gen.lower()}_{_k}", disabled=_cnt[_gen] == 0,
                                              help=f"Ver {_nom} {'masculino' if _gen == 'M' else 'femenino'} en Categorías"):
                                     _ir_categoria(_nom, _g.loc[_sel, '_gen'].iloc[0])
+
+    # Entrenador: resumen del año del equipo, al final del Inicio
+    if es_entrenador:
+        tarjeta_resumen_club()
 
     # --- 6. GESTIÓN (Perfil M) ---
     if st.session_state.role == "M":

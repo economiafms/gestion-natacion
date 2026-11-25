@@ -349,3 +349,172 @@ def generar_imagen(r, nombre, formato="Historia (1080×1920)"):
     out = io.BytesIO()
     img.convert("RGB").save(out, format="PNG", optimize=True)
     return out.getvalue()
+
+
+# ================================================================ resumen del club (entrenador)
+PROFE = "Profe. Franco Minacori"
+
+# Logros del equipo por año, que no salen de las planillas: (línea 1, línea 2, puesto, total de clubes)
+LOGROS_CLUB = {
+    2026: [
+        ("Circuito de Natación", "Master Aficionados", 2, 24),
+        ("Master Open · agosto", "Parque Roca", 18, 150),
+    ],
+}
+
+
+def _id(v):
+    try:
+        return str(int(float(v)))
+    except Exception:
+        return None
+
+
+def calcular_resumen_club(db, anio, clubes=None, excluir=()):
+    """Estadísticas del año de todo el equipo: individuales y relevos (un relevo cuenta como una carrera
+    y un podio del equipo). `excluir`: códigos de nadador (texto) que no cuentan (el entrenador)."""
+    excluir = set(excluir)
+    t = db['tiempos'].copy()
+    t['_id'] = t['codnadador'].map(_id)
+    t = t[t['_id'].notna() & ~t['_id'].isin(excluir)].copy()
+    t['_f'] = _fechas(t['fecha'])
+    t['posicion'] = pd.to_numeric(t['posicion'], errors='coerce').fillna(0).astype(int) if 'posicion' in t.columns else 0
+    ind = t[t['_f'].dt.year == anio]
+
+    rel = db.get('relevos')
+    if rel is not None and not rel.empty and 'fecha' in rel.columns:
+        rel = rel.copy()
+        rel['_f'] = _fechas(rel['fecha'])
+        rel = rel[rel['_f'].dt.year == anio].copy()
+        rel['posicion'] = (pd.to_numeric(rel['posicion'], errors='coerce').fillna(0).astype(int)
+                           if 'posicion' in rel.columns else 0)
+    else:
+        rel = pd.DataFrame({'fecha': [], 'codpileta': [], 'posicion': [], '_f': pd.Series([], dtype='datetime64[ns]')})
+
+    r = {"anio": anio, "individuales": len(ind), "relevos": len(rel), "carreras": len(ind) + len(rel)}
+    if not r["carreras"]:
+        return r
+
+    pos = pd.concat([ind['posicion'], rel['posicion']], ignore_index=True)
+    r["oro"], r["plata"], r["bronce"] = (int((pos == k).sum()) for k in (1, 2, 3))
+    r["podios"] = r["oro"] + r["plata"] + r["bronce"]
+
+    nadadores = set(ind['_id'])
+    en_podio = set(ind.loc[ind['posicion'].between(1, 3), '_id'])
+    for k in range(1, 5):
+        col = f'nadador_{k}'
+        if col in rel.columns:
+            ids = rel[col].map(_id)
+            nadadores.update(i for i in ids.dropna() if i not in excluir)
+            en_podio.update(i for i in ids[rel['posicion'].between(1, 3)].dropna() if i not in excluir)
+    r["nadadores"] = len(nadadores)
+    r["nadadores_podio"] = len(en_podio)
+
+    cols = ['fecha', 'codpileta', 'posicion']
+    ambos = pd.concat([ind.reindex(columns=cols), rel.reindex(columns=cols)], ignore_index=True)
+    fechas = detalle_fechas(ambos, clubes)
+    r["torneos"] = len(fechas)
+    r["fechas_detalle"] = [
+        (f"{dia.strftime('%d/%m')} · {sede}", len(idx),
+         int(pd.to_numeric(ambos.loc[idx, 'posicion'], errors='coerce').between(1, 3).sum()))
+        for dia, sede, idx in fechas]
+    meses = pd.concat([ind['_f'], rel['_f']]).dt.month.value_counts()
+    r["mes_activo"] = MESES[int(meses.idxmax()) - 1] if not meses.empty else None
+
+    # Récords personales del equipo: marcas del año que mejoran la mejor marca anterior del nadador
+    t['_s'] = t['tiempo'].map(_seg)
+    records = 0
+    for _, g in t.dropna(subset=['_s', '_f']).sort_values('_f').groupby(['_id', 'codestilo', 'coddistancia']):
+        previo = None
+        for f, s in zip(g['_f'], g['_s']):
+            if previo is not None and s < previo and f.year == anio:
+                records += 1
+            previo = s if previo is None else min(previo, s)
+    r["records"] = records
+    r["logros"] = LOGROS_CLUB.get(anio, [])
+    return r
+
+
+def _logro(d, x, y, w, h, l1, l2, puesto, total):
+    d.rounded_rectangle((x, y, x + w, y + h), radius=30, fill=(0, 0, 0, 95), outline=(255, 200, 40, 120), width=2)
+    chico = h < 170
+    for k, linea in enumerate((l1, l2)):
+        txt = linea.upper()
+        d.text((x + 28, y + (14 if chico else 20) + k * (26 if chico else 28)), txt,
+               font=_ajustar(d, txt, "Bold", 22, w - 56), fill=(255, 140, 146))
+    fp = _f("Black", 54 if chico else 70)
+    tp = f"{puesto}°"
+    yp = y + (66 if chico else 84)
+    d.text((x + 28, yp), tp, font=fp, fill=ORO)
+    xs = x + 28 + d.textlength(tp, font=fp) + 14
+    sub = f"de {total} clubes"
+    d.text((xs, yp + (22 if chico else 32)), sub, font=_ajustar(d, sub, "SemiBold", 30, x + w - 28 - xs),
+           fill=(255, 255, 255))
+
+
+def generar_imagen_club(r, formato="Historia (1080×1920)"):
+    """PNG del resumen del año del equipo de Natación Master, firmado por el profe.
+    Devuelve (png, y_fin): y_fin es dónde termina el contenido (para controlar que no pise el pie)."""
+    W, H = FORMATOS.get(formato, (1080, 1920))
+    historia = H > 1500
+    img = _fondo(W, H)
+    d = ImageDraw.Draw(img, "RGBA")
+    M = 70
+    y = 80 if historia else 56
+
+    _escudo(img, M, y, 92)
+    d.text((M + 112, y + 10), "COMPLEJO ACUÁTICO", font=_f("Bold", 26), fill=(255, 150, 156))
+    d.text((M + 112, y + 42), "Newell's Old Boys", font=_f("SemiBold", 34), fill=(255, 255, 255))
+    y += 150 if historia else 120
+
+    tam_ma = 560 if historia else 430
+    _marca_agua(img, W - tam_ma * 0.72, y - (10 if historia else 20), tam_ma)
+    d.text((M, y), "NUESTRO", font=_f("Black", 120 if historia else 96), fill=(255, 255, 255))
+    d.text((M, y + (112 if historia else 90)), str(r["anio"]), font=_f("Black", 230 if historia else 170), fill=ROJO)
+    y += 360 if historia else 270
+    if historia:
+        d.text((M, y), "en el agua", font=_f("SemiBold", 46), fill=(235, 235, 235))
+        y += 70
+        d.text((M, y), "Natación Master", font=_f("Bold", 44), fill=(255, 205, 210))
+        y += 90
+    else:   # el posteo es más bajo: una sola línea
+        fe = _f("SemiBold", 38)
+        d.text((M, y), "en el agua · ", font=fe, fill=(235, 235, 235))
+        d.text((M + d.textlength("en el agua · ", font=fe), y), "Natación Master", font=_f("Bold", 38), fill=(255, 205, 210))
+        y += 68
+
+    rad = 78 if historia else 62
+    cy = y + rad + 10
+    for i, (col, n, et) in enumerate(((ORO, r.get("oro", 0), "ORO"), (PLATA, r.get("plata", 0), "PLATA"),
+                                       (BRONCE, r.get("bronce", 0), "BRONCE"))):
+        _medalla(d, W * (i + 1) / 4, cy, rad, col, n, et)
+    y = cy + rad + (78 if historia else 60)
+
+    gap = 24
+    cw = (W - 2 * M - gap) / 2
+    ch = 184 if historia else 168
+    datos = [
+        ("Fechas", str(r.get("torneos", 0)), f"más activo: {r['mes_activo']}" if r.get("mes_activo") else ""),
+        ("Carreras", str(r.get("carreras", 0)), f"{r.get('relevos', 0)} en relevos" if r.get("relevos") else "individuales"),
+        ("Nadadores", str(r.get("nadadores", 0)), f"{r.get('nadadores_podio', 0)} subieron al podio"),
+        ("Récords personales", str(r.get("records", 0)), "marcas mejoradas"),
+    ]
+    for i, (t, v, s) in enumerate(datos):
+        _tarjeta(d, M + (i % 2) * (cw + gap), y + (i // 2) * (ch + gap), cw, ch, t, v, s)
+    y += 2 * ch + gap + (30 if historia else 24)
+
+    logros = list(r.get("logros") or [])[:2]
+    if logros:
+        lh = 190 if historia else 140
+        for i, lg in enumerate(logros):
+            _logro(d, M + i * (cw + gap), y, cw if len(logros) > 1 else W - 2 * M, lh, *lg)
+        y += lh
+
+    # Pie: firma del profe y hashtag
+    _centrado(d, H - (150 if historia else 104), PROFE, _f("Bold", 36 if historia else 30), (255, 255, 255), W)
+    _centrado(d, H - (96 if historia else 62), f"#NOB{r['anio']} · Natación Master Newell's",
+              _f("SemiBold", 26), (255, 255, 255, 170), W)
+
+    out = io.BytesIO()
+    img.convert("RGB").save(out, format="PNG", optimize=True)
+    return out.getvalue(), y
