@@ -196,8 +196,8 @@ def barra_movil(principales, nombre, extras, activo=None, web_izq=None, web_der=
             '.st-key-bn_row [data-testid="stColumn"] { flex: 1 1 0 !important; width: auto !important; }'
             '.st-key-bn_row [data-testid="stColumn"]:has(.st-key-bn_2) { flex: 0 0 72px !important; }'
             '.st-key-bn_row button { overflow: visible; }'
-            '.st-key-bn_row button p { font-size: 24px !important; }'
-            '.st-key-bn_row button::after { font-size: 9px !important; letter-spacing: -0.3px !important; }'
+            '.st-key-bn_row button p { font-size: 25px !important; }'
+            '.st-key-bn_row button::after { font-size: 10px !important; letter-spacing: -0.3px !important; }'
             '.st-key-bn_row .st-key-bn_2 button::after { font-size: 10.5px !important; letter-spacing: -0.2px !important; }'
             '}'
         )
