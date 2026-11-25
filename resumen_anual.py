@@ -412,12 +412,21 @@ def calcular_resumen_club(db, anio, clubes=None, excluir=()):
 
     cols = ['fecha', 'codpileta', 'posicion']
     ambos = pd.concat([ind.reindex(columns=cols), rel.reindex(columns=cols)], ignore_index=True)
-    fechas = detalle_fechas(ambos, clubes)
+    # Para el equipo, un torneo de varios días seguidos en la misma sede es una sola fecha
+    fechas = []   # [primer día, último día, sede, índices]
+    for dia, sede, idx in sorted(detalle_fechas(ambos, clubes), key=lambda f: (_club_norm(f[1]), f[0])):
+        ult = fechas[-1] if fechas else None
+        if ult and _club_norm(ult[2]) == _club_norm(sede) and (dia - ult[1]).days <= 1:
+            ult[1] = dia
+            ult[3] = ult[3] + idx
+        else:
+            fechas.append([dia, dia, sede, list(idx)])
+    fechas.sort(key=lambda f: f[0])
     r["torneos"] = len(fechas)
     r["fechas_detalle"] = [
-        (f"{dia.strftime('%d/%m')} · {sede}", len(idx),
+        (f"{d1.strftime('%d/%m')}{'–' + d2.strftime('%d/%m') if d2 != d1 else ''} · {sede}", len(idx),
          int(pd.to_numeric(ambos.loc[idx, 'posicion'], errors='coerce').between(1, 3).sum()))
-        for dia, sede, idx in fechas]
+        for d1, d2, sede, idx in fechas]
     meses = pd.concat([ind['_f'], rel['_f']]).dt.month.value_counts()
     r["mes_activo"] = MESES[int(meses.idxmax()) - 1] if not meses.empty else None
 
