@@ -309,10 +309,42 @@ def dialogo_resumen_anual(id_nadador, nombre, anio):
 .ra-fecha b {{ display: block; font-size: 13.5px; color: #fff; margin-bottom: 2px; }}
 .ra-prueba {{ font-size: 13px; color: #ccc; }}
 </style><div class="ra-fechas"><h4>📅 Fechas contadas ({r['torneos']})</h4>{filas}</div>""", unsafe_allow_html=True)
-    botones_imagen(png, f"mi_{anio}_en_el_agua.png", f"Mi {anio} en el agua")
+    archivo = f"mi_{anio}_en_el_agua.png"
+    st.download_button("⬇️ Descargar imagen", data=png, file_name=archivo, mime="image/png",
+                       type="primary", use_container_width=True, key="ra_descargar")
+    b64 = base64.b64encode(png).decode()
+    st.html(f"""
+<button id="ra-share" style="width:100%;padding:10px 14px;border-radius:12px;border:1px solid rgba(255,255,255,0.25);
+  background:linear-gradient(90deg,#833AB4,#E1306C,#F77737);color:#fff;font-weight:800;font-size:15px;cursor:pointer">
+  📲 Compartir</button>
+<div id="ra-share-msg" style="font-size:12px;color:#bbb;margin-top:6px"></div>
+<script>
+(function() {{
+  const btn = document.getElementById("ra-share"), msg = document.getElementById("ra-share-msg");
+  if (!btn || btn.dataset.ok) return; btn.dataset.ok = "1";
+  btn.addEventListener("click", async () => {{
+    try {{
+      const blob = await (await fetch("data:image/png;base64,{b64}")).blob();
+      const file = new File([blob], "{archivo}", {{ type: "image/png" }});
+      if (navigator.canShare && navigator.canShare({{ files: [file] }})) {{
+        await navigator.share({{ files: [file], title: "Mi {anio} en el agua" }});
+      }} else {{
+        msg.textContent = "Este navegador no permite compartir. Descargá la imagen.";
+      }}
+    }} catch (e) {{
+      if (e && e.name !== "AbortError") msg.textContent = "No se pudo compartir. Descargá la imagen.";
+    }}
+  }});
+}})();
+</script>""", unsafe_allow_javascript=True)
 
 
-def botones_imagen(png, archivo, titulo, key="ra"):
+@st.cache_data(ttl="1h", show_spinner=False)
+def _imagen_resumen_club(claves, formato):
+    return resumen_anual.generar_imagen_club(dict(claves), formato)[0]
+
+
+def botones_imagen_club(png, archivo, titulo, key="ra"):
     """Descargar la imagen y compartirla (en el celular abre el menú para compartir, p. ej. Instagram)."""
     st.download_button("⬇️ Descargar imagen", data=png, file_name=archivo, mime="image/png",
                        type="primary", use_container_width=True, key=f"{key}_descargar")
@@ -343,11 +375,6 @@ def botones_imagen(png, archivo, titulo, key="ra"):
 </script>""", unsafe_allow_javascript=True)
 
 
-@st.cache_data(ttl="1h", show_spinner=False)
-def _imagen_resumen_club(claves, formato):
-    return resumen_anual.generar_imagen_club(dict(claves), formato)[0]
-
-
 @st.dialog("Natación Master · resumen del año", width="medium")
 def dialogo_resumen_club(anio):
     r = resumen_anual.calcular_resumen_club(db, anio, mapa_clubes(), entrenador.ids_entrenador(db['nadadores']))
@@ -372,7 +399,7 @@ def dialogo_resumen_club(anio):
 .ra-fecha b {{ display: block; font-size: 13.5px; color: #fff; margin-bottom: 2px; }}
 .ra-prueba {{ font-size: 13px; color: #ccc; }}
 </style><div class="ra-fechas"><h4>📅 Fechas del equipo ({r['torneos']})</h4>{filas}</div>""", unsafe_allow_html=True)
-    botones_imagen(png, f"natacion_master_{anio}.png", f"Natación Master {anio}", key="rc")
+    botones_imagen_club(png, f"natacion_master_{anio}.png", f"Natación Master {anio}", key="rc")
 
 
 def tarjeta_resumen_club():
