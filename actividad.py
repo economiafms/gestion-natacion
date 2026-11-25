@@ -25,10 +25,10 @@ def ids_activos(tiempos, relevos, anios=None):
     anios = anios or anios_activos()
     ids = set()
     if tiempos is not None and not tiempos.empty and 'fecha' in tiempos.columns:
-        t = tiempos[pd.to_datetime(tiempos['fecha'], errors='coerce').dt.year.isin(anios)]
+        t = tiempos[pd.to_datetime(tiempos['fecha'], errors='coerce', format='mixed').dt.year.isin(anios)]
         ids.update(id_txt(x) for x in t['codnadador'].dropna())
     if relevos is not None and not relevos.empty and 'fecha' in relevos.columns:
-        r = relevos[pd.to_datetime(relevos['fecha'], errors='coerce').dt.year.isin(anios)]
+        r = relevos[pd.to_datetime(relevos['fecha'], errors='coerce', format='mixed').dt.year.isin(anios)]
         for k in range(1, 5):
             col = f'nadador_{k}'
             if col in r.columns:
