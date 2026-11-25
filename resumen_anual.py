@@ -503,7 +503,7 @@ def generar_imagen_club(r, formato="Historia (1080×1920)"):
     cw = (W - 2 * M - gap) / 2
     ch = 184 if historia else 168
     datos = [
-        ("Fechas", str(r.get("torneos", 0)), f"más activo: {r['mes_activo']}" if r.get("mes_activo") else ""),
+        ("Fechas", str(r.get("torneos", 0)), "de competencia"),
         ("Carreras", str(r.get("carreras", 0)), f"{r.get('relevos', 0)} en relevos" if r.get("relevos") else "individuales"),
         ("Nadadores", str(r.get("nadadores", 0)), f"{r.get('nadadores_podio', 0)} subieron al podio"),
         ("Récords personales", str(r.get("records", 0)), "marcas mejoradas"),
