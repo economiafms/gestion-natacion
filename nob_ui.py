@@ -132,7 +132,8 @@ def hero(titulo: str, icono: str | None = None, subtitulo: str | None = None,
     )
 
 
-def barra_movil(principales, nombre, extras, activo=None, web_izq=None, web_der=None, web_gestion=False):
+def barra_movil(principales, nombre, extras, activo=None, web_izq=None, web_der=None, web_gestion=False,
+                lados_en_movil=False):
     """Barra de navegación fija abajo, SOLO en el celular (en computadora no se muestra).
 
     Estructura (de arriba hacia abajo):
@@ -148,6 +149,9 @@ def barra_movil(principales, nombre, extras, activo=None, web_izq=None, web_der=
         (para el manager: Simulador y Ranking).
       - `web_gestion`: "rueda" (pide clave) o "carga" (gestión desbloqueada: botón Cargar datos),
         en lugar del "+". None si no corresponde.
+
+    `lados_en_movil`: True para mostrar también en el celular `web_izq` / `web_der` (perfil M):
+        la fila queda de 7; el botón central conserva su ancho y los otros 6 se reparten el resto.
 
     `activo`: índice (0-4) de la página actual en la fila principal, o None.
     Devuelve ("principal", i) | ("ficha",) | ("extra", i) | ("salir",) |
@@ -180,6 +184,23 @@ def barra_movil(principales, nombre, extras, activo=None, web_izq=None, web_der=
             if lateral[2]:
                 css.append(f'.st-key-{clave} button::after {{ color: #FF4D57 !important; font-weight: 800 !important; }}'
                            f'.st-key-{clave} button {{ box-shadow: inset 0 2px 0 #E30613 !important; }}')
+
+    if lados_en_movil and (web_izq or web_der):
+        # Celular con 7 accesos: el centro mantiene su ancho (~72 px) y los otros 6 se reparten el resto
+        # (~45 px cada uno, lo mínimo cómodo para tocar). Las etiquetas se achican para entrar.
+        css.append(
+            '@media (max-width: 900px) {'
+            '.st-key-bn_row [data-testid="stColumn"]:has(.st-key-bnw_izq),'
+            '.st-key-bn_row [data-testid="stColumn"]:has(.st-key-bnw_der) { display: flex !important; }'
+            '.st-key-bn_row [data-testid="stHorizontalBlock"] { gap: 1px !important; }'
+            '.st-key-bn_row [data-testid="stColumn"] { flex: 1 1 0 !important; width: auto !important; }'
+            '.st-key-bn_row [data-testid="stColumn"]:has(.st-key-bn_2) { flex: 0 0 72px !important; }'
+            '.st-key-bn_row button { overflow: visible; }'
+            '.st-key-bn_row button p { font-size: 24px !important; }'
+            '.st-key-bn_row button::after { font-size: 9px !important; letter-spacing: -0.3px !important; }'
+            '.st-key-bn_row .st-key-bn_2 button::after { font-size: 10.5px !important; letter-spacing: -0.2px !important; }'
+            '}'
+        )
 
     accion = None
     with st.container(key="nob_bottom_nav"):

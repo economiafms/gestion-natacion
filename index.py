@@ -354,7 +354,10 @@ else:
 
     extras = []
     if st.session_state.role in ["M", "P"]:
-        extras += [("👥", "Padrón", "padron"), ("🏆", "Ranking", pg_ranking), ("🏊", "Simulador", pg_simulador)]
+        extras.append(("👥", "Padrón", "padron"))
+        # Perfil M: Simulador y Ranking ya están en la fila del celular; el perfil P los sigue teniendo en el "+"
+        if st.session_state.role != "M":
+            extras += [("🏆", "Ranking", pg_ranking), ("🏊", "Simulador", pg_simulador)]
         if st.session_state.admin_unlocked:
             extras.append(("⚙️", "Carga de Datos", pg_carga))
     # Cerrar sesión no va en el panel: tiene su propio botón fijo en la franja
@@ -371,7 +374,8 @@ else:
 
     accion = barra_movil([(i, e) for i, e, _ in principales], st.session_state.user_name or "Mi Ficha",
                          [(i, e) for i, e, _ in extras], activo,
-                         web_izq=web_izq, web_der=web_der, web_gestion=web_gestion)
+                         web_izq=web_izq, web_der=web_der, web_gestion=web_gestion,
+                         lados_en_movil=st.session_state.role == "M")
     if accion is not None:
         if accion[0] == "principal":
             destino = principales[accion[1]][2]
