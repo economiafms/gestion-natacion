@@ -412,7 +412,36 @@ def calcular_resumen_club(db, anio, clubes=None, excluir=()):
     r["nadadores"] = len(nadadores)
     r["nadadores_podio"] = len(en_podio)
 
-    cols = ['fecha', 'codpileta', 'posicion']
+    # Descripción de cada carrera para el detalle de las fechas: quién, qué prueba, tiempo y puesto
+    def _mapa(hoja, cod):
+        h = db.get(hoja)
+        if h is None or h.empty or cod not in h.columns or 'descripcion' not in h.columns:
+            return {}
+        return {_id(k): str(v) for k, v in zip(h[cod], h['descripcion']) if _id(k) is not None}
+    est, dis = _mapa('estilos', 'codestilo'), _mapa('distancias', 'coddistancia')
+    nad = db.get('nadadores')
+    nombres = ({_id(c): f"{str(a).strip().upper()}, {str(n).strip()}"
+                for c, a, n in zip(nad['codnadador'], nad['apellido'], nad['nombre']) if _id(c) is not None}
+               if nad is not None and not nad.empty else {})
+
+    def _prueba(fila):
+        return " ".join(x for x in (dis.get(_id(fila.get('coddistancia')), ""), est.get(_id(fila.get('codestilo')), "")) if x)
+
+    def _cola(marca, pos):
+        marca = "" if marca is None or pd.isna(marca) or not str(marca).strip() else f" ({marca})"
+        return marca + (f" · {pos}°" if pos > 0 else "")
+
+    ind = ind.assign(_txt=[f"{nombres.get(i, '-')} · {_prueba(f)}{_cola(f.get('tiempo'), int(f['posicion']))}"
+                           for i, (_, f) in zip(ind['_id'], ind.iterrows())])
+    if len(rel):
+        def _txt_rel(f):
+            quienes = " / ".join(nombres.get(_id(f.get(f'nadador_{k}')), "").split(",")[0].title()
+                                 for k in range(1, 5) if _id(f.get(f'nadador_{k}')) is not None)
+            marca = f.get('tiempo_final') if 'tiempo_final' in rel.columns else None
+            return f"Relevo 4x{_prueba(f) or 'posta'}{_cola(marca, int(f['posicion']))}" + (f" · {quienes}" if quienes else "")
+        rel = rel.assign(_txt=[_txt_rel(f) for _, f in rel.iterrows()])
+
+    cols = ['fecha', 'codpileta', 'posicion', '_txt']
     ambos = pd.concat([ind.reindex(columns=cols), rel.reindex(columns=cols)], ignore_index=True)
     # Para el equipo, un torneo de varios días seguidos en la misma sede es una sola fecha
     fechas = []   # [primer día, último día, sede, índices]
@@ -425,9 +454,15 @@ def calcular_resumen_club(db, anio, clubes=None, excluir=()):
             fechas.append([dia, dia, sede, list(idx)])
     fechas.sort(key=lambda f: f[0])
     r["torneos"] = len(fechas)
+    def _carreras(idx):
+        # Primero los podios (oro, plata, bronce), después el resto en orden de prueba
+        g = ambos.loc[idx].assign(_p=lambda x: pd.to_numeric(x['posicion'], errors='coerce').fillna(0))
+        g = g.assign(_o=g['_p'].where(g['_p'].between(1, 3), 99)).sort_values(['_o', '_txt'])
+        return g['_txt'].fillna("Carrera").tolist()
+
     r["fechas_detalle"] = [
         (f"{d1.strftime('%d/%m')}{'–' + d2.strftime('%d/%m') if d2 != d1 else ''} · {sede}", len(idx),
-         int(pd.to_numeric(ambos.loc[idx, 'posicion'], errors='coerce').between(1, 3).sum()))
+         int(pd.to_numeric(ambos.loc[idx, 'posicion'], errors='coerce').between(1, 3).sum()), _carreras(idx))
         for d1, d2, sede, idx in fechas]
     meses = pd.concat([ind['_f'], rel['_f']]).dt.month.value_counts()
     r["mes_activo"] = MESES[int(meses.idxmax()) - 1] if not meses.empty else None

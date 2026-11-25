@@ -390,15 +390,23 @@ def dialogo_resumen_club(anio):
         png = _imagen_resumen_club(claves, formato, resumen_anual.VERSION_IMAGEN_CLUB)
     st.image(png, use_container_width=True)
     if r.get("fechas_detalle"):
+        # Cada fecha se despliega al tocarla y muestra sus carreras (podios primero)
         filas = "".join(
-            f"<div class='ra-fecha'><b>{html.escape(t)}</b><div class='ra-prueba'>{n} carrera{'s' if n != 1 else ''}"
-            + (f" · {p} podio{'s' if p != 1 else ''}" if p else "") + "</div></div>"
-            for t, n, p in r["fechas_detalle"])
+            f"<details class='ra-fecha'><summary><b>{html.escape(t)}</b><div class='ra-prueba'>{n} carrera{'s' if n != 1 else ''}"
+            + (f" · {p} podio{'s' if p != 1 else ''}" if p else "") + " · ver carreras</div></summary>"
+            + "<div class='ra-lista'>" + "".join(f"<div class='ra-carrera'>{html.escape(c)}</div>" for c in carreras) + "</div></details>"
+            for t, n, p, carreras in r["fechas_detalle"])
         st.markdown(f"""<style>
 .ra-fechas h4 {{ font-size: 15px; font-weight: 800; margin: 10px 0 6px; }}
 .ra-fecha {{ background: rgba(255,255,255,0.04); border-left: 3px solid #E30613; border-radius: 8px; padding: 7px 10px; margin-bottom: 6px; }}
+.ra-fecha summary {{ cursor: pointer; list-style: none; }}
+.ra-fecha summary::-webkit-details-marker {{ display: none; }}
 .ra-fecha b {{ display: block; font-size: 13.5px; color: #fff; margin-bottom: 2px; }}
 .ra-prueba {{ font-size: 13px; color: #ccc; }}
+.ra-fecha[open] .ra-prueba {{ color: #FF8A92; }}
+.ra-lista {{ margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.08); }}
+.ra-carrera {{ font-size: 12.5px; color: #ddd; padding: 3px 0; border-bottom: 1px dashed rgba(255,255,255,0.06); }}
+.ra-carrera:last-child {{ border-bottom: none; }}
 </style><div class="ra-fechas"><h4>📅 Fechas del equipo ({r['torneos']})</h4>{filas}</div>""", unsafe_allow_html=True)
     botones_imagen_club(png, f"natacion_master_{anio}.png", f"Natación Master {anio}", key="rc")
 
