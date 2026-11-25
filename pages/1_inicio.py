@@ -691,9 +691,10 @@ def dialogo_ranking_estilo(estilo):
     rk = ranking_50_activos().get(estilo, pd.DataFrame())
     anios = actividad.anios_activos()
 
-    # Filtro por género (arranca en Todos)
+    # Filtro por género: arranca en el que se tocó en Inicio (tarjeta = Todos, ♂ = Masculino, ♀ = Femenino)
     with st.container(key="dlg_rk_filtro"):
-        gen = st.segmented_control("Género", ["Todos", "Femenino", "Masculino"], default="Todos",
+        gen = st.segmented_control("Género", ["Todos", "Femenino", "Masculino"], key="dlg_rk_gen",
+                                   default=None if "dlg_rk_gen" in st.session_state else "Todos",
                                    label_visibility="collapsed")
     if not rk.empty and gen in ("Femenino", "Masculino"):
         rk = rk[rk['_gen'] == gen[0]]
@@ -1212,13 +1213,38 @@ if db and st.session_state.user_id:
                 f'.st-key-estr_{i} button::after {{ content: "{str(estilo).upper().replace(chr(34), "")}"; }}'
                 for i, (estilo, _) in enumerate(items)
             )
-            st.markdown(f"<style>{nombres_css}</style>", unsafe_allow_html=True)
+            # Debajo de cada tarjeta, ♂ / ♀ (como en las tarjetas de categorías): abren el ranking ya filtrado
+            gen_css = """
+.st-key-nob_estilos [class*="st-key-rkgen_"] { gap: 4px !important; flex-wrap: nowrap !important; margin-top: -6px; }
+.st-key-nob_estilos [class*="st-key-rkgen_"] > div { flex: 1 1 0 !important; min-width: 0 !important; }
+.st-key-nob_estilos [class*="st-key-rkm_"] button, .st-key-nob_estilos [class*="st-key-rkf_"] button {
+  width: 100%; min-height: 30px !important; padding: 2px 4px !important; border-radius: 10px !important;
+  flex-direction: row !important; transition: transform .12s ease, background .12s ease; }
+.st-key-nob_estilos [class*="st-key-rkm_"] button p, .st-key-nob_estilos [class*="st-key-rkf_"] button p {
+  font-size: 13px !important; font-weight: 800 !important; color: inherit; }
+.st-key-nob_estilos [class*="st-key-rkm_"] button::after, .st-key-nob_estilos [class*="st-key-rkf_"] button::after { content: none !important; }
+.st-key-nob_estilos [class*="st-key-rkm_"] button { background: rgba(227,6,19,0.16) !important; border: 1px solid rgba(227,6,19,0.55) !important; color: #FF6B72 !important; }
+.st-key-nob_estilos [class*="st-key-rkf_"] button { background: rgba(240,98,146,0.16) !important; border: 1px solid rgba(240,98,146,0.55) !important; color: #F8A5C2 !important; }
+.st-key-nob_estilos [class*="st-key-rkm_"] button:hover { background: rgba(227,6,19,0.32) !important; transform: translateY(-1px); }
+.st-key-nob_estilos [class*="st-key-rkf_"] button:hover { background: rgba(240,98,146,0.32) !important; transform: translateY(-1px); }
+.st-key-nob_estilos [class*="st-key-rkm_"] button:disabled, .st-key-nob_estilos [class*="st-key-rkf_"] button:disabled { opacity: .3; transform: none; }
+"""
+            st.markdown(f"<style>{nombres_css}{gen_css}</style>", unsafe_allow_html=True)
             with st.container(key="nob_estilos"):
                 for i, (col, (estilo, cantidad)) in enumerate(zip(st.columns(len(items), gap="small"), items)):
                     with col:
                         if st.button(str(cantidad), key=f"estr_{i}", use_container_width=True,
                                      help=f"Ver ranking de 50 m {estilo} (nadadores activos)"):
+                            st.session_state["dlg_rk_gen"] = "Todos"
                             dialogo_ranking_estilo(estilo)
+                        _g = _rk[estilo]['_gen']
+                        with st.container(key=f"rkgen_{i}", horizontal=True):
+                            for _gk, _ico, _nom in (("M", "♂", "Masculino"), ("F", "♀", "Femenino")):
+                                _n = int((_g == _gk).sum())
+                                if st.button(f"{_ico} {_n}", key=f"rk{_gk.lower()}_{i}", disabled=_n == 0,
+                                             help=f"Ver ranking de 50 m {estilo} {_nom.lower()}"):
+                                    st.session_state["dlg_rk_gen"] = _nom
+                                    dialogo_ranking_estilo(estilo)
 
     # Nadador y manager: chip de su categoría (mismos rivales que la página Mi Categoría: categoría y género)
     if st.session_state.role in ["N", "M", "P"] and not es_entrenador and cat not in (None, "-"):
