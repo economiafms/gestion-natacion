@@ -358,7 +358,7 @@ PROFE = "Profe. Franco Minacori"
 LOGROS_CLUB = {
     2026: [
         ("Circuito de Natación", "Master Aficionados", 2, 24),
-        ("Master Open · agosto", "Parque Roca", 18, 150),
+        ("Master Open · agosto", "Parque Roca (BsAs)", 18, 150),
     ],
 }
 
