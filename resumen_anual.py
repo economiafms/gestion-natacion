@@ -357,7 +357,7 @@ PROFE = "Profe. Franco Minacori"
 # Logros del equipo por año, que no salen de las planillas: (línea 1, línea 2, puesto, total de clubes)
 LOGROS_CLUB = {
     2026: [
-        ("Circuito de Natación", "Master Aficionados", 2, 24),
+        ("Circuito de Natación", "Master Aficionados (Regional)", 2, 24),
         ("Master Open · agosto", "Parque Roca (BsAs)", 18, 150),
     ],
 }
