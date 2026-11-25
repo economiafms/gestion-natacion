@@ -1363,6 +1363,9 @@ if db and st.session_state.user_id:
     # El top es del año en curso: hasta que haya medallas en el año (p. ej. al empezar 2027) no se muestra
     if tabla.empty:
         filas_top = []
+    # Entrenador: resumen del año del equipo, arriba del top medallistas
+    if es_entrenador:
+        tarjeta_resumen_club()
     if filas_top and vista_staff:
         # Entrenador y managers: el top se ve igual que siempre; encima de cada fila hay un botón invisible
         # (todas las filas miden lo mismo) que abre la ficha del nadador en el Fichero.
@@ -1491,10 +1494,6 @@ if db and st.session_state.user_id:
                                 if st.button(f"{_ico} {_cnt[_gen]}", key=f"ent_{_gen.lower()}_{_k}", disabled=_cnt[_gen] == 0,
                                              help=f"Ver {_nom} {'masculino' if _gen == 'M' else 'femenino'} en Categorías"):
                                     _ir_categoria(_nom, _g.loc[_sel, '_gen'].iloc[0])
-
-    # Entrenador: resumen del año del equipo, al final del Inicio
-    if es_entrenador:
-        tarjeta_resumen_club()
 
     # --- 6. GESTIÓN (Perfil M) ---
     if st.session_state.role == "M":
