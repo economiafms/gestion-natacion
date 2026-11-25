@@ -567,8 +567,8 @@ def dialogo_estilo(estilo):
 
 
 def ranking_50_activos():
-    """Mejor marca individual en 50 m de cada nadador activo (mismo criterio que el resto de Inicio),
-    por estilo. El entrenador no figura. Devuelve {estilo: DataFrame ordenado del más rápido al más lento}."""
+    """Mejor marca individual en 50 m de cada nadador activo, por estilo. Activo acá: al menos un
+    registro (individual o relevo) en el año anterior al de la consulta. El entrenador no figura. Devuelve {estilo: DataFrame ordenado del más rápido al más lento}."""
     t = db['tiempos'].copy()
     if t.empty:
         return {}
@@ -577,7 +577,7 @@ def ranking_50_activos():
     t = t.merge(est, on='codestilo', how='left').merge(dis, on='coddistancia', how='left')
     t = t[pd.to_numeric(t['Distancia'].astype(str).str.extract(r'(\d+)')[0], errors='coerce') == 50]
 
-    ids_act = actividad.ids_activos(db.get('tiempos'), db.get('relevos'))
+    ids_act = actividad.ids_activos(db.get('tiempos'), db.get('relevos'), [date.today().year - 1])
     nad = entrenador.sin_entrenador(db['nadadores']).copy()
     nad['_id'] = nad['codnadador'].map(actividad.id_txt)
     nad = nad[nad['_id'].isin(ids_act)].drop_duplicates('_id')
@@ -613,7 +613,7 @@ def html_ranking(df, sedes):
 @st.dialog("Ranking 50 m · activos", width="large")
 def dialogo_ranking_estilo(estilo):
     rk = ranking_50_activos().get(estilo, pd.DataFrame())
-    anios = actividad.anios_activos()
+    anio_ant = date.today().year - 1
 
     # Filtro por género (arranca en Todos)
     with st.container(key="dlg_rk_filtro"):
@@ -624,7 +624,7 @@ def dialogo_ranking_estilo(estilo):
 
     st.markdown(f"""<div class="nob-est-head">
 <div class="nob-est-name">50 m {html.escape(str(estilo))}</div>
-<div class="nob-est-desc">Mejor marca de cada nadador activo (con marcas en {anios[0]} o {anios[1]})</div>
+<div class="nob-est-desc">Mejor marca de cada nadador activo (con registros en {anio_ant})</div>
 </div>""", unsafe_allow_html=True)
 
     seccion(f"Ranking · {len(rk)}")
